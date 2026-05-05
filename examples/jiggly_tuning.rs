@@ -268,6 +268,7 @@ fn fmt_rt(m: i32) -> String {
 }
 
 /// One row in the Pareto-front summary table.
+#[derive(Clone)]
 struct Row {
     rt: i32,
     ya: i32,
@@ -434,4 +435,156 @@ fn main() {
     println!("=== firmware shipping default (RT=4h00m YEL=30 RED=25 FST=20) ===");
     print_header();
     print_row("", &shipping_row);
+    println!();
+
+    // -------------------------------------------------------------------------
+    // A-posteriori pick: rank the front by weighted preferences.
+    // -------------------------------------------------------------------------
+    //
+    // Every point on the front is incomparable in the strict Pareto sense —
+    // none dominates another. To surface ONE recommendation we apply explicit
+    // weights to the four normalized objectives. Anyone with different
+    // priorities can read the front above and pick a different row.
+    //
+    // We add the firmware's shipping defaults to the candidate set so they
+    // compete on equal footing with the front the optimizer found.
+
+    const W_WORK: f64 = 0.45; // work failures hurt most
+    const W_LUNCH: f64 = 0.30; // the design goal
+    const W_PRESS: f64 = 0.15; // UX friction
+    const W_AFTER: f64 = 0.10; // minor screen-burn cost
+
+    let mut candidates: Vec<(String, Row)> = rows
+        .iter()
+        .map(|r| ("front".to_string(), r.clone()))
+        .collect();
+    let shipping_candidate_idx = candidates.len();
+    candidates.push(("shipping default".to_string(), shipping_row.clone()));
+
+    let scores =
+        compute_weighted_scores(&candidates.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
+    let mut ranked: Vec<(usize, f64)> = scores.iter().copied().enumerate().collect();
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    println!("=== ranked by weighted preferences ===");
+    println!(
+        "  weights: work_fail {}% · lunch_sleep {}% · presses {}% · after_hours {}%",
+        (W_WORK * 100.0) as i32,
+        (W_LUNCH * 100.0) as i32,
+        (W_PRESS * 100.0) as i32,
+        (W_AFTER * 100.0) as i32,
+    );
+    println!("  candidate set: {} Pareto-front rows + 1 shipping default", rows.len());
+    println!();
+    println!("{:>4}  {:>5}  source", "rank", "score");
+    print_header();
+    for (rank, &(idx, score)) in ranked.iter().take(5).enumerate() {
+        let (label, r) = &candidates[idx];
+        println!("{:>4}  {:.3}  {label}", rank + 1, score);
+        print_row("", r);
+    }
+    println!();
+
+    let &(top_idx, top_score) = ranked.first().expect("at least one candidate");
+    let (top_label, top) = &candidates[top_idx];
+    let shipping_rank = ranked
+        .iter()
+        .position(|(i, _)| *i == shipping_candidate_idx)
+        .map(|p| p + 1)
+        .unwrap_or(0);
+
+    let max_work = candidates.iter().map(|(_, r)| r.work_fail).fold(0.0, f64::max);
+    let max_press = candidates.iter().map(|(_, r)| r.presses).fold(0.0, f64::max);
+
+    println!("=== RECOMMENDED PICK ({top_label}) ===");
+    println!(
+        "  RT={}  YELLOW_AT={}  RED_AT={}  FAST_RED_AT={}",
+        fmt_rt(top.rt),
+        top.ya,
+        top.ra,
+        top.fra,
+    );
+    println!("  weighted score = {top_score:.3}");
+    println!();
+    println!("Why:");
+    println!(
+        "  • {} mean work-time failure ({} better than the worst candidate)",
+        fmt_minutes(top.work_fail),
+        ratio_str(max_work, top.work_fail.max(1e-9)),
+    );
+    println!(
+        "  • {} mean lunch sleep ({:.1}% land in the 12:15–12:45 sweet spot)",
+        fmt_minutes(top.lunch),
+        top.p_sweet * 100.0,
+    );
+    println!(
+        "  • {:.2} button presses/day ({} fewer than the worst candidate)",
+        top.presses,
+        ratio_str(max_press, top.presses.max(1e-9)),
+    );
+    println!("  • {} mean after-hours awake (negligible)", fmt_minutes(top.after));
+
+    if top_label != "shipping default" {
+        println!();
+        println!(
+            "(Shipping default ranks #{shipping_rank} of {}.)",
+            candidates.len(),
+        );
+    } else {
+        println!();
+        println!(
+            "Note: the optimizer found {} non-dominated alternatives, but under",
+            rows.len(),
+        );
+        println!("these weights the firmware's shipping defaults score highest.");
+    }
+}
+
+/// Score every row in `rows` by a fixed weighted sum of normalized objectives.
+///
+/// Each objective is normalized to `[0, 1]` across `rows` with `1` meaning
+/// "best on the front" and `0` meaning "worst on the front", direction-aware
+/// (lunch is maximize, the rest are minimize).
+fn compute_weighted_scores(rows: &[Row]) -> Vec<f64> {
+    const W_WORK: f64 = 0.45;
+    const W_LUNCH: f64 = 0.30;
+    const W_PRESS: f64 = 0.15;
+    const W_AFTER: f64 = 0.10;
+
+    let work_min = rows.iter().map(|r| r.work_fail).fold(f64::INFINITY, f64::min);
+    let work_max = rows.iter().map(|r| r.work_fail).fold(f64::NEG_INFINITY, f64::max);
+    let lunch_min = rows.iter().map(|r| r.lunch).fold(f64::INFINITY, f64::min);
+    let lunch_max = rows.iter().map(|r| r.lunch).fold(f64::NEG_INFINITY, f64::max);
+    let press_min = rows.iter().map(|r| r.presses).fold(f64::INFINITY, f64::min);
+    let press_max = rows.iter().map(|r| r.presses).fold(f64::NEG_INFINITY, f64::max);
+    let after_min = rows.iter().map(|r| r.after).fold(f64::INFINITY, f64::min);
+    let after_max = rows.iter().map(|r| r.after).fold(f64::NEG_INFINITY, f64::max);
+
+    rows.iter()
+        .map(|r| {
+            let work = norm_min(r.work_fail, work_min, work_max);
+            let lunch = norm_max(r.lunch, lunch_min, lunch_max);
+            let press = norm_min(r.presses, press_min, press_max);
+            let after = norm_min(r.after, after_min, after_max);
+            W_WORK * work + W_LUNCH * lunch + W_PRESS * press + W_AFTER * after
+        })
+        .collect()
+}
+
+/// Normalize a minimize-direction value to `[0, 1]` (best→1, worst→0).
+fn norm_min(v: f64, lo: f64, hi: f64) -> f64 {
+    if (hi - lo).abs() < 1e-12 { 1.0 } else { (hi - v) / (hi - lo) }
+}
+
+/// Normalize a maximize-direction value to `[0, 1]` (best→1, worst→0).
+fn norm_max(v: f64, lo: f64, hi: f64) -> f64 {
+    if (hi - lo).abs() < 1e-12 { 1.0 } else { (v - lo) / (hi - lo) }
+}
+
+/// Render `worst / best` as e.g. "7.5×" for the recommendation rationale.
+fn ratio_str(worst: f64, best: f64) -> String {
+    if best <= 1e-9 {
+        return "∞×".to_string();
+    }
+    format!("{:.1}×", worst / best)
 }

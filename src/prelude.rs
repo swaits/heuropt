@@ -4,6 +4,8 @@
 //! use heuropt::prelude::*;
 //! ```
 
+#[cfg(feature = "async")]
+pub use crate::core::async_problem::AsyncProblem;
 pub use crate::core::{
     Candidate, Direction, Evaluation, Objective, ObjectiveSpace, OptimizationResult,
     PartialProblem, Population, Problem, Rng, rng_from_seed,

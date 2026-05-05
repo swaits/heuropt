@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-05
+
+Theme: async evaluation. heuropt now supports problems where each
+evaluation is a `.await`-able operation — HTTP services, RPC clients,
+spawned subprocesses. This is the differentiating capability vs.
+pymoo / hyperopt / MOEA Framework, none of which ship first-class
+async support.
+
+No public-API breaks for synchronous users. The new surface is
+gated behind a new `async` feature flag.
+
+### Added
+
+- New optional feature `async`, gated on
+  [`futures`](https://crates.io/crates/futures).
+- `core::async_problem::AsyncProblem` trait — mirrors `Problem` but
+  with `async fn evaluate_async(&self, decision)`. Adapt an
+  existing sync `Problem` with a one-line wrapper.
+- Per-algorithm `run_async(&problem, concurrency).await` methods on
+  `RandomSearch` and `DifferentialEvolution` — drives evaluations
+  through whichever async runtime the caller is using (typically
+  tokio). `concurrency` bounds in-flight evaluations.
+- Internal `algorithms::parallel_eval_async::evaluate_batch_async`
+  helper — uses `futures::stream::FuturesOrdered` with concurrency-
+  bounded chunks, preserves input order so seeded determinism is
+  preserved when evaluations are themselves deterministic.
+- `examples/async_eval.rs` — worked example with a simulated 20 ms
+  remote service. At concurrency = 1 it's serial; at concurrency = 4
+  it's 2× faster; demonstrates DifferentialEvolution under tokio.
+
+[0.7.0]: https://github.com/swaits/heuropt/releases/tag/v0.7.0
+
 ## [0.6.0] — 2026-05-05
 
 Theme: production lifecycle. heuropt becomes deployable for long-
@@ -542,5 +574,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.7.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

@@ -3,5 +3,6 @@
 //! full design.
 
 pub mod core;
+pub mod pareto;
 pub mod prelude;
 pub mod traits;

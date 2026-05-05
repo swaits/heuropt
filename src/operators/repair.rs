@@ -70,23 +70,47 @@ impl Repair<Vec<f64>> for ProjectToSimplex {
         if n == 0 {
             return;
         }
+        // If any |x_i| dwarfs `total` so badly that `x_i - total == x_i` in
+        // f64, the standard Duchi/Held-Wolfe projection loses all precision
+        // in τ and silently returns the all-zero vector. In that pathological
+        // regime the projection is effectively concentrated on argmax(x), so
+        // assign all mass there directly.
+        let max_abs = decision
+            .iter()
+            .copied()
+            .fold(0.0_f64, |a, b| a.max(b.abs()));
+        if max_abs > self.total * 1e15 {
+            let mut argmax = 0;
+            for (i, &v) in decision.iter().enumerate().skip(1) {
+                if v > decision[argmax] {
+                    argmax = i;
+                }
+            }
+            for (i, x) in decision.iter_mut().enumerate() {
+                *x = if i == argmax { self.total } else { 0.0 };
+            }
+            return;
+        }
+
         // Sort copy descending.
         let mut sorted: Vec<f64> = decision.clone();
         sorted.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
 
         // Find ρ = max{ j : sorted[j-1] - (Σ_{i<=j} sorted[i] - total) / j > 0 }.
+        // Mathematically the j=0 case always satisfies the condition (since
+        // total > 0), so we initialize from it before the loop — that guards
+        // against floating-point precision loss when |sorted[0]| ≫ total,
+        // where the subtraction `sorted[0] - tau` could otherwise round to
+        // zero and leave τ unset (yielding the all-zero output bug).
         let mut cumsum = 0.0;
-        let mut rho = 0;
-        let mut tau_at_rho = 0.0;
+        let mut tau_at_rho = sorted[0] - self.total;
         for (j, &val) in sorted.iter().enumerate() {
             cumsum += val;
             let tau = (cumsum - self.total) / (j as f64 + 1.0);
             if val - tau > 0.0 {
-                rho = j + 1;
                 tau_at_rho = tau;
             }
         }
-        let _ = rho;
         // Apply: x_i ← max(x_i - τ, 0).
         for x in decision.iter_mut() {
             *x = (*x - tau_at_rho).max(0.0);
@@ -167,5 +191,38 @@ mod tests {
     #[should_panic(expected = "total must be > 0")]
     fn project_non_positive_total_panics() {
         let _ = ProjectToSimplex::new(0.0);
+    }
+
+    /// Regression: discovered by the `clamp_to_bounds` fuzzer. When
+    /// `|max(x)|` dwarfs `total` so badly that the subtraction `x - τ`
+    /// rounds away `total`, the standard algorithm previously returned
+    /// the all-zero vector. The degenerate-magnitude fallback now
+    /// concentrates all mass on argmax(x).
+    #[test]
+    fn project_extreme_magnitudes_concentrates_on_argmax() {
+        let mut r = ProjectToSimplex::new(1.0);
+        let mut x = vec![1e20, 5e19, -1e20];
+        r.repair(&mut x);
+        let s: f64 = x.iter().sum();
+        assert!(approx_eq(s, 1.0, 1e-12));
+        // Argmax is index 0; all mass should be there.
+        assert!(approx_eq(x[0], 1.0, 1e-12));
+        assert_eq!(x[1], 0.0);
+        assert_eq!(x[2], 0.0);
+    }
+
+    /// Regression: when the input is "all zeros", τ is small (0 - total),
+    /// the projection should distribute total evenly. This tests the
+    /// loop's handling of equal entries.
+    #[test]
+    fn project_all_zeros_distributes_evenly() {
+        let mut r = ProjectToSimplex::new(1.0);
+        let mut x = vec![0.0, 0.0, 0.0, 0.0];
+        r.repair(&mut x);
+        let s: f64 = x.iter().sum();
+        assert!(approx_eq(s, 1.0, 1e-12));
+        for &v in &x {
+            assert!(approx_eq(v, 0.25, 1e-12));
+        }
     }
 }

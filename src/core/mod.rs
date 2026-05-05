@@ -3,6 +3,7 @@
 pub mod candidate;
 pub mod evaluation;
 pub mod objective;
+pub mod partial_problem;
 pub mod population;
 pub mod problem;
 pub mod result;
@@ -11,6 +12,7 @@ pub mod rng;
 pub use candidate::*;
 pub use evaluation::*;
 pub use objective::*;
+pub use partial_problem::*;
 pub use population::*;
 pub use problem::*;
 pub use result::*;

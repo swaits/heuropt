@@ -6,7 +6,7 @@
 
 pub use crate::core::{
     Candidate, Direction, Evaluation, Objective, ObjectiveSpace, OptimizationResult,
-    Population, Problem, Rng, rng_from_seed,
+    PartialProblem, Population, Problem, Rng, rng_from_seed,
 };
 
 pub use crate::traits::{Initializer, Optimizer, Repair, Variation};
@@ -27,7 +27,8 @@ pub use crate::algorithms::{
     BayesianOptConfig, CmaEs, CmaEsConfig, DifferentialEvolution,
     DifferentialEvolutionConfig, EpsilonMoea, EpsilonMoeaConfig,
     GeneticAlgorithm, GeneticAlgorithmConfig, Grea, GreaConfig, HillClimber, HillClimberConfig, Hype,
-    HypeConfig, Ibea, IbeaConfig, IpopCmaEs, IpopCmaEsConfig, Knea, KneaConfig, Moead, MoeadConfig, Mopso, MopsoConfig,
+    HypeConfig, Hyperband, HyperbandConfig, Ibea, IbeaConfig, IpopCmaEs, IpopCmaEsConfig,
+    Knea, KneaConfig, Moead, MoeadConfig, Mopso, MopsoConfig,
     NelderMead, NelderMeadConfig, Nsga2,
     Nsga2Config, Nsga3, Nsga3Config, OnePlusOneEs, OnePlusOneEsConfig, Paes, PaesConfig, ParticleSwarm, PesaII, PesaIIConfig,
     ParticleSwarmConfig, RandomSearch, RandomSearchConfig, Rvea, RveaConfig,

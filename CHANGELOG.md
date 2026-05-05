@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-05
+
+Theme: testing infrastructure, two real bug fixes surfaced by that
+infrastructure, and a CPU-time optimization pass that made the
+comparison harness 3.27× faster end-to-end. No breaking changes to
+the v0.3.0 public API.
+
+### Performance
+
+A focused, measure-and-iterate optimization pass on the Pareto-based
+multi-objective hot paths. Every change verified bit-identical against
+the v0.3.0 comparison-harness snapshot — quality metrics
+(hypervolume, spacing, mean L2, mean dist, front size) match to the
+last decimal in every benchmark.
+
+**Cumulative wall-clock impact (compare harness, 10-seed mean):**
+
+| Algorithm / Problem  | v0.3.0  | v0.4.0  | Speedup |
+|----------------------|--------:|--------:|--------:|
+| AGE-MOEA / DTLZ1     | 2299 ms |  229 ms |  10×    |
+| SPEA2 / DTLZ2        | 4304 ms |  513 ms |  8.4×   |
+| AGE-MOEA / ZDT3      |  932 ms |  193 ms |  4.8×   |
+| NSGA-II / ZDT1       |  268 ms |   65 ms |  4.1×   |
+| NSGA-II / ZDT3       |  267 ms |   65 ms |  4.1×   |
+| SMS-EMOA / DTLZ2     | 5643 ms | 1369 ms |  4.1×   |
+| NSGA-II / Rastrigin  |  260 ms |   71 ms |  3.7×   |
+| NSGA-II / DTLZ2      |  344 ms |  106 ms |  3.2×   |
+| NSGA-III / DTLZ2     |  318 ms |  122 ms |  2.6×   |
+| NSGA-III / DTLZ1     |  303 ms |  122 ms |  2.5×   |
+| HypE / DTLZ2         |   80 ms |   44 ms |  1.8×   |
+| **Total compare**    | **18 629 ms** | **5688 ms** | **3.27×** |
+
+**Hot-path instruction counts (gungraun):**
+
+| Benchmark               | v0.3.0      | v0.4.0   | Speedup |
+|-------------------------|------------:|---------:|--------:|
+| `hypervolume_nd_3d` n=100 | 13 523 760 | 367 767 |    37×  |
+| `hypervolume_nd_3d` n=30  |    676 902 |  70 334 |   9.6×  |
+| `non_dominated_sort_2d` n=200 | 13 513 271 | 2 601 813 | 5.2× |
+| `non_dominated_sort_2d` n=50  |    852 317 |   198 574 | 4.3× |
+| `spea2_short`             |    179 113 | 133 783 |   1.34× |
+
+**Changes (in commit order):**
+
+- `perf(hypervolume)` — Rewrote the M≥3 HSO recursion in
+  `hypervolume_nd`. The original cloned the active set into a fresh
+  Vec<Vec<f64>> at the top of every recursive call, used a linear-scan
+  `position` lookup to remove the just-processed point each band, and
+  re-projected onto M-1 axes inside every band. Now: sort-by-index,
+  pre-project once, slice prefixes for the active set, and skip
+  `non_dominated_projection` when recursing into the M=2 base case
+  (whose sweep already filters dominated points internally).
+- `perf(non_dominated_sort)` — Cache `as_minimization` /
+  feasibility / violation per individual once at the top of the
+  Deb fast-non-dominated-sort, then inline the dominance test against
+  those arrays. The naïve formulation called `pareto_compare` twice
+  per pair, each call allocating two fresh Vec<f64>s — 4N(N-1)
+  allocations per sort. Propagates to every Pareto-based MOEA.
+- `perf(age_moea)` — Cache `lp_norm(translated[i], p)` once per
+  candidate at function entry; maintain a `nearest[]` array updated
+  incrementally on each pick (single `min` per remaining instead of
+  a fresh full scan over the keep list). Cuts the splitting-front
+  scoring loop from O(R · K · M) per iteration to O(R · M).
+- `perf(spea2)` — Two wins. (1) `compute_fitness` (called twice per
+  generation): inline dominance against cached oriented arrays,
+  symmetric distance matrix built once. (2) `build_archive` truncation:
+  compute pairwise distances + sorted neighbor vectors once, then on
+  victim removal use binary-search-remove on every survivor's
+  still-sorted vector — total truncation cost O(K³ log K) → O(K² log K).
+- `perf(hypervolume)` — Index-sort instead of cloning point vectors
+  in the M≥3 recursion. The N inner-Vec clones per HV call were
+  redundant once we'd already sorted by last-axis. Big bench win
+  (32×→37× cumulative on n=100/3D), modest wall-clock impact because
+  SMS-EMOA's worst-front HV calls operate on small fronts.
+- `build(release)` — Enable thin LTO + codegen-units=1 in the
+  release profile. Worth ~150 ms across the harness; only applies
+  when heuropt is the workspace root, so downstream consumers see
+  whatever profile their own Cargo.toml configures.
+- `perf(pareto_archive)` — Cache the candidate's oriented +
+  feasibility once per `insert`, build each member's oriented vector
+  once, and inline the two-pass dominance checks. Used by PESA-II
+  (most impact), PAES, ε-MOEA, and any user code working through the
+  archive directly.
+
 ### Added
 
 - **Decision tree update** in README to cover all v0.3.0 algorithms,
@@ -58,6 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   degenerate "all mass on argmax" projection above a 1e15 magnitude
   ratio, and is robust to floating-point precision loss in the
   algorithm's inner loop.
+
+[0.4.0]: https://github.com/swaits/heuropt/releases/tag/v0.4.0
 
 ## [0.3.0] — 2026-05-05
 
@@ -297,5 +383,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.4.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

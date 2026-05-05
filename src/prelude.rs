@@ -22,6 +22,6 @@ pub use crate::operators::{
 };
 
 pub use crate::algorithms::{
-    DifferentialEvolution, DifferentialEvolutionConfig, Nsga2, Nsga2Config, Paes, PaesConfig,
-    RandomSearch, RandomSearchConfig, Spea2, Spea2Config,
+    DifferentialEvolution, DifferentialEvolutionConfig, Nsga2, Nsga2Config, Nsga3,
+    Nsga3Config, Paes, PaesConfig, RandomSearch, RandomSearchConfig, Spea2, Spea2Config,
 };

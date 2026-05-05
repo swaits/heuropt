@@ -73,8 +73,14 @@ const W_BALANCE: f64 = 0.10; // bonus for longer yellow + red phases
 
 // Press hinge: full reward at or below LOW, linearly drops to 0 at COMFORT_CAP,
 // and any candidate with mean_presses > COMFORT_CAP is rejected outright.
-const PRESS_HINGE_LOW: f64 = 2.0;
-const PRESS_COMFORT_CAP: f64 = 3.0;
+//
+// Counts every daily press: morning boot, 13:00 lunch retap, warning-phase
+// reactions, and any death-restart presses during the workday. With ~2
+// baseline presses already mandatory each day, the LOW threshold sits just
+// above baseline (2 + a half warning press) and the cap allows up to
+// 1.5 additional presses on top of baseline before rejecting.
+const PRESS_HINGE_LOW: f64 = 2.5;
+const PRESS_COMFORT_CAP: f64 = 3.5;
 
 // Balance bonus saturates: a min(yellow_width, red_width) of >= this many
 // minutes scores the full balance term.
@@ -145,17 +151,37 @@ impl JigglyTuning {
     ) -> DayOutcome {
         let mut rng = StdRng::seed_from_u64(day_seed);
         let mut expire = s + rt;
-        let mut o = DayOutcome::default();
-        let t_max = e.max(expire) + 1;
+        // Boot press at workday start: user presses to begin cycle 1.
+        let mut o = DayOutcome { presses: 1, ..Default::default() };
+        // Allow the loop to extend past the larger of (workday end, last
+        // possible cycle end given any in-loop expire bumps). Cap at one
+        // extra cycle's worth so a long string of presses can't blow the
+        // budget.
+        let t_max = e.max(expire).max(s + 2 * rt) + 1;
+        let mut prev_running = true;
         for t in s..t_max {
-            // Free re-tap when the user re-logs in at 13:00.
+            // 13:00 re-login press: user comes back from lunch, presses to
+            // start cycle 2.
             if t == LUNCH_END && t < e {
                 expire = t + rt;
+                o.presses += 1;
             }
             let in_workday = t >= s && t < e;
             let at_lunch = (LUNCH_START..LUNCH_END).contains(&t);
             let device_running = t < expire;
             let device_dead = !device_running;
+
+            // Death-restart press: when the device transitions from running
+            // to dead during workday (not at lunch), user notices the screen
+            // sleeping and presses to restart. Counts as a press for THIS
+            // minute; subsequent at-desk minutes are now covered.
+            if prev_running && device_dead && in_workday && !at_lunch {
+                expire = t + rt;
+                o.presses += 1;
+                prev_running = true;
+                continue;
+            }
+            prev_running = device_running;
 
             if device_dead && in_workday {
                 if at_lunch {
@@ -496,7 +522,7 @@ fn main() {
         (W_BALANCE * 100.0) as i32,
     );
     println!(
-        "  press hinge: full reward ≤ {:.0}/d, ramps to 0 at {:.0}/d, REJECTED above",
+        "  press hinge: full reward ≤ {:.1}/d, ramps to 0 at {:.1}/d, REJECTED above",
         PRESS_HINGE_LOW, PRESS_COMFORT_CAP,
     );
     println!(
@@ -552,16 +578,21 @@ fn main() {
         ratio_str(max_work, top.work_fail.max(1e-9)),
     );
     let press_note = if top.presses <= PRESS_HINGE_LOW {
-        format!("inside your no-penalty zone ≤{:.0}/d", PRESS_HINGE_LOW)
+        format!("inside your no-penalty zone ≤{:.1}/d", PRESS_HINGE_LOW)
+    } else if top.presses < PRESS_COMFORT_CAP {
+        format!(
+            "above the {:.1}/d hinge but below your {:.1}/d cap",
+            PRESS_HINGE_LOW, PRESS_COMFORT_CAP,
+        )
     } else {
-        format!("{:.2}/d above the {:.0}-press hinge", top.presses - PRESS_HINGE_LOW, PRESS_HINGE_LOW)
+        format!("AT or ABOVE your {:.1}/d comfort cap", PRESS_COMFORT_CAP)
     };
     println!(
-        "  • {:.2} button presses/day ({}, {} below your {:.0}/d comfort cap)",
-        top.presses,
-        press_note,
-        ratio_str(PRESS_COMFORT_CAP, top.presses.max(1e-9)),
-        PRESS_COMFORT_CAP,
+        "  • {:.2} button presses/day total — {}",
+        top.presses, press_note,
+    );
+    println!(
+        "    (counts: boot + 13:00 retap + warning-phase reactions + death-restarts)"
     );
     println!(
         "  • warning phases: yellow {} min, red {} min, fast-red {} min (balance score {:.2})",

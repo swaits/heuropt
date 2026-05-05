@@ -224,25 +224,28 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
     // `k` is exactly the prefix `sorted[..=k]` — no allocations or
     // linear-scan removals needed.
     let last = m - 1;
-    let mut sorted: Vec<Vec<f64>> = points.to_vec();
-    sorted.sort_by(|a, b| {
-        a[last]
-            .partial_cmp(&b[last])
+    // Index-sort instead of cloning every point's inner vector. The
+    // recursion stays bit-identical because we still iterate the same
+    // points in the same order.
+    let mut order: Vec<usize> = (0..points.len()).collect();
+    order.sort_by(|&i, &j| {
+        points[i][last]
+            .partial_cmp(&points[j][last])
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Pre-project all points onto the first M-1 axes once. The active
-    // set at each band is the prefix `projected_all[..=k]`; we slice
-    // that prefix instead of rebuilding it per band.
-    let projected_all: Vec<Vec<f64>> = sorted.iter().map(|q| q[..last].to_vec()).collect();
+    // Pre-project once onto the first M-1 axes, in the sorted order.
+    // The active set at iteration `k` is the prefix `projected[..=k]`,
+    // so the inner recursion just slices the prefix.
+    let projected: Vec<Vec<f64>> = order.iter().map(|&i| points[i][..last].to_vec()).collect();
     let sub_reference: &[f64] = &reference[..last];
     let mut total = 0.0;
     let mut prev = reference[last];
-    for k in (0..sorted.len()).rev() {
-        let p = &sorted[k];
-        let depth = prev - p[last];
+    for k in (0..order.len()).rev() {
+        let p_last = points[order[k]][last];
+        let depth = prev - p_last;
         if depth > 0.0 {
-            let active = &projected_all[..=k];
+            let active = &projected[..=k];
             // The 2-D base case sweeps in sorted-x order and skips any
             // point with `y >= last_y`, which is exactly the dominance
             // filter — so for M=3 (sub_reference len 2) we can hand
@@ -258,7 +261,7 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
             };
             total += depth * inner;
         }
-        prev = p[last];
+        prev = p_last;
     }
 
     total

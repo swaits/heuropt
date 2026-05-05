@@ -46,6 +46,10 @@ pub fn non_dominated_sort<D>(
 
     fronts.push(first_front);
     let mut k = 0;
+    let mut assigned = vec![false; n];
+    for &i in &fronts[0] {
+        assigned[i] = true;
+    }
     while k < fronts.len() && !fronts[k].is_empty() {
         let mut next: Vec<usize> = Vec::new();
         // Borrow-friendly: collect dominated indices for the current front first.
@@ -55,6 +59,7 @@ pub fn non_dominated_sort<D>(
                 dominated_by_count[j] -= 1;
                 if dominated_by_count[j] == 0 {
                     next.push(j);
+                    assigned[j] = true;
                 }
             }
         }
@@ -63,6 +68,15 @@ pub fn non_dominated_sort<D>(
         }
         fronts.push(next);
         k += 1;
+    }
+
+    // Any indices still unassigned correspond to dominance-graph cycles
+    // (which can arise when objectives or constraint violations contain
+    // NaN — `pareto_compare` becomes intransitive). Place them all in a
+    // final residual front so the partition invariant holds.
+    let residual: Vec<usize> = (0..n).filter(|&i| !assigned[i]).collect();
+    if !residual.is_empty() {
+        fronts.push(residual);
     }
 
     fronts
@@ -79,10 +93,7 @@ mod tests {
     }
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     #[test]
@@ -90,6 +101,28 @@ mod tests {
         let s = space_min2();
         let fronts = non_dominated_sort::<()>(&[], &s);
         assert!(fronts.is_empty());
+    }
+
+    /// Regression: discovered by the `non_dominated_sort` fuzzer. NaN
+    /// objectives make `pareto_compare` intransitive, which can leave a
+    /// cycle in the dominance graph where no node has zero in-degree.
+    /// Previously the algorithm dropped those indices silently; now they
+    /// land in a final residual front so the partition invariant holds.
+    #[test]
+    fn nan_objective_cycle_indices_partitioned_into_residual_front() {
+        let s = space_min2();
+        // Three points whose pairwise comparisons form a 3-cycle under NaN
+        // intransitivity (the original fuzz-found case had 5 points; this
+        // 3-point case is the minimal reproduction).
+        let pop = [
+            cand(vec![f64::NAN, 1.0]),
+            cand(vec![1.0, f64::NAN]),
+            cand(vec![f64::NAN, f64::NAN]),
+        ];
+        let fronts = non_dominated_sort(&pop, &s);
+        let mut all_indices: Vec<usize> = fronts.iter().flatten().copied().collect();
+        all_indices.sort();
+        assert_eq!(all_indices, vec![0, 1, 2]);
     }
 
     #[test]

@@ -26,6 +26,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 gungraun = "0.18"
+proptest = "1"
 
 [[bench]]
 name = "hot_paths"

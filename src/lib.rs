@@ -3,4 +3,5 @@
 //! full design.
 
 pub mod core;
+pub mod prelude;
 pub mod traits;

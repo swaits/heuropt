@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### New algorithms (the "expensive-eval and gradient-free" cohort)
+
+- `OnePlusOneEs` — Rechenberg 1973 (1+1)-ES with the one-fifth success
+  rule. Smallest possible self-adapting evolution strategy.
+- `NelderMead` — Nelder & Mead 1965 simplex direct-search method. Fills
+  a real gap: heuropt's first classical gradient-free local optimizer.
+- `IpopCmaEs` — Auger & Hansen 2005 increasing-population CMA-ES with
+  restart. Specifically fixes vanilla CMA-ES's known weakness on
+  multimodal problems (e.g. Rastrigin: 2.35 → 0.13).
+- `BayesianOpt` — Gaussian-process-based Bayesian Optimization with
+  Expected Improvement acquisition. heuropt's first sample-efficient
+  algorithm: targets the 50–500 evaluation regime where every other
+  algorithm is way over-budget.
+
+#### Internal helpers
+
+- `internal::cholesky` — Cholesky factorization + triangular solves
+  for symmetric positive-definite matrices, used by the GP posterior
+  in `BayesianOpt`. Hand-rolled to avoid pulling in nalgebra.
+
+#### CmaEs API change (additive)
+
+- `CmaEsConfig` gained an `initial_mean: Option<Vec<f64>>` field
+  (defaulting to `None`, which keeps the existing midpoint-of-bounds
+  behavior). `IpopCmaEs` uses it to inject restart diversity without
+  shrinking the search box.
+
 ## [0.2.0] — 2026-05-05
 
 A substantial expansion of the algorithm catalog (21 new algorithms),

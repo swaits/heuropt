@@ -1015,6 +1015,123 @@ fn rastrigin_cma_es(seed: u64) -> SoRun {
     }
 }
 
+fn rastrigin_ipop_cma_es(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let pop = 16;
+    let config = IpopCmaEsConfig {
+        initial_population_size: pop,
+        total_generations: RASTRIGIN_BUDGET / pop,
+        initial_sigma: 1.0,
+        eigen_decomposition_period: 1,
+        stall_generations: None,
+        seed,
+    };
+    let mut opt = IpopCmaEs::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_one_plus_one_es(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let config = OnePlusOneEsConfig {
+        iterations: RASTRIGIN_BUDGET,
+        initial_sigma: 1.0,
+        adaptation_period: 50,
+        step_increase: 1.22,
+        seed,
+    };
+    let mut opt = OnePlusOneEs::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rosenbrock_nelder_mead(_seed: u64) -> SoRun {
+    let problem = rosenbrock_problem();
+    let bounds = RealBounds::new(vec![(-5.0, 10.0); ROSENBROCK_DIM]);
+    let config = NelderMeadConfig {
+        iterations: ROSENBROCK_BUDGET / 4,
+        ..NelderMeadConfig::default()
+    };
+    let mut opt = NelderMead::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rosenbrock_one_plus_one_es(seed: u64) -> SoRun {
+    let problem = rosenbrock_problem();
+    let bounds = RealBounds::new(vec![(-5.0, 10.0); ROSENBROCK_DIM]);
+    let config = OnePlusOneEsConfig {
+        iterations: ROSENBROCK_BUDGET,
+        initial_sigma: 1.0,
+        adaptation_period: 30,
+        step_increase: 1.22,
+        seed,
+    };
+    let mut opt = OnePlusOneEs::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rosenbrock_bo(seed: u64) -> SoRun {
+    let problem = rosenbrock_problem();
+    let bounds = RealBounds::new(vec![(-5.0, 10.0); ROSENBROCK_DIM]);
+    let config = BayesianOptConfig {
+        initial_samples: 10,
+        iterations: 50,
+        length_scales: None,
+        signal_variance: 1.0,
+        noise_variance: 1e-6,
+        acquisition_samples: 1_000,
+        seed,
+    };
+    let mut opt = BayesianOpt::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn ackley_bo(seed: u64) -> SoRun {
+    let problem = ackley_problem();
+    let bounds = RealBounds::new(vec![(-32.768, 32.768); ACKLEY_DIM]);
+    let config = BayesianOptConfig {
+        initial_samples: 10,
+        iterations: 50,
+        length_scales: None,
+        signal_variance: 1.0,
+        noise_variance: 1e-6,
+        acquisition_samples: 1_000,
+        seed,
+    };
+    let mut opt = BayesianOpt::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Rosenbrock + Ackley runners (a curated SO subset on each)
 // -----------------------------------------------------------------------------
@@ -1440,6 +1557,7 @@ fn run_rastrigin_comparison() {
     let runners: &[(&str, Runner)] = &[
         ("RandomSearch", rastrigin_random),
         ("HillClimber", rastrigin_hill_climber),
+        ("(1+1)-ES", rastrigin_one_plus_one_es),
         ("SimulatedAnneal", rastrigin_simulated_annealing),
         ("PAES", rastrigin_paes),
         ("GA", rastrigin_genetic_algorithm),
@@ -1447,6 +1565,7 @@ fn run_rastrigin_comparison() {
         ("NSGA-II", rastrigin_nsga2),
         ("DE", rastrigin_de),
         ("CMA-ES", rastrigin_cma_es),
+        ("IPOP-CMA-ES", rastrigin_ipop_cma_es),
     ];
 
     for (name, runner) in runners {
@@ -1479,6 +1598,9 @@ fn run_rosenbrock_comparison() {
         ("PSO", rosenbrock_pso),
         ("CMA-ES", rosenbrock_cma),
         ("TLBO", rosenbrock_tlbo),
+        ("(1+1)-ES", rosenbrock_one_plus_one_es),
+        ("Nelder-Mead", rosenbrock_nelder_mead),
+        ("BO (60 evals)", rosenbrock_bo),
     ];
     for (name, runner) in runners {
         let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
@@ -1508,6 +1630,7 @@ fn run_ackley_comparison() {
         ("PSO", ackley_pso),
         ("CMA-ES", ackley_cma),
         ("TLBO", ackley_tlbo),
+        ("BO (60 evals)", ackley_bo),
     ];
     for (name, runner) in runners {
         let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();

@@ -235,7 +235,11 @@ START
  │   │
  │   ├─ Yes → sample-efficient regime
  │   │    ├─ Standard expensive black-box, single-objective
- │   │    │     → BayesianOpt   (GP + Expected Improvement; gold standard)
+ │   │    │     → BayesianOpt   (GP + Expected Improvement; gold
+ │   │    │                      standard *with* per-problem kernel
+ │   │    │                      tuning. The default RBF kernel at
+ │   │    │                      60 evals is honestly bad — give it
+ │   │    │                      more evals or tune the kernel.)
  │   │    │     → Tpe           (KDE-based; cheaper per-step,
  │   │    │                      more robust without tuning)
  │   │    │
@@ -292,12 +296,24 @@ START
      │    ├─ Strong default, fast, well-understood
      │    │     → Nsga2
      │    │
-     │    ├─ Want better front quality than NSGA-II
-     │    │     → Ibea     (indicator-based; often best of the
+     │    ├─ Real-valued, smooth front, want best convergence
+     │    │     → Mopso    (multi-objective PSO; on the benches
+     │    │                 here it wins ZDT1 on both HV and
+     │    │                 convergence by 100× over the
      │    │                 dominance-based methods)
-     │    │     → SmsEmoa  (hypervolume-contribution selection;
-     │    │                 great on 2–3 obj at higher per-step cost)
+     │    │
+     │    ├─ Want better front quality than NSGA-II
+     │    │     → Ibea     (indicator-based; consistently the best
+     │    │                 of the dominance-based methods on these
+     │    │                 benches — wins ZDT3 HV and DTLZ2 mean
+     │    │                 dist by 24×)
      │    │     → Spea2    (strength + density)
+     │    │     → SmsEmoa  (hypervolume-contribution selection;
+     │    │                 elegant in theory but underperforms
+     │    │                 NSGA-II on these benches at our budgets —
+     │    │                 only worth its higher per-step cost on
+     │    │                 fronts where exact HV-contribution is
+     │    │                 the right discriminator)
      │    │
      │    ├─ Want decomposition / weight-vector style
      │    │     → Moead    (very fast per generation, scales well)
@@ -312,19 +328,23 @@ START
      │    │     → EpsilonMoea (ε-grid archive,
      │    │                     archive size auto-limits)
      │    │
-     │    ├─ Real-valued and want swarm style
-     │    │     → Mopso
-     │    │
      │    └─ Just one starting decision (no population budget)
      │          → Paes  (1+1 ES with a Pareto archive)
      │
      └─ 4+ (many-objective)
           │
-          ├─ Strong default
-          │     → Nsga3      (reference-point niching, canonical)
-          │     → Moead      (decomposition; scales naturally)
+          ├─ Linear / simplex-shaped front (e.g., DTLZ1)
+          │     → Grea       (grid coords drive ranking; on DTLZ1
+          │                    here it beats NSGA-III by 3× and
+          │                    AGE-MOEA by 2.5×)
+          │     → Moead      (decomposition shines on linear fronts;
+          │                    second on DTLZ1, also among the
+          │                    fastest per generation)
           │
-          ├─ Want geometric structure inferred (vs assumed)
+          ├─ Curved / unknown front geometry
+          │     → Nsga3      (reference-point niching, canonical;
+          │                    a strong default when the front
+          │                    isn't simplex-shaped)
           │     → AgeMoea    (estimates L_p geometry per generation)
           │     → Rvea       (reference vectors with adaptive penalty)
           │
@@ -333,10 +353,6 @@ START
           │                   at high obj count)
           │     → Hype       (Monte Carlo HV estimation; scales
           │                   to arbitrary M)
-          │
-          └─ Want grid-based diversity
-                → Grea       (grid coords drive ranking; particularly
-                              good on linear/simplex fronts)
 ```
 
 ### Quick reference
@@ -345,7 +361,7 @@ START
 
 | Algorithm        | Objectives | Decision   | Strengths |
 |---|---|---|---|
-| `BayesianOpt`    | 1          | `Vec<f64>` | GP surrogate + Expected Improvement; the gold standard |
+| `BayesianOpt`    | 1          | `Vec<f64>` | GP surrogate + EI; gold standard *with* per-problem kernel tuning (default RBF at 60 evals is honestly bad) |
 | `Tpe`            | 1          | `Vec<f64>` | KDE surrogate; robust without hyperparameter tuning |
 | `Hyperband`      | 1          | any        | multi-fidelity; needs `PartialProblem` |
 
@@ -381,18 +397,18 @@ START
 | `Paes`        | 2–3        | 1+1 ES with Pareto archive |
 | `Nsga2`       | 2–3        | canonical Pareto-based EA |
 | `Spea2`       | 2–3        | strength + density |
-| `Mopso`       | 2–3        | multi-objective PSO with archive |
-| `Ibea`        | 2+         | indicator-based; scales to many-obj |
-| `SmsEmoa`     | 2+         | hypervolume-contribution selection |
+| `Mopso`       | 2–3        | multi-objective PSO; best convergence on smooth real-valued 2-obj fronts |
+| `Ibea`        | 2+         | indicator-based; consistently best of the dominance-based methods |
+| `SmsEmoa`     | 2+         | exact HV-contribution selection; high per-step cost, modest gain |
 | `Hype`        | 2+         | Monte Carlo HV estimation |
 | `EpsilonMoea` | 2+         | ε-grid archive; auto-sized |
 | `PesaII`      | 2+         | grid-based region selection |
 | `AgeMoea`     | 2+         | adaptive front-geometry estimation |
 | `Knea`        | 2+         | knee-point favored survival |
 | `Moead`       | 2+         | decomposition; fast per-gen |
-| `Nsga3`       | 4+         | reference-point niching |
+| `Nsga3`       | 4+         | reference-point niching; strong on curved fronts |
 | `Rvea`        | 4+         | reference vectors with penalty |
-| `Grea`        | 4+         | grid coords drive selection |
+| `Grea`        | 4+         | grid coords drive selection; particularly strong on linear/simplex fronts |
 
 ## Current algorithms
 

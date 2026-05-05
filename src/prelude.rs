@@ -18,4 +18,6 @@ pub use crate::pareto::{
 
 pub use crate::operators::{BitFlipMutation, GaussianMutation, RealBounds, SwapMutation};
 
-pub use crate::algorithms::{Paes, PaesConfig, RandomSearch, RandomSearchConfig};
+pub use crate::algorithms::{
+    Nsga2, Nsga2Config, Paes, PaesConfig, RandomSearch, RandomSearchConfig,
+};

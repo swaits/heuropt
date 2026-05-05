@@ -2,7 +2,6 @@
 
 use crate::core::candidate::Candidate;
 use crate::core::objective::ObjectiveSpace;
-use crate::pareto::dominance::{Dominance, pareto_compare};
 
 /// A growable, dominance-pruned archive of candidates.
 ///
@@ -33,19 +32,63 @@ impl<D: Clone> ParetoArchive<D> {
     /// - Otherwise, drop existing members that the new candidate dominates,
     ///   then keep the new candidate.
     pub fn insert(&mut self, candidate: Candidate<D>) {
-        for m in &self.members {
-            if matches!(
-                pareto_compare(&candidate.evaluation, &m.evaluation, &self.objectives),
-                Dominance::DominatedBy | Dominance::Equal
+        // The naïve formulation calls `pareto_compare` twice per member
+        // (once each pass), and `pareto_compare` re-allocates two
+        // Vec<f64>s via `as_minimization` per call → 4N allocations per
+        // insert. Cache the candidate's oriented + feasibility once, and
+        // each member's oriented once, then inline the dominance checks.
+        let n = self.members.len();
+        let m_dim = self.objectives.len();
+        let cand_oriented = self
+            .objectives
+            .as_minimization(&candidate.evaluation.objectives);
+        let cand_feasible = candidate.evaluation.is_feasible();
+        let cand_violation = candidate.evaluation.constraint_violation;
+        let member_oriented: Vec<Vec<f64>> = self
+            .members
+            .iter()
+            .map(|c| self.objectives.as_minimization(&c.evaluation.objectives))
+            .collect();
+
+        // First pass: bail if any existing member dominates-or-equals
+        // the candidate.
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..n {
+            let m_eval = &self.members[i].evaluation;
+            if member_dominates_or_equals(
+                &member_oriented[i],
+                m_eval.is_feasible(),
+                m_eval.constraint_violation,
+                &cand_oriented,
+                cand_feasible,
+                cand_violation,
+                m_dim,
             ) {
                 return;
             }
         }
-        self.members.retain(|m| {
-            !matches!(
-                pareto_compare(&candidate.evaluation, &m.evaluation, &self.objectives),
-                Dominance::Dominates
-            )
+
+        // Second pass: drop existing members the candidate dominates.
+        let mut keep_mask = Vec::with_capacity(n);
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..n {
+            let m_eval = &self.members[i].evaluation;
+            let cand_dominates_member = candidate_dominates_member(
+                &cand_oriented,
+                cand_feasible,
+                cand_violation,
+                &member_oriented[i],
+                m_eval.is_feasible(),
+                m_eval.constraint_violation,
+                m_dim,
+            );
+            keep_mask.push(!cand_dominates_member);
+        }
+        let mut idx = 0;
+        self.members.retain(|_| {
+            let keep = keep_mask[idx];
+            idx += 1;
+            keep
         });
         self.members.push(candidate);
     }
@@ -78,6 +121,68 @@ impl<D: Clone> ParetoArchive<D> {
     /// Consume the archive, returning the members.
     pub fn into_vec(self) -> Vec<Candidate<D>> {
         self.members
+    }
+}
+
+/// Inline `pareto_compare(member, candidate, objectives) ∈ {Dominates, Equal}`
+/// against the cached oriented + feasibility/violation values, returning the
+/// boolean directly.
+#[inline]
+fn member_dominates_or_equals(
+    m_oriented: &[f64],
+    m_feasible: bool,
+    m_violation: f64,
+    c_oriented: &[f64],
+    c_feasible: bool,
+    c_violation: f64,
+    m_dim: usize,
+) -> bool {
+    match (m_feasible, c_feasible) {
+        (true, false) => true,
+        (false, true) => false,
+        (false, false) => m_violation <= c_violation,
+        (true, true) => {
+            let mut c_better = false;
+            for k in 0..m_dim {
+                if c_oriented[k] < m_oriented[k] {
+                    c_better = true;
+                    break;
+                }
+            }
+            !c_better
+        }
+    }
+}
+
+/// Inline `pareto_compare(candidate, member, objectives) == Dominates`.
+#[inline]
+fn candidate_dominates_member(
+    c_oriented: &[f64],
+    c_feasible: bool,
+    c_violation: f64,
+    m_oriented: &[f64],
+    m_feasible: bool,
+    m_violation: f64,
+    m_dim: usize,
+) -> bool {
+    match (c_feasible, m_feasible) {
+        (true, false) => true,
+        (false, true) => false,
+        (false, false) => c_violation < m_violation,
+        (true, true) => {
+            let mut c_better_anywhere = false;
+            let mut m_better_anywhere = false;
+            for k in 0..m_dim {
+                let cv = c_oriented[k];
+                let mv = m_oriented[k];
+                if cv < mv {
+                    c_better_anywhere = true;
+                } else if cv > mv {
+                    m_better_anywhere = true;
+                }
+            }
+            c_better_anywhere && !m_better_anywhere
+        }
     }
 }
 

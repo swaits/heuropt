@@ -197,7 +197,7 @@ fn build_tour(
     for _ in 1..n {
         let current = *tour.last().unwrap();
         // Build a probability vector over the unvisited candidates.
-        let mut probs: Vec<(usize, f64)> = (0..n)
+        let probs: Vec<(usize, f64)> = (0..n)
             .filter(|&j| !visited[j])
             .map(|j| {
                 let p = pheromone[current][j].max(0.0).powf(alpha) * eta[current][j].powf(beta);

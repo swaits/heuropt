@@ -4,7 +4,6 @@ use rand::Rng as _;
 use rand::seq::IndexedRandom;
 
 use crate::algorithms::parallel_eval::evaluate_batch;
-use crate::core::candidate::Candidate;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
 use crate::core::result::OptimizationResult;

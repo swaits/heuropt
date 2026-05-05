@@ -17,6 +17,7 @@ pub mod random_search;
 pub mod simulated_annealing;
 pub mod spea2;
 pub mod tabu_search;
+pub mod umda;
 
 pub use ant_colony_tsp::*;
 pub use cma_es::*;
@@ -34,3 +35,4 @@ pub use random_search::*;
 pub use simulated_annealing::*;
 pub use spea2::*;
 pub use tabu_search::*;
+pub use umda::*;

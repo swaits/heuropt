@@ -30,7 +30,7 @@ pub use crate::algorithms::{
     NelderMead, NelderMeadConfig, Nsga2,
     Nsga2Config, Nsga3, Nsga3Config, OnePlusOneEs, OnePlusOneEsConfig, Paes, PaesConfig, ParticleSwarm, PesaII, PesaIIConfig,
     ParticleSwarmConfig, RandomSearch, RandomSearchConfig, Rvea, RveaConfig,
-    SimulatedAnnealing,
+    SeparableNes, SeparableNesConfig, SimulatedAnnealing,
     SimulatedAnnealingConfig, SmsEmoa, SmsEmoaConfig, Spea2, Spea2Config, TabuSearch,
     TabuSearchConfig, Tlbo, TlboConfig, Umda,
     UmdaConfig,

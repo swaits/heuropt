@@ -234,6 +234,121 @@ fn zdt1_nsga2(seed: u64) -> MoRun {
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
 }
 
+fn zdt1_sms_emoa(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    // SMS-EMOA is steady-state and computes O(N²) hypervolumes per
+    // iteration, so we run it on a smaller population for a smaller
+    // total budget to keep wall time tractable.
+    let config = SmsEmoaConfig {
+        population_size: 40,
+        generations: 4_000,
+        reference_point: vec![11.0, 11.0],
+        seed,
+    };
+    let mut opt = SmsEmoa::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_hype(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 80;
+    // Each generation does multiple HV-estimation passes (parent selection +
+    // survival truncation), each with mc_samples × N work. Keep budget
+    // smaller than NSGA-II's so wall time is tractable.
+    let gens = 80;
+    let config = HypeConfig {
+        population_size: pop,
+        generations: gens,
+        reference_point: vec![11.0, 11.0],
+        mc_samples: 1_000,
+        seed,
+    };
+    let mut opt = Hype::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_rvea(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 100;
+    let gens = ZDT1_BUDGET / pop;
+    let config = RveaConfig {
+        population_size: pop,
+        generations: gens,
+        reference_divisions: 99,
+        alpha: 2.0,
+        seed,
+    };
+    let mut opt = Rvea::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_pesa2(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 50;
+    let gens = (ZDT1_BUDGET - pop) / pop;
+    let config = PesaIIConfig {
+        population_size: pop,
+        archive_size: 100,
+        generations: gens,
+        grid_divisions: 20,
+        seed,
+    };
+    let mut opt = PesaII::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_epsilon_moea(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let config = EpsilonMoeaConfig {
+        population_size: 50,
+        evaluations: ZDT1_BUDGET,
+        epsilon: vec![0.01, 0.01],
+        seed,
+    };
+    let mut opt = EpsilonMoea::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
 fn zdt1_mopso(seed: u64) -> MoRun {
     let problem = Zdt1 { dim: ZDT1_DIM };
     let bounds = RealBounds::new(vec![(0.0, 1.0); ZDT1_DIM]);
@@ -375,6 +490,119 @@ fn dtlz2_spea2(seed: u64) -> MoRun {
         seed,
     };
     let mut opt = Spea2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_sms_emoa(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    // 3-D HV-by-slicing is significantly more expensive than 2-D; smaller
+    // pop and gen budget here to keep the comparison tractable.
+    let pop = 40;
+    let gens = 4_000;
+    let config = SmsEmoaConfig {
+        population_size: pop,
+        generations: gens,
+        reference_point: vec![3.0, 3.0, 3.0],
+        seed,
+    };
+    let mut opt = SmsEmoa::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_hype(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 80;
+    let gens = 80;
+    let config = HypeConfig {
+        population_size: pop,
+        generations: gens,
+        reference_point: vec![3.0, 3.0, 3.0],
+        mc_samples: 1_000,
+        seed,
+    };
+    let mut opt = Hype::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_rvea(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 92;
+    let gens = DTLZ2_BUDGET / pop;
+    let config = RveaConfig {
+        population_size: pop,
+        generations: gens,
+        reference_divisions: 12,
+        alpha: 2.0,
+        seed,
+    };
+    let mut opt = Rvea::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_pesa2(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 50;
+    let gens = (DTLZ2_BUDGET - pop) / pop;
+    let config = PesaIIConfig {
+        population_size: pop,
+        archive_size: 100,
+        generations: gens,
+        grid_divisions: 12,
+        seed,
+    };
+    let mut opt = PesaII::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_epsilon_moea(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let config = EpsilonMoeaConfig {
+        population_size: 50,
+        evaluations: DTLZ2_BUDGET,
+        epsilon: vec![0.05, 0.05, 0.05],
+        seed,
+    };
+    let mut opt = EpsilonMoea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
@@ -689,7 +917,12 @@ fn run_zdt1_comparison() {
         ("PAES", zdt1_paes),
         ("MOPSO", zdt1_mopso),
         ("SPEA2", zdt1_spea2),
+        ("PESA-II", zdt1_pesa2),
+        ("ε-MOEA", zdt1_epsilon_moea),
         ("IBEA", zdt1_ibea),
+        ("HypE", zdt1_hype),
+        ("SMS-EMOA", zdt1_sms_emoa),
+        ("RVEA", zdt1_rvea),
         ("NSGA-II", zdt1_nsga2),
         ("NSGA-III", zdt1_nsga3),
         ("MOEA/D", zdt1_moead),
@@ -748,7 +981,12 @@ fn run_dtlz2_comparison() {
         ("MOPSO", dtlz2_mopso),
         ("NSGA-II", dtlz2_nsga2),
         ("SPEA2", dtlz2_spea2),
+        ("PESA-II", dtlz2_pesa2),
+        ("ε-MOEA", dtlz2_epsilon_moea),
         ("IBEA", dtlz2_ibea),
+        ("HypE", dtlz2_hype),
+        ("SMS-EMOA", dtlz2_sms_emoa),
+        ("RVEA", dtlz2_rvea),
         ("NSGA-III", dtlz2_nsga3),
         ("MOEA/D", dtlz2_moead),
     ];

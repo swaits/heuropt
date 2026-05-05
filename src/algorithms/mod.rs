@@ -12,6 +12,7 @@ pub mod particle_swarm;
 pub mod random_search;
 pub mod simulated_annealing;
 pub mod spea2;
+pub mod tabu_search;
 
 pub use differential_evolution::*;
 pub use genetic_algorithm::*;
@@ -24,3 +25,4 @@ pub use particle_swarm::*;
 pub use random_search::*;
 pub use simulated_annealing::*;
 pub use spea2::*;
+pub use tabu_search::*;

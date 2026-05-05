@@ -26,5 +26,5 @@ pub use crate::algorithms::{
     GeneticAlgorithmConfig, HillClimber, HillClimberConfig, Moead, MoeadConfig, Nsga2,
     Nsga2Config, Nsga3, Nsga3Config, Paes, PaesConfig, ParticleSwarm, ParticleSwarmConfig,
     RandomSearch, RandomSearchConfig, SimulatedAnnealing, SimulatedAnnealingConfig, Spea2,
-    Spea2Config,
+    Spea2Config, TabuSearch, TabuSearchConfig,
 };

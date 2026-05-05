@@ -26,7 +26,7 @@ pub use crate::algorithms::{
     DifferentialEvolutionConfig, EpsilonMoea, EpsilonMoeaConfig,
     GeneticAlgorithm, GeneticAlgorithmConfig, Grea, GreaConfig, HillClimber, HillClimberConfig, Hype,
     HypeConfig, Ibea, IbeaConfig, Knea, KneaConfig, Moead, MoeadConfig, Mopso, MopsoConfig, Nsga2,
-    Nsga2Config, Nsga3, Nsga3Config, Paes, PaesConfig, ParticleSwarm, PesaII, PesaIIConfig,
+    Nsga2Config, Nsga3, Nsga3Config, OnePlusOneEs, OnePlusOneEsConfig, Paes, PaesConfig, ParticleSwarm, PesaII, PesaIIConfig,
     ParticleSwarmConfig, RandomSearch, RandomSearchConfig, Rvea, RveaConfig,
     SimulatedAnnealing,
     SimulatedAnnealingConfig, SmsEmoa, SmsEmoaConfig, Spea2, Spea2Config, TabuSearch,

@@ -87,8 +87,8 @@ where
             // --- Combine pool, compute fitness ---
             let mut pool: Vec<Candidate<P::Decision>> =
                 Vec::with_capacity(population.len() + archive.len());
-            pool.extend(population.drain(..));
-            pool.extend(archive.drain(..));
+            pool.append(&mut population);
+            pool.append(&mut archive);
             let fitness = compute_fitness(&pool, &objectives);
 
             // --- Build the next archive ---

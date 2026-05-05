@@ -119,7 +119,7 @@ where
             // --- Combine + survival selection ---
             let mut combined: Vec<Candidate<P::Decision>> =
                 Vec::with_capacity(2 * n);
-            combined.extend(population.into_iter());
+            combined.extend(population);
             combined.extend(offspring);
             population = environmental_selection(&combined, &objectives, &reference_points, n, &mut rng);
         }
@@ -325,6 +325,7 @@ fn solve_intercepts(oriented: &[Vec<f64>], extremes: &[usize]) -> Option<Vec<f64
     let mut a: Vec<Vec<f64>> = extremes.iter().map(|&i| oriented[i].clone()).collect();
     let mut b: Vec<f64> = vec![1.0; m];
     // Forward elimination with partial pivoting.
+    #[allow(clippy::needless_range_loop)] // Body indexes both `a` and `b` by row.
     for k in 0..m {
         let mut pivot = k;
         for i in (k + 1)..m {
@@ -339,6 +340,7 @@ fn solve_intercepts(oriented: &[Vec<f64>], extremes: &[usize]) -> Option<Vec<f64
         b.swap(k, pivot);
         for i in (k + 1)..m {
             let factor = a[i][k] / a[k][k];
+            #[allow(clippy::needless_range_loop)] // Body indexes both `a[i]` and `a[k]`.
             for j in k..m {
                 a[i][j] -= factor * a[k][j];
             }
@@ -360,7 +362,7 @@ fn solve_intercepts(oriented: &[Vec<f64>], extremes: &[usize]) -> Option<Vec<f64
     // Intercept along axis k is 1 / x[k].
     let intercepts: Vec<f64> = x
         .into_iter()
-        .map(|v| if v.abs() < 1e-12 { return f64::NAN } else { 1.0 / v })
+        .map(|v| if v.abs() < 1e-12 { f64::NAN } else { 1.0 / v })
         .collect();
     if intercepts.iter().any(|v| !v.is_finite() || *v <= 0.0) {
         return None;

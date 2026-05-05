@@ -79,6 +79,7 @@ impl Problem for Dtlz2 {
         let mut f = vec![0.0_f64; m];
         for i in 0..m {
             let mut prod = scale;
+            #[allow(clippy::needless_range_loop)] // Body indexes `x[j]`.
             for j in 0..(m - i - 1) {
                 prod *= (x[j] * std::f64::consts::FRAC_PI_2).cos();
             }

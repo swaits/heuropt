@@ -31,3 +31,10 @@ proptest = "1"
 [[bench]]
 name = "hot_paths"
 harness = false
+
+# Tighten release codegen for the compare harness and downstream binaries
+# that build heuropt directly (i.e. when this crate is the workspace root).
+# When heuropt is used as a dependency the consumer's profile wins.
+[profile.release]
+lto = "thin"
+codegen-units = 1

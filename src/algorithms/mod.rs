@@ -1,5 +1,6 @@
 //! Built-in reference optimizers.
 
+pub mod age_moea;
 pub mod ant_colony_tsp;
 pub mod cma_es;
 pub mod differential_evolution;
@@ -25,6 +26,7 @@ pub mod tabu_search;
 pub mod tlbo;
 pub mod umda;
 
+pub use age_moea::*;
 pub use ant_colony_tsp::*;
 pub use cma_es::*;
 pub use differential_evolution::*;

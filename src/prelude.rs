@@ -17,8 +17,8 @@ pub use crate::pareto::{
 };
 
 pub use crate::operators::{
-    BitFlipMutation, BoundedGaussianMutation, GaussianMutation, RealBounds,
-    SimulatedBinaryCrossover, SwapMutation,
+    BitFlipMutation, BoundedGaussianMutation, GaussianMutation, PolynomialMutation,
+    RealBounds, SimulatedBinaryCrossover, SwapMutation,
 };
 
 pub use crate::algorithms::{

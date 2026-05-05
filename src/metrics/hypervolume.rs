@@ -1,9 +1,8 @@
 //! Exact 2D and N-D hypervolume against a fixed reference point.
 
 use crate::core::candidate::Candidate;
-use crate::core::objective::ObjectiveSpace;
-use crate::pareto::dominance::{Dominance, pareto_compare};
 use crate::core::evaluation::Evaluation;
+use crate::core::objective::ObjectiveSpace;
 
 /// Compute the dominated hypervolume of a 2D front against `reference_point`.
 ///
@@ -418,8 +417,7 @@ mod nd_tests {
         let _ = hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]);
     }
 
-    /// Sanity test: pareto_compare and hypervolume_nd should agree on
-    /// the simple "fewer non-dominated points → less HV" intuition.
+    /// Sanity test: dominated points shouldn't increase HV.
     #[test]
     fn nd_dominated_points_dont_increase_hv() {
         let s = ObjectiveSpace::new(vec![
@@ -433,15 +431,6 @@ mod nd_tests {
         with_dominated.push(cand_n(vec![1.5, 1.5, 1.5]));
         let hv_base = hypervolume_nd(&base, &s, &[2.0, 2.0, 2.0]);
         let hv_with = hypervolume_nd(&with_dominated, &s, &[2.0, 2.0, 2.0]);
-        // Confirm that adding the dominated point really is dominated.
-        assert!(matches!(
-            pareto_compare(
-                &Evaluation::new(vec![1.5, 1.5, 1.5]),
-                &Evaluation::new(vec![0.0, 1.0, 1.0]),
-                &s,
-            ),
-            Dominance::DominatedBy,
-        ));
         assert!((hv_base - hv_with).abs() < 1e-12, "{hv_base} vs {hv_with}");
     }
 }

@@ -8,7 +8,7 @@ use crate::core::objective::ObjectiveSpace;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
 use crate::core::result::OptimizationResult;
-use crate::core::rng::{Rng, rng_from_seed};
+use crate::core::rng::rng_from_seed;
 use crate::metrics::hypervolume::hypervolume_nd_from_evaluations;
 use crate::pareto::front::{best_candidate, pareto_front};
 use crate::pareto::sort::non_dominated_sort;
@@ -264,7 +264,3 @@ mod tests {
     }
 }
 
-// Allow the unused-import warning from the `rng` import if certain feature
-// combinations don't use it.
-#[allow(dead_code)]
-fn _force_rng_use(_rng: &mut Rng) {}

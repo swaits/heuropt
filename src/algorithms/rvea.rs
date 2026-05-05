@@ -4,7 +4,6 @@ use rand::Rng as _;
 
 use crate::algorithms::parallel_eval::evaluate_batch;
 use crate::core::candidate::Candidate;
-use crate::core::objective::ObjectiveSpace;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
 use crate::core::result::OptimizationResult;
@@ -249,9 +248,6 @@ fn smallest_neighbor_angle(references: &[Vec<f64>]) -> f64 {
     }
     if !min_angle.is_finite() { std::f64::consts::FRAC_PI_4 } else { min_angle }
 }
-
-#[allow(unused_imports)]
-use crate::core::objective::Objective;
 
 #[cfg(test)]
 mod tests {

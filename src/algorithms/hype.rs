@@ -61,7 +61,11 @@ pub struct Hype<I, V> {
 impl<I, V> Hype<I, V> {
     /// Construct a `Hype`.
     pub fn new(config: HypeConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -73,7 +77,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Hype population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "Hype population_size must be > 0"
+        );
         assert!(self.config.mc_samples > 0, "Hype mc_samples must be > 0");
         let n = self.config.population_size;
         let objectives = problem.objectives();
@@ -93,14 +100,21 @@ where
         for _ in 0..self.config.generations {
             // Phase 1: parent selection + variation (random tournament on
             // a fitness-by-HV-estimate proxy).
-            let fitness =
-                hype_fitness(&population, &objectives, &reference, self.config.mc_samples, &mut rng);
+            let fitness = hype_fitness(
+                &population,
+                &objectives,
+                &reference,
+                self.config.mc_samples,
+                &mut rng,
+            );
             let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
             while offspring_decisions.len() < n {
                 let p1 = binary_tournament(&fitness, &mut rng);
                 let p2 = binary_tournament(&fitness, &mut rng);
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(!children.is_empty(), "Hype variation returned no children");
                 for child in children {
@@ -140,8 +154,13 @@ where
                 // by largest HV contribution.
                 let pool: Vec<&Candidate<P::Decision>> =
                     splitting.iter().map(|&i| &combined[i]).collect();
-                let contributions =
-                    estimate_contributions(&pool, &objectives, &reference, self.config.mc_samples, &mut rng);
+                let contributions = estimate_contributions(
+                    &pool,
+                    &objectives,
+                    &reference,
+                    self.config.mc_samples,
+                    &mut rng,
+                );
                 let mut order: Vec<usize> = (0..splitting.len()).collect();
                 order.sort_by(|&a, &b| {
                     contributions[b]
@@ -154,7 +173,10 @@ where
             }
 
             // Materialize the next generation.
-            population = keep_indices.into_iter().map(|i| combined[i].clone()).collect();
+            population = keep_indices
+                .into_iter()
+                .map(|i| combined[i].clone())
+                .collect();
         }
 
         let front = pareto_front(&population, &objectives);
@@ -321,10 +343,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

@@ -11,7 +11,10 @@
 /// # Panics
 /// If `num_objectives == 0`.
 pub fn das_dennis(num_objectives: usize, divisions: usize) -> Vec<Vec<f64>> {
-    assert!(num_objectives > 0, "das_dennis requires num_objectives >= 1");
+    assert!(
+        num_objectives > 0,
+        "das_dennis requires num_objectives >= 1"
+    );
     let mut out = Vec::new();
     let mut current = Vec::with_capacity(num_objectives);
     recurse(num_objectives, divisions, divisions, &mut current, &mut out);
@@ -34,7 +37,13 @@ fn recurse(
     }
     for take in 0..=remaining_units {
         current.push(take);
-        recurse(remaining_axes - 1, remaining_units - take, total, current, out);
+        recurse(
+            remaining_axes - 1,
+            remaining_units - take,
+            total,
+            current,
+            out,
+        );
         current.pop();
     }
 }

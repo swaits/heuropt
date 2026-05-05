@@ -54,7 +54,11 @@ pub struct Rvea<I, V> {
 impl<I, V> Rvea<I, V> {
     /// Construct an `Rvea`.
     pub fn new(config: RveaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -66,14 +70,20 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Rvea population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "Rvea population_size must be > 0"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let m = objectives.len();
         // Reference vectors normalized to unit norm.
         let raw_refs = das_dennis(m, self.config.reference_divisions);
         let references: Vec<Vec<f64>> = raw_refs.into_iter().map(unit_normalize).collect();
-        assert!(!references.is_empty(), "Rvea: no reference vectors generated");
+        assert!(
+            !references.is_empty(),
+            "Rvea: no reference vectors generated"
+        );
 
         // Smallest angle between any two reference vectors — used to scale
         // the APD penalty term.
@@ -91,8 +101,10 @@ where
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
                 let p2 = rng.random_range(0..population.len());
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(!children.is_empty(), "Rvea variation returned no children");
                 for child in children {
@@ -126,7 +138,11 @@ where
                 .iter()
                 .map(|c| {
                     let oriented = objectives.as_minimization(&c.evaluation.objectives);
-                    oriented.iter().enumerate().map(|(k, v)| v - ideal[k]).collect()
+                    oriented
+                        .iter()
+                        .enumerate()
+                        .map(|(k, v)| v - ideal[k])
+                        .collect()
                 })
                 .collect();
 
@@ -157,22 +173,23 @@ where
                 }
             }
 
-            let mut next: Vec<Candidate<P::Decision>> =
-                keep.into_iter().flatten().map(|(i, _)| combined[i].clone()).collect();
+            let mut next: Vec<Candidate<P::Decision>> = keep
+                .into_iter()
+                .flatten()
+                .map(|(i, _)| combined[i].clone())
+                .collect();
             // If we ended up with fewer than n (some references unfilled),
             // backfill with the lowest-APD remaining candidates.
             if next.len() < n {
                 let mut all_apds: Vec<(usize, f64)> = (0..combined.len())
                     .map(|i| {
-                        let length: f64 =
-                            translated[i].iter().map(|v| v * v).sum::<f64>().sqrt();
+                        let length: f64 = translated[i].iter().map(|v| v * v).sum::<f64>().sqrt();
                         let theta_max_safe = theta_max.max(1e-12);
                         let penalty = 1.0 + (m_dim as f64) * alpha_t * (angles[i] / theta_max_safe);
                         (i, penalty * length)
                     })
                     .collect();
-                all_apds
-                    .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                all_apds.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
                 for (i, _) in all_apds {
                     if next.len() >= n {
                         break;
@@ -246,7 +263,11 @@ fn smallest_neighbor_angle(references: &[Vec<f64>]) -> f64 {
             }
         }
     }
-    if !min_angle.is_finite() { std::f64::consts::FRAC_PI_4 } else { min_angle }
+    if !min_angle.is_finite() {
+        std::f64::consts::FRAC_PI_4
+    } else {
+        min_angle
+    }
 }
 
 #[cfg(test)]
@@ -292,10 +313,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

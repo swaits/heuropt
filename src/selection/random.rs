@@ -9,11 +9,7 @@ use crate::core::rng::Rng;
 ///
 /// Returns cloned decisions. Panics if `population` is empty and `count > 0`
 /// (spec §10.1).
-pub fn select_random<D: Clone>(
-    population: &[Candidate<D>],
-    count: usize,
-    rng: &mut Rng,
-) -> Vec<D> {
+pub fn select_random<D: Clone>(population: &[Candidate<D>], count: usize, rng: &mut Rng) -> Vec<D> {
     if count == 0 {
         return Vec::new();
     }

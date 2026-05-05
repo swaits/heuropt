@@ -77,10 +77,7 @@ mod tests {
     }
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     #[test]

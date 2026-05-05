@@ -19,7 +19,10 @@ pub struct HillClimberConfig {
 
 impl Default for HillClimberConfig {
     fn default() -> Self {
-        Self { iterations: 1000, seed: 42 }
+        Self {
+            iterations: 1000,
+            seed: 42,
+        }
     }
 }
 
@@ -44,7 +47,11 @@ pub struct HillClimber<I, V> {
 impl<I, V> HillClimber<I, V> {
     /// Construct a `HillClimber`.
     pub fn new(config: HillClimberConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -65,7 +72,10 @@ where
         let mut rng = rng_from_seed(self.config.seed);
 
         let mut initial = self.initializer.initialize(1, &mut rng);
-        assert!(!initial.is_empty(), "HillClimber initializer returned no decisions");
+        assert!(
+            !initial.is_empty(),
+            "HillClimber initializer returned no decisions"
+        );
         let mut current_decision = initial.remove(0);
         let mut current_eval = problem.evaluate(&current_decision);
         let mut evaluations = 1usize;
@@ -73,7 +83,10 @@ where
         for _ in 0..self.config.iterations {
             let parents = vec![current_decision.clone()];
             let children = self.variation.vary(&parents, &mut rng);
-            assert!(!children.is_empty(), "HillClimber variation returned no children");
+            assert!(
+                !children.is_empty(),
+                "HillClimber variation returned no children"
+            );
             let child_decision = children.into_iter().next().unwrap();
             let child_eval = problem.evaluate(&child_decision);
             evaluations += 1;
@@ -116,7 +129,10 @@ mod tests {
 
     fn make_optimizer(seed: u64) -> HillClimber<RealBounds, GaussianMutation> {
         HillClimber::new(
-            HillClimberConfig { iterations: 500, seed },
+            HillClimberConfig {
+                iterations: 500,
+                seed,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.3 },
         )
@@ -127,7 +143,11 @@ mod tests {
         let mut opt = make_optimizer(1);
         let r = opt.run(&Sphere1D);
         let best = r.best.unwrap();
-        assert!(best.evaluation.objectives[0] < 1e-2, "got f = {}", best.evaluation.objectives[0]);
+        assert!(
+            best.evaluation.objectives[0] < 1e-2,
+            "got f = {}",
+            best.evaluation.objectives[0]
+        );
     }
 
     #[test]

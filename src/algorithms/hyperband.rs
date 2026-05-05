@@ -31,7 +31,12 @@ pub struct HyperbandConfig {
 
 impl Default for HyperbandConfig {
     fn default() -> Self {
-        Self { max_budget: 81.0, eta: 3.0, max_brackets: 5, seed: 42 }
+        Self {
+            max_budget: 81.0,
+            eta: 3.0,
+            max_brackets: 5,
+            seed: 42,
+        }
     }
 }
 
@@ -66,7 +71,11 @@ where
 {
     /// Construct a `Hyperband`.
     pub fn new(config: HyperbandConfig, initializer: I) -> Self {
-        Self { config, initializer, _marker: std::marker::PhantomData }
+        Self {
+            config,
+            initializer,
+            _marker: std::marker::PhantomData,
+        }
     }
 
     /// Run Hyperband on a multi-fidelity problem, returning the standard
@@ -75,9 +84,15 @@ where
     where
         P: PartialProblem<Decision = D>,
     {
-        assert!(self.config.max_budget > 0.0, "Hyperband max_budget must be > 0");
+        assert!(
+            self.config.max_budget > 0.0,
+            "Hyperband max_budget must be > 0"
+        );
         assert!(self.config.eta > 1.0, "Hyperband eta must be > 1");
-        assert!(self.config.max_brackets >= 1, "Hyperband max_brackets must be >= 1");
+        assert!(
+            self.config.max_brackets >= 1,
+            "Hyperband max_brackets must be >= 1"
+        );
         let objectives = problem.objectives();
         assert!(
             objectives.is_single_objective(),
@@ -97,9 +112,8 @@ where
         // Brackets are indexed s = s_max, s_max - 1, ..., 0.
         for s in (0..=s_max).rev() {
             let s_f = s as f64;
-            let n = ((s_max as f64 + 1.0) / (s_f + 1.0)
-                * self.config.eta.powf(s_f))
-            .ceil() as usize;
+            let n =
+                ((s_max as f64 + 1.0) / (s_f + 1.0) * self.config.eta.powf(s_f)).ceil() as usize;
             let r = self.config.max_budget / self.config.eta.powf(s_f);
 
             // Sample n configurations.
@@ -268,10 +282,7 @@ mod tests {
         impl PartialProblem for MultiObj {
             type Decision = Vec<f64>;
             fn objectives(&self) -> ObjectiveSpace {
-                ObjectiveSpace::new(vec![
-                    Objective::minimize("a"),
-                    Objective::minimize("b"),
-                ])
+                ObjectiveSpace::new(vec![Objective::minimize("a"), Objective::minimize("b")])
             }
             fn evaluate_at_budget(&self, _: &Vec<f64>, _: f64) -> Evaluation {
                 Evaluation::new(vec![0.0, 0.0])

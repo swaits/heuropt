@@ -9,8 +9,12 @@ use heuropt::prelude::*;
 /// Generate per-axis bounds whose width is at least 0.001 (avoid the
 /// degenerate `lo == hi` case for properties that need a proper interval).
 fn bounds(dim: usize) -> impl Strategy<Value = Vec<(f64, f64)>> {
-    prop::collection::vec((-50.0_f64..50.0, 0.001_f64..50.0), dim..=dim)
-        .prop_map(|pairs| pairs.into_iter().map(|(lo, span)| (lo, lo + span)).collect())
+    prop::collection::vec((-50.0_f64..50.0, 0.001_f64..50.0), dim..=dim).prop_map(|pairs| {
+        pairs
+            .into_iter()
+            .map(|(lo, span)| (lo, lo + span))
+            .collect()
+    })
 }
 
 /// Generate a parent vector inside the given bounds.

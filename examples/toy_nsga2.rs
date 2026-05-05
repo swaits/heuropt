@@ -26,7 +26,11 @@ impl Problem for SchafferN1 {
 fn main() {
     let initializer = RealBounds::new(vec![(-5.0, 5.0)]);
     let variation = GaussianMutation { sigma: 0.2 };
-    let config = Nsga2Config { population_size: 60, generations: 80, seed: 42 };
+    let config = Nsga2Config {
+        population_size: 60,
+        generations: 80,
+        seed: 42,
+    };
     let mut optimizer = Nsga2::new(config, initializer, variation);
 
     let result = optimizer.run(&SchafferN1);

@@ -43,6 +43,7 @@ impl Problem for SchafferN1 {
 }
 
 struct OneMax {
+    #[allow(dead_code)]
     bits: usize,
 }
 impl Problem for OneMax {
@@ -69,8 +70,7 @@ fn mo_bounds() -> Vec<(f64, f64)> {
     vec![(-3.0, 3.0)]
 }
 
-fn mo_variation()
--> CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation> {
+fn mo_variation() -> CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation> {
     let bounds = mo_bounds();
     CompositeVariation {
         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),

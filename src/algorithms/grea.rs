@@ -51,7 +51,11 @@ pub struct Grea<I, V> {
 impl<I, V> Grea<I, V> {
     /// Construct a `Grea`.
     pub fn new(config: GreaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -63,8 +67,14 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Grea population_size must be > 0");
-        assert!(self.config.grid_divisions >= 1, "Grea grid_divisions must be >= 1");
+        assert!(
+            self.config.population_size > 0,
+            "Grea population_size must be > 0"
+        );
+        assert!(
+            self.config.grid_divisions >= 1,
+            "Grea grid_divisions must be >= 1"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
@@ -80,8 +90,10 @@ where
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
                 let p2 = rng.random_range(0..population.len());
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(!children.is_empty(), "Grea variation returned no children");
                 for child in children {
@@ -98,7 +110,8 @@ where
             let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
             combined.extend(population);
             combined.extend(offspring);
-            population = environmental_selection(combined, &objectives, n, self.config.grid_divisions);
+            population =
+                environmental_selection(combined, &objectives, n, self.config.grid_divisions);
         }
 
         let front = pareto_front(&population, &objectives);
@@ -253,10 +266,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 }

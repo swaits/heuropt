@@ -23,7 +23,11 @@ pub struct PaesConfig {
 
 impl Default for PaesConfig {
     fn default() -> Self {
-        Self { iterations: 1000, archive_size: 100, seed: 42 }
+        Self {
+            iterations: 1000,
+            archive_size: 100,
+            seed: 42,
+        }
     }
 }
 
@@ -45,7 +49,11 @@ pub struct Paes<I, V> {
 impl<I, V> Paes<I, V> {
     /// Construct a `Paes` optimizer.
     pub fn new(config: PaesConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -74,15 +82,15 @@ where
         let mut evaluations = 1usize;
 
         let mut archive = ParetoArchive::new(objectives.clone());
-        archive.insert(Candidate::new(current_decision.clone(), current_eval.clone()));
+        archive.insert(Candidate::new(
+            current_decision.clone(),
+            current_eval.clone(),
+        ));
 
         for _ in 0..self.config.iterations {
             let parents = vec![current_decision.clone()];
             let children = self.variation.vary(&parents, &mut rng);
-            assert!(
-                !children.is_empty(),
-                "PAES variation returned no children",
-            );
+            assert!(!children.is_empty(), "PAES variation returned no children",);
             let child_decision = children.into_iter().next().unwrap();
             let child_eval = problem.evaluate(&child_decision);
             evaluations += 1;
@@ -103,7 +111,10 @@ where
             }
 
             archive.insert(Candidate::new(child_decision, child_eval));
-            archive.insert(Candidate::new(current_decision.clone(), current_eval.clone()));
+            archive.insert(Candidate::new(
+                current_decision.clone(),
+                current_eval.clone(),
+            ));
             archive.truncate(self.config.archive_size);
         }
 
@@ -129,7 +140,11 @@ mod tests {
     #[test]
     fn produces_at_least_one_candidate() {
         let mut opt = Paes::new(
-            PaesConfig { iterations: 50, archive_size: 16, seed: 1 },
+            PaesConfig {
+                iterations: 50,
+                archive_size: 16,
+                seed: 1,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.3 },
         );
@@ -141,7 +156,11 @@ mod tests {
     #[test]
     fn archive_size_respected() {
         let mut opt = Paes::new(
-            PaesConfig { iterations: 200, archive_size: 8, seed: 2 },
+            PaesConfig {
+                iterations: 200,
+                archive_size: 8,
+                seed: 2,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.2 },
         );
@@ -152,7 +171,11 @@ mod tests {
     #[test]
     fn single_objective_returns_best() {
         let mut opt = Paes::new(
-            PaesConfig { iterations: 200, archive_size: 8, seed: 3 },
+            PaesConfig {
+                iterations: 200,
+                archive_size: 8,
+                seed: 3,
+            },
             RealBounds::new(vec![(-2.0, 2.0)]),
             GaussianMutation { sigma: 0.1 },
         );

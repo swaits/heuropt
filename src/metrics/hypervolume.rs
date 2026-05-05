@@ -71,10 +71,7 @@ mod tests {
     }
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     #[test]
@@ -83,7 +80,11 @@ mod tests {
         // Dominated region area = 4*4 - sum of "outside" rectangles
         //   stripes: x∈[1,2] y∈[3,4]→1, x∈[2,3] y∈[2,4]→2, x∈[3,4] y∈[1,4]→3 → total dominated = 1+2+3 = 6.
         let s = space_min2();
-        let front = [cand(vec![1.0, 3.0]), cand(vec![2.0, 2.0]), cand(vec![3.0, 1.0])];
+        let front = [
+            cand(vec![1.0, 3.0]),
+            cand(vec![2.0, 2.0]),
+            cand(vec![3.0, 1.0]),
+        ];
         let hv = hypervolume_2d(&front, &s, [4.0, 4.0]);
         assert!((hv - 6.0).abs() < 1e-12, "expected 6.0, got {hv}");
     }
@@ -156,7 +157,10 @@ pub fn hypervolume_nd<D>(
         reference_point.len(),
         "hypervolume_nd: ObjectiveSpace and reference_point must agree on dimension",
     );
-    assert!(!reference_point.is_empty(), "hypervolume_nd: dimension must be >= 1");
+    assert!(
+        !reference_point.is_empty(),
+        "hypervolume_nd: dimension must be >= 1"
+    );
 
     if front.is_empty() {
         return 0.0;
@@ -193,9 +197,7 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
         // 2-D HV via the same sweep used by hypervolume_2d. Inlined here
         // because we already have the points in oriented form.
         let mut sorted: Vec<&Vec<f64>> = points.iter().collect();
-        sorted.sort_by(|a, b| {
-            a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sorted.sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal));
         let mut area = 0.0;
         let mut last_y = reference[1];
         for p in sorted {
@@ -236,10 +238,7 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
     for p in sorted.into_iter().rev() {
         let depth = prev - p[last];
         if depth > 0.0 && !active.is_empty() {
-            let projected: Vec<Vec<f64>> = active
-                .iter()
-                .map(|q| q[..last].to_vec())
-                .collect();
+            let projected: Vec<Vec<f64>> = active.iter().map(|q| q[..last].to_vec()).collect();
             let nd = non_dominated_projection(&projected);
             total += depth * hso_recursive(&nd, &sub_reference);
         }
@@ -259,7 +258,11 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
 
 /// Drop dominated members of a projected point set.
 fn non_dominated_projection(points: &[Vec<f64>]) -> Vec<Vec<f64>> {
-    let m = if let Some(first) = points.first() { first.len() } else { return Vec::new(); };
+    let m = if let Some(first) = points.first() {
+        first.len()
+    } else {
+        return Vec::new();
+    };
     let mut out: Vec<Vec<f64>> = Vec::new();
     'outer: for p in points {
         // Skip if dominated by any kept point.
@@ -327,11 +330,12 @@ mod nd_tests {
 
     #[test]
     fn nd_matches_2d_on_known_case() {
-        let s = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
-        let front = [cand_n(vec![1.0, 3.0]), cand_n(vec![2.0, 2.0]), cand_n(vec![3.0, 1.0])];
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
+        let front = [
+            cand_n(vec![1.0, 3.0]),
+            cand_n(vec![2.0, 2.0]),
+            cand_n(vec![3.0, 1.0]),
+        ];
         let hv2 = hypervolume_2d(&front, &s, [4.0, 4.0]);
         let hvn = hypervolume_nd(&front, &s, &[4.0, 4.0]);
         assert!((hv2 - hvn).abs() < 1e-12, "{hv2} vs {hvn}");
@@ -409,10 +413,7 @@ mod nd_tests {
     #[test]
     #[should_panic(expected = "must agree on dimension")]
     fn nd_panics_on_dim_mismatch() {
-        let s = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
         let front = [cand_n(vec![1.0, 1.0])];
         let _ = hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]);
     }

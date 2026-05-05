@@ -21,7 +21,10 @@ pub struct ParetoArchive<D> {
 impl<D: Clone> ParetoArchive<D> {
     /// Build an empty archive against the given objective space.
     pub fn new(objectives: ObjectiveSpace) -> Self {
-        Self { members: Vec::new(), objectives }
+        Self {
+            members: Vec::new(),
+            objectives,
+        }
     }
 
     /// Insert a candidate, preserving the non-domination property.
@@ -85,10 +88,7 @@ mod tests {
     use crate::core::objective::Objective;
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     fn cand(decision: u32, obj: Vec<f64>) -> Candidate<u32> {

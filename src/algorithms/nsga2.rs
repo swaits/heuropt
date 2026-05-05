@@ -26,7 +26,11 @@ pub struct Nsga2Config {
 
 impl Default for Nsga2Config {
     fn default() -> Self {
-        Self { population_size: 100, generations: 250, seed: 42 }
+        Self {
+            population_size: 100,
+            generations: 250,
+            seed: 42,
+        }
     }
 }
 
@@ -44,7 +48,11 @@ pub struct Nsga2<I, V> {
 impl<I, V> Nsga2<I, V> {
     /// Construct an `Nsga2` optimizer.
     pub fn new(config: Nsga2Config, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -78,8 +86,7 @@ where
             n,
             "NSGA-II initializer must return exactly population_size decisions",
         );
-        let population: Vec<Candidate<P::Decision>> =
-            evaluate_batch(problem, initial_decisions);
+        let population: Vec<Candidate<P::Decision>> = evaluate_batch(problem, initial_decisions);
         let mut evaluations = population.len();
 
         // Annotate the starting population with rank and crowding so the first
@@ -130,7 +137,9 @@ where
                     let dist = crowding_distance(&combined, front, &objectives);
                     let mut order: Vec<usize> = (0..front.len()).collect();
                     order.sort_by(|&a, &b| {
-                        dist[b].partial_cmp(&dist[a]).unwrap_or(std::cmp::Ordering::Equal)
+                        dist[b]
+                            .partial_cmp(&dist[a])
+                            .unwrap_or(std::cmp::Ordering::Equal)
                     });
                     let needed = n - next.len();
                     for &k in order.iter().take(needed) {
@@ -178,7 +187,11 @@ fn annotate<D: Clone>(
     population
         .into_iter()
         .enumerate()
-        .map(|(i, c)| Nsga2Entry { candidate: c, rank: rank[i], crowding_distance: dist[i] })
+        .map(|(i, c)| Nsga2Entry {
+            candidate: c,
+            rank: rank[i],
+            crowding_distance: dist[i],
+        })
         .collect()
 }
 
@@ -212,7 +225,11 @@ mod tests {
     #[test]
     fn final_population_has_expected_size() {
         let mut opt = Nsga2::new(
-            Nsga2Config { population_size: 20, generations: 5, seed: 1 },
+            Nsga2Config {
+                population_size: 20,
+                generations: 5,
+                seed: 1,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.3 },
         );
@@ -224,7 +241,11 @@ mod tests {
     #[test]
     fn evaluation_count_at_least_initial_population() {
         let mut opt = Nsga2::new(
-            Nsga2Config { population_size: 16, generations: 3, seed: 2 },
+            Nsga2Config {
+                population_size: 16,
+                generations: 3,
+                seed: 2,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.3 },
         );
@@ -236,21 +257,35 @@ mod tests {
     #[test]
     fn deterministic_with_same_seed() {
         let mut a = Nsga2::new(
-            Nsga2Config { population_size: 16, generations: 5, seed: 99 },
+            Nsga2Config {
+                population_size: 16,
+                generations: 5,
+                seed: 99,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.2 },
         );
         let mut b = Nsga2::new(
-            Nsga2Config { population_size: 16, generations: 5, seed: 99 },
+            Nsga2Config {
+                population_size: 16,
+                generations: 5,
+                seed: 99,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
             GaussianMutation { sigma: 0.2 },
         );
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 
@@ -258,7 +293,11 @@ mod tests {
     #[should_panic(expected = "population_size must be greater than 0")]
     fn zero_population_size_panics() {
         let mut opt = Nsga2::new(
-            Nsga2Config { population_size: 0, generations: 1, seed: 0 },
+            Nsga2Config {
+                population_size: 0,
+                generations: 1,
+                seed: 0,
+            },
             RealBounds::new(vec![(-1.0, 1.0)]),
             GaussianMutation { sigma: 0.1 },
         );

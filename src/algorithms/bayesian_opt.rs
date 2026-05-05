@@ -85,8 +85,14 @@ where
             self.config.initial_samples >= 2,
             "BayesianOpt initial_samples must be >= 2",
         );
-        assert!(self.config.signal_variance > 0.0, "BayesianOpt signal_variance must be > 0");
-        assert!(self.config.noise_variance > 0.0, "BayesianOpt noise_variance must be > 0");
+        assert!(
+            self.config.signal_variance > 0.0,
+            "BayesianOpt signal_variance must be > 0"
+        );
+        assert!(
+            self.config.noise_variance > 0.0,
+            "BayesianOpt noise_variance must be > 0"
+        );
         assert!(
             self.config.acquisition_samples >= 1,
             "BayesianOpt acquisition_samples must be >= 1",
@@ -99,25 +105,24 @@ where
         let direction = objectives.objectives[0].direction;
         let dim = self.bounds.bounds.len();
         if let Some(ls) = &self.config.length_scales {
-            assert_eq!(ls.len(), dim, "BayesianOpt length_scales.len() must equal dim");
+            assert_eq!(
+                ls.len(),
+                dim,
+                "BayesianOpt length_scales.len() must equal dim"
+            );
         }
-        let length_scales: Vec<f64> = self
-            .config
-            .length_scales
-            .clone()
-            .unwrap_or_else(|| {
-                self.bounds
-                    .bounds
-                    .iter()
-                    .map(|&(lo, hi)| 0.2 * (hi - lo).max(1e-9))
-                    .collect()
-            });
+        let length_scales: Vec<f64> = self.config.length_scales.clone().unwrap_or_else(|| {
+            self.bounds
+                .bounds
+                .iter()
+                .map(|&(lo, hi)| 0.2 * (hi - lo).max(1e-9))
+                .collect()
+        });
         let mut rng = rng_from_seed(self.config.seed);
 
         // ---------------- Initial random design ----------------
-        let mut decisions: Vec<Vec<f64>> = Vec::with_capacity(
-            self.config.initial_samples + self.config.iterations,
-        );
+        let mut decisions: Vec<Vec<f64>> =
+            Vec::with_capacity(self.config.initial_samples + self.config.iterations);
         let mut targets: Vec<f64> = Vec::with_capacity(decisions.capacity());
         let mut evaluations = Vec::with_capacity(decisions.capacity());
         for _ in 0..self.config.initial_samples {
@@ -153,8 +158,7 @@ where
                 }
             };
 
-            let best_target =
-                targets.iter().cloned().fold(f64::INFINITY, f64::min);
+            let best_target = targets.iter().cloned().fold(f64::INFINITY, f64::min);
 
             // Maximize EI by best-of-N random sampling.
             let mut best_x = sample_uniform_in_bounds(&self.bounds, &mut rng);
@@ -183,7 +187,11 @@ where
             .collect();
         let mut best_idx = 0;
         for i in 1..final_pop.len() {
-            if better(&final_pop[i].evaluation, &final_pop[best_idx].evaluation, direction) {
+            if better(
+                &final_pop[i].evaluation,
+                &final_pop[best_idx].evaluation,
+                direction,
+            ) {
                 best_idx = i;
             }
         }
@@ -232,7 +240,13 @@ fn sample_uniform_in_bounds(bounds: &RealBounds, rng: &mut Rng) -> Vec<f64> {
     bounds
         .bounds
         .iter()
-        .map(|&(lo, hi)| if lo == hi { lo } else { lo + (hi - lo) * rng.random::<f64>() })
+        .map(|&(lo, hi)| {
+            if lo == hi {
+                lo
+            } else {
+                lo + (hi - lo) * rng.random::<f64>()
+            }
+        })
         .collect()
 }
 
@@ -289,10 +303,19 @@ impl GpPosterior {
         let n = self.decisions.len();
         let mut k_star = vec![0.0_f64; n];
         for (i, k_star_i) in k_star.iter_mut().enumerate() {
-            *k_star_i = rbf_kernel(x, &self.decisions[i], &self.length_scales, self.signal_variance);
+            *k_star_i = rbf_kernel(
+                x,
+                &self.decisions[i],
+                &self.length_scales,
+                self.signal_variance,
+            );
         }
         let _ = n;
-        let mu: f64 = k_star.iter().zip(self.alpha.iter()).map(|(a, b)| a * b).sum();
+        let mu: f64 = k_star
+            .iter()
+            .zip(self.alpha.iter())
+            .map(|(a, b)| a * b)
+            .sum();
         // Var = k(x,x) - k_star^T · K^{-1} · k_star
         // Compute K^{-1}·k_star = solve_upper_transpose(L, solve_lower(L, k_star))
         let v_temp = crate::internal::cholesky::solve_lower(&self.chol_l, &k_star);
@@ -335,8 +358,7 @@ fn erf(x: f64) -> f64 {
     let sign = if x < 0.0 { -1.0 } else { 1.0 };
     let x = x.abs();
     let t = 1.0 / (1.0 + p * x);
-    let y = 1.0
-        - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
+    let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
     sign * y
 }
 

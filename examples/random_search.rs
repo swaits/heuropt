@@ -24,7 +24,11 @@ impl Problem for Sphere2D {
 
 fn main() {
     let initializer = RealBounds::new(vec![(-5.0, 5.0), (-5.0, 5.0)]);
-    let config = RandomSearchConfig { iterations: 500, batch_size: 1, seed: 7 };
+    let config = RandomSearchConfig {
+        iterations: 500,
+        batch_size: 1,
+        seed: 7,
+    };
     let mut optimizer = RandomSearch::new(config, initializer);
 
     let result = optimizer.run(&Sphere2D);

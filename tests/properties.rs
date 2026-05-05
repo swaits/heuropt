@@ -20,17 +20,12 @@ use heuropt::prelude::*;
 
 /// Generate a 2-objective minimize ObjectiveSpace.
 fn space_2d() -> ObjectiveSpace {
-    ObjectiveSpace::new(vec![
-        Objective::minimize("f1"),
-        Objective::minimize("f2"),
-    ])
+    ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
 }
 
 /// Generate a candidate with a 2-D objective vector in `[lo, hi]`.
 fn candidate_2d(lo: f64, hi: f64) -> impl Strategy<Value = Candidate<()>> {
-    (lo..hi, lo..hi).prop_map(|(a, b)| {
-        Candidate::new((), Evaluation::new(vec![a, b]))
-    })
+    (lo..hi, lo..hi).prop_map(|(a, b)| Candidate::new((), Evaluation::new(vec![a, b])))
 }
 
 /// Generate a small 2-D population.
@@ -40,8 +35,12 @@ fn population_2d() -> impl Strategy<Value = Vec<Candidate<()>>> {
 
 /// Generate per-axis bounds.
 fn bounds(dim: usize) -> impl Strategy<Value = Vec<(f64, f64)>> {
-    prop::collection::vec((-50.0_f64..50.0, 0.001_f64..50.0), dim..=dim)
-        .prop_map(|pairs| pairs.into_iter().map(|(lo, span)| (lo, lo + span)).collect())
+    prop::collection::vec((-50.0_f64..50.0, 0.001_f64..50.0), dim..=dim).prop_map(|pairs| {
+        pairs
+            .into_iter()
+            .map(|(lo, span)| (lo, lo + span))
+            .collect()
+    })
 }
 
 // -----------------------------------------------------------------------------

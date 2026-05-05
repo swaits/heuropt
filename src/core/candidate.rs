@@ -18,7 +18,10 @@ pub struct Candidate<D> {
 impl<D> Candidate<D> {
     /// Pair a decision with its evaluation.
     pub fn new(decision: D, evaluation: Evaluation) -> Self {
-        Self { decision, evaluation }
+        Self {
+            decision,
+            evaluation,
+        }
     }
 }
 

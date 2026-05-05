@@ -21,7 +21,10 @@ pub(crate) fn symmetric_eigen(
     max_sweeps: usize,
 ) -> (Vec<f64>, Vec<Vec<f64>>) {
     let n = matrix.len();
-    debug_assert!(matrix.iter().all(|row| row.len() == n), "matrix must be square");
+    debug_assert!(
+        matrix.iter().all(|row| row.len() == n),
+        "matrix must be square"
+    );
 
     // Working copy of the matrix; converges to a diagonal of eigenvalues.
     let mut a: Vec<Vec<f64>> = matrix.to_vec();

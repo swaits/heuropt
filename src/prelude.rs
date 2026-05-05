@@ -12,28 +12,25 @@ pub use crate::core::{
 pub use crate::traits::{Initializer, Optimizer, Repair, Variation};
 
 pub use crate::pareto::{
-    Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis,
-    non_dominated_sort, pareto_compare, pareto_front,
+    Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis, non_dominated_sort,
+    pareto_compare, pareto_front,
 };
 
 pub use crate::operators::{
-    BitFlipMutation, BoundedGaussianMutation, ClampToBounds, CompositeVariation,
-    GaussianMutation, LevyMutation, PolynomialMutation, ProjectToSimplex, RealBounds,
-    SimulatedBinaryCrossover, SwapMutation,
+    BitFlipMutation, BoundedGaussianMutation, ClampToBounds, CompositeVariation, GaussianMutation,
+    LevyMutation, PolynomialMutation, ProjectToSimplex, RealBounds, SimulatedBinaryCrossover,
+    SwapMutation,
 };
 
 pub use crate::algorithms::{
-    AgeMoea, AgeMoeaConfig, AntColonyTsp, AntColonyTspConfig, BayesianOpt,
-    BayesianOptConfig, CmaEs, CmaEsConfig, DifferentialEvolution,
-    DifferentialEvolutionConfig, EpsilonMoea, EpsilonMoeaConfig,
-    GeneticAlgorithm, GeneticAlgorithmConfig, Grea, GreaConfig, HillClimber, HillClimberConfig, Hype,
-    HypeConfig, Hyperband, HyperbandConfig, Ibea, IbeaConfig, IpopCmaEs, IpopCmaEsConfig,
-    Knea, KneaConfig, Moead, MoeadConfig, Mopso, MopsoConfig,
-    NelderMead, NelderMeadConfig, Nsga2,
-    Nsga2Config, Nsga3, Nsga3Config, OnePlusOneEs, OnePlusOneEsConfig, Paes, PaesConfig, ParticleSwarm, PesaII, PesaIIConfig,
-    ParticleSwarmConfig, RandomSearch, RandomSearchConfig, Rvea, RveaConfig,
-    SeparableNes, SeparableNesConfig, SimulatedAnnealing,
+    AgeMoea, AgeMoeaConfig, AntColonyTsp, AntColonyTspConfig, BayesianOpt, BayesianOptConfig,
+    CmaEs, CmaEsConfig, DifferentialEvolution, DifferentialEvolutionConfig, EpsilonMoea,
+    EpsilonMoeaConfig, GeneticAlgorithm, GeneticAlgorithmConfig, Grea, GreaConfig, HillClimber,
+    HillClimberConfig, Hype, HypeConfig, Hyperband, HyperbandConfig, Ibea, IbeaConfig, IpopCmaEs,
+    IpopCmaEsConfig, Knea, KneaConfig, Moead, MoeadConfig, Mopso, MopsoConfig, NelderMead,
+    NelderMeadConfig, Nsga2, Nsga2Config, Nsga3, Nsga3Config, OnePlusOneEs, OnePlusOneEsConfig,
+    Paes, PaesConfig, ParticleSwarm, ParticleSwarmConfig, PesaII, PesaIIConfig, RandomSearch,
+    RandomSearchConfig, Rvea, RveaConfig, SeparableNes, SeparableNesConfig, SimulatedAnnealing,
     SimulatedAnnealingConfig, SmsEmoa, SmsEmoaConfig, Spea2, Spea2Config, TabuSearch,
-    TabuSearchConfig, Tlbo, TlboConfig, Tpe, TpeConfig, Umda,
-    UmdaConfig,
+    TabuSearchConfig, Tlbo, TlboConfig, Tpe, TpeConfig, Umda, UmdaConfig,
 };

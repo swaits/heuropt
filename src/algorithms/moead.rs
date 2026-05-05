@@ -52,7 +52,11 @@ pub struct Moead<I, V> {
 impl<I, V> Moead<I, V> {
     /// Construct a `Moead` optimizer.
     pub fn new(config: MoeadConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -119,7 +123,8 @@ where
             .collect();
 
         for _ in 0..self.config.generations {
-            #[allow(clippy::needless_range_loop)] // Body indexes both `neighborhoods[i]` and `population[j]` via `nbh`.
+            #[allow(clippy::needless_range_loop)]
+            // Body indexes both `neighborhoods[i]` and `population[j]` via `nbh`.
             for i in 0..n {
                 // Pick two distinct parents from the neighborhood.
                 let nbh = &neighborhoods[i];
@@ -128,10 +133,15 @@ where
                 while p2 == p1 && nbh.len() > 1 {
                     p2 = *nbh.choose(&mut rng).unwrap();
                 }
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
-                assert!(!children.is_empty(), "MOEA/D variation returned no children");
+                assert!(
+                    !children.is_empty(),
+                    "MOEA/D variation returned no children"
+                );
                 let child_decision = children.into_iter().next().unwrap();
                 let child_eval = problem.evaluate(&child_decision);
                 evaluations += 1;
@@ -152,8 +162,7 @@ where
                     let g_cur = tchebycheff(&cur_oriented, &weights[j], &ideal);
                     let g_new = tchebycheff(&oriented_child, &weights[j], &ideal);
                     if g_new <= g_cur {
-                        population[j] =
-                            Candidate::new(child_decision.clone(), child_eval.clone());
+                        population[j] = Candidate::new(child_decision.clone(), child_eval.clone());
                     }
                 }
             }
@@ -188,7 +197,11 @@ fn tchebycheff(oriented_objectives: &[f64], weight: &[f64], ideal: &[f64]) -> f6
 }
 
 fn weight_distance(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 
 #[cfg(test)]
@@ -201,10 +214,7 @@ mod tests {
 
     fn make_optimizer(
         seed: u64,
-    ) -> Moead<
-        RealBounds,
-        CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>,
-    > {
+    ) -> Moead<RealBounds, CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>> {
         let bounds = vec![(-5.0, 5.0)];
         let initializer = RealBounds::new(bounds.clone());
         let variation = CompositeVariation {

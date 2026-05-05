@@ -63,8 +63,18 @@ fn challenger_wins<D>(c: &Candidate<D>, b: &Candidate<D>, dir: Direction) -> boo
         (false, true) => false,
         (false, false) => c.evaluation.constraint_violation < b.evaluation.constraint_violation,
         (true, true) => {
-            let cv = c.evaluation.objectives.first().copied().unwrap_or(f64::INFINITY);
-            let bv = b.evaluation.objectives.first().copied().unwrap_or(f64::INFINITY);
+            let cv = c
+                .evaluation
+                .objectives
+                .first()
+                .copied()
+                .unwrap_or(f64::INFINITY);
+            let bv = b
+                .evaluation
+                .objectives
+                .first()
+                .copied()
+                .unwrap_or(f64::INFINITY);
             match dir {
                 Direction::Minimize => cv < bv,
                 Direction::Maximize => cv > bv,
@@ -218,10 +228,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "exactly one objective")]
     fn multi_objective_panics() {
-        let s = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
         let pop = [cand_min(1, 1.0)];
         let mut rng = rng_from_seed(0);
         let _ = tournament_select_single_objective(&pop, &s, 2, 1, &mut rng);
@@ -246,8 +253,8 @@ mod tests {
         let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
         let pop = [
             Candidate::new(1u32, Evaluation::constrained(vec![0.0], 5.0)), // infeasible
-            Candidate::new(2u32, Evaluation::new(vec![10.0])),              // feasible, big f
-            Candidate::new(3u32, Evaluation::new(vec![3.0])),               // feasible, small f
+            Candidate::new(2u32, Evaluation::new(vec![10.0])),             // feasible, big f
+            Candidate::new(3u32, Evaluation::new(vec![3.0])),              // feasible, small f
         ];
         let mut rng = rng_from_seed(0);
         let picks = stochastic_ranking_select(&pop, &s, 0.0, 3, &mut rng);

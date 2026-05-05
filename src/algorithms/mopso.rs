@@ -73,7 +73,10 @@ where
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
         assert!(self.config.swarm_size >= 1, "Mopso swarm_size must be >= 1");
-        assert!(self.config.archive_size >= 1, "Mopso archive_size must be >= 1");
+        assert!(
+            self.config.archive_size >= 1,
+            "Mopso archive_size must be >= 1"
+        );
         let objectives = problem.objectives();
         assert!(
             objectives.is_multi_objective(),
@@ -128,9 +131,8 @@ where
                     let cognitive_term =
                         self.config.cognitive * r1 * (pbest_decisions[i][j] - positions[i][j]);
                     let social_term = self.config.social * r2 * (leader[j] - positions[i][j]);
-                    let mut v = self.config.inertia * velocities[i][j]
-                        + cognitive_term
-                        + social_term;
+                    let mut v =
+                        self.config.inertia * velocities[i][j] + cognitive_term + social_term;
                     if v > v_max[j] {
                         v = v_max[j];
                     } else if v < -v_max[j] {
@@ -148,8 +150,7 @@ where
 
             // --- Phase 3: serial pbest + archive updates ---
             for (i, cand) in evaluated.iter().enumerate() {
-                let dominance =
-                    pareto_compare(&cand.evaluation, &pbest_evals[i], &objectives);
+                let dominance = pareto_compare(&cand.evaluation, &pbest_evals[i], &objectives);
                 let replace = match dominance {
                     Dominance::Dominates => true,
                     Dominance::DominatedBy => false,
@@ -212,10 +213,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

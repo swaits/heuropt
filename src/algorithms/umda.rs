@@ -67,7 +67,10 @@ where
     P: Problem<Decision = Vec<bool>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size >= 2, "Umda population_size must be >= 2");
+        assert!(
+            self.config.population_size >= 2,
+            "Umda population_size must be >= 2"
+        );
         assert!(
             self.config.selected_size >= 1,
             "Umda selected_size must be >= 1",
@@ -114,7 +117,11 @@ where
             // --- Phase 1: select top μ members ---
             let mut order: Vec<usize> = (0..population.len()).collect();
             order.sort_by(|&a, &b| {
-                compare_so(&population[a].evaluation, &population[b].evaluation, direction)
+                compare_so(
+                    &population[a].evaluation,
+                    &population[b].evaluation,
+                    direction,
+                )
             });
             let selected: Vec<&Candidate<Vec<bool>>> =
                 order.iter().take(mu).map(|&i| &population[i]).collect();
@@ -228,10 +235,7 @@ mod tests {
         type Decision = Vec<bool>;
 
         fn objectives(&self) -> ObjectiveSpace {
-            ObjectiveSpace::new(vec![
-                Objective::minimize("a"),
-                Objective::minimize("b"),
-            ])
+            ObjectiveSpace::new(vec![Objective::minimize("a"), Objective::minimize("b")])
         }
 
         fn evaluate(&self, _x: &Vec<bool>) -> Evaluation {

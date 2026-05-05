@@ -39,8 +39,7 @@ pub fn spacing<D>(front: &[Candidate<D>], objectives: &ObjectiveSpace) -> f64 {
     }
 
     let mean = nearest.iter().sum::<f64>() / n as f64;
-    let variance =
-        nearest.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / n as f64;
+    let variance = nearest.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / n as f64;
     variance.sqrt()
 }
 
@@ -55,10 +54,7 @@ mod tests {
     }
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     #[test]

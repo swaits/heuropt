@@ -18,12 +18,18 @@ pub struct Evaluation {
 impl Evaluation {
     /// Build a feasible evaluation from objective values.
     pub fn new(objectives: Vec<f64>) -> Self {
-        Self { objectives, constraint_violation: 0.0 }
+        Self {
+            objectives,
+            constraint_violation: 0.0,
+        }
     }
 
     /// Build an evaluation with a known total constraint violation.
     pub fn constrained(objectives: Vec<f64>, constraint_violation: f64) -> Self {
-        Self { objectives, constraint_violation }
+        Self {
+            objectives,
+            constraint_violation,
+        }
     }
 
     /// Returns `true` when `constraint_violation <= 0.0`.

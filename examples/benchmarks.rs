@@ -58,7 +58,9 @@ impl Problem for Rastrigin {
     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
         let n = self.dim as f64;
         let value = 10.0 * n
-            + x.iter().map(|v| v * v - 10.0 * (2.0 * PI * v).cos()).sum::<f64>();
+            + x.iter()
+                .map(|v| v * v - 10.0 * (2.0 * PI * v).cos())
+                .sum::<f64>();
         Evaluation::new(vec![value])
     }
 }
@@ -104,7 +106,11 @@ fn run_zdt1() {
         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / dim as f64),
     };
-    let config = Nsga2Config { population_size: 100, generations: 1000, seed: 42 };
+    let config = Nsga2Config {
+        population_size: 100,
+        generations: 1000,
+        seed: 42,
+    };
     let mut optimizer = Nsga2::new(config, initializer, variation);
 
     let result = optimizer.run(&problem);

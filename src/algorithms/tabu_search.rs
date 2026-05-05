@@ -25,7 +25,11 @@ pub struct TabuSearchConfig {
 
 impl Default for TabuSearchConfig {
     fn default() -> Self {
-        Self { iterations: 500, tabu_tenure: 16, seed: 42 }
+        Self {
+            iterations: 500,
+            tabu_tenure: 16,
+            seed: 42,
+        }
     }
 }
 
@@ -62,7 +66,12 @@ where
 {
     /// Construct a `TabuSearch`.
     pub fn new(config: TabuSearchConfig, initializer: I, neighbors: N) -> Self {
-        Self { config, initializer, neighbors, _marker: std::marker::PhantomData }
+        Self {
+            config,
+            initializer,
+            neighbors,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
@@ -87,14 +96,18 @@ where
         let mut rng = rng_from_seed(self.config.seed);
 
         let mut initial = self.initializer.initialize(1, &mut rng);
-        assert!(!initial.is_empty(), "TabuSearch initializer returned no decisions");
+        assert!(
+            !initial.is_empty(),
+            "TabuSearch initializer returned no decisions"
+        );
         let mut current_decision = initial.remove(0);
         let mut current_eval = problem.evaluate(&current_decision);
         let mut best_decision = current_decision.clone();
         let mut best_eval = current_eval.clone();
         let mut evaluations = 1usize;
 
-        let mut tabu_queue: VecDeque<P::Decision> = VecDeque::with_capacity(self.config.tabu_tenure);
+        let mut tabu_queue: VecDeque<P::Decision> =
+            VecDeque::with_capacity(self.config.tabu_tenure);
         let mut tabu_set: HashSet<P::Decision> = HashSet::new();
 
         for _ in 0..self.config.iterations {
@@ -118,8 +131,7 @@ where
 
             for (i, c) in candidates.iter().enumerate() {
                 let is_tabu = tabu_set.contains(c);
-                let aspires = is_tabu
-                    && better_than(&cand_evals[i], &best_eval, direction);
+                let aspires = is_tabu && better_than(&cand_evals[i], &best_eval, direction);
                 if is_tabu && !aspires {
                     continue;
                 }
@@ -227,15 +239,16 @@ mod tests {
         }
     }
 
-    fn make_optimizer<F>(
-        seed: u64,
-        neighbors: F,
-    ) -> TabuSearch<Vec<i32>, StartAtZero, F>
+    fn make_optimizer<F>(seed: u64, neighbors: F) -> TabuSearch<Vec<i32>, StartAtZero, F>
     where
         F: FnMut(&Vec<i32>, &mut Rng) -> Vec<Vec<i32>>,
     {
         TabuSearch::new(
-            TabuSearchConfig { iterations: 50, tabu_tenure: 4, seed },
+            TabuSearchConfig {
+                iterations: 50,
+                tabu_tenure: 4,
+                seed,
+            },
             StartAtZero,
             neighbors,
         )
@@ -244,9 +257,7 @@ mod tests {
     #[test]
     fn finds_optimum_on_grid() {
         // Neighbors: ±1 of current value.
-        let neighbors = |x: &Vec<i32>, _rng: &mut Rng| {
-            vec![vec![x[0] - 1], vec![x[0] + 1]]
-        };
+        let neighbors = |x: &Vec<i32>, _rng: &mut Rng| vec![vec![x[0] - 1], vec![x[0] + 1]];
         let mut opt = make_optimizer(1, neighbors);
         let r = opt.run(&GridProblem);
         let best = r.best.unwrap();

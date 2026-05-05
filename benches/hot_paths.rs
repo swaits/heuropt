@@ -14,10 +14,10 @@ use gungraun::prelude::*;
 use heuropt::core::candidate::Candidate;
 use heuropt::core::evaluation::Evaluation;
 use heuropt::core::objective::{Objective, ObjectiveSpace};
+use heuropt::core::problem::Problem;
 use heuropt::metrics::hypervolume::{hypervolume_2d, hypervolume_nd};
 use heuropt::pareto::crowding::crowding_distance;
 use heuropt::pareto::sort::non_dominated_sort;
-use heuropt::core::problem::Problem;
 use heuropt::prelude::*;
 
 // -----------------------------------------------------------------------------
@@ -53,7 +53,11 @@ fn crowding_distance_2d(n: usize) -> Vec<f64> {
     let pop = make_2d_population(n);
     let s = space_2d();
     let front: Vec<usize> = (0..pop.len()).collect();
-    black_box(crowding_distance(black_box(&pop), black_box(&front), black_box(&s)))
+    black_box(crowding_distance(
+        black_box(&pop),
+        black_box(&front),
+        black_box(&s),
+    ))
 }
 
 #[library_benchmark]
@@ -62,7 +66,11 @@ fn crowding_distance_2d(n: usize) -> Vec<f64> {
 fn hypervolume_2d_bench(n: usize) -> f64 {
     let pop = make_2d_population(n);
     let s = space_2d();
-    black_box(hypervolume_2d(black_box(&pop), black_box(&s), black_box([1.1, 1.1])))
+    black_box(hypervolume_2d(
+        black_box(&pop),
+        black_box(&s),
+        black_box([1.1, 1.1]),
+    ))
 }
 
 fn make_3d_population(n: usize) -> (Vec<Candidate<()>>, ObjectiveSpace) {
@@ -75,10 +83,7 @@ fn make_3d_population(n: usize) -> (Vec<Candidate<()>>, ObjectiveSpace) {
         .map(|i| {
             let t = i as f64 / n as f64;
             let theta = 0.5 * std::f64::consts::PI * t;
-            Candidate::new(
-                (),
-                Evaluation::new(vec![theta.cos(), theta.sin(), 1.0 - t]),
-            )
+            Candidate::new((), Evaluation::new(vec![theta.cos(), theta.sin(), 1.0 - t]))
         })
         .collect();
     (pop, s)
@@ -89,7 +94,11 @@ fn make_3d_population(n: usize) -> (Vec<Candidate<()>>, ObjectiveSpace) {
 #[bench::n_100(100)]
 fn hypervolume_nd_bench_3d(n: usize) -> f64 {
     let (pop, s) = make_3d_population(n);
-    black_box(hypervolume_nd(black_box(&pop), black_box(&s), black_box(&[2.0, 2.0, 2.0])))
+    black_box(hypervolume_nd(
+        black_box(&pop),
+        black_box(&s),
+        black_box(&[2.0, 2.0, 2.0]),
+    ))
 }
 
 library_benchmark_group!(
@@ -128,7 +137,11 @@ fn nsga2_one_generation() -> usize {
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
     };
     let mut opt = Nsga2::new(
-        Nsga2Config { population_size: 50, generations: 1, seed: 0 },
+        Nsga2Config {
+            population_size: 50,
+            generations: 1,
+            seed: 0,
+        },
         initializer,
         variation,
     );
@@ -191,7 +204,11 @@ fn so_bounds() -> RealBounds {
 #[library_benchmark]
 fn random_search_short() -> usize {
     let mut o = RandomSearch::new(
-        RandomSearchConfig { iterations: 50, batch_size: 1, seed: 0 },
+        RandomSearchConfig {
+            iterations: 50,
+            batch_size: 1,
+            seed: 0,
+        },
         so_bounds(),
     );
     black_box(o.run(black_box(&Sphere1D)).evaluations)
@@ -200,7 +217,10 @@ fn random_search_short() -> usize {
 #[library_benchmark]
 fn hill_climber_short() -> usize {
     let mut o = HillClimber::new(
-        HillClimberConfig { iterations: 50, seed: 0 },
+        HillClimberConfig {
+            iterations: 50,
+            seed: 0,
+        },
         so_bounds(),
         GaussianMutation { sigma: 0.1 },
     );
@@ -291,7 +311,11 @@ fn differential_evolution_short() -> usize {
 #[library_benchmark]
 fn tlbo_short() -> usize {
     let mut o = Tlbo::new(
-        TlboConfig { population_size: 10, generations: 5, seed: 0 },
+        TlboConfig {
+            population_size: 10,
+            generations: 5,
+            seed: 0,
+        },
         so_bounds(),
     );
     black_box(o.run(black_box(&Sphere1D)).evaluations)
@@ -316,7 +340,10 @@ fn separable_nes_short() -> usize {
 #[library_benchmark]
 fn nelder_mead_short() -> usize {
     let mut o = NelderMead::new(
-        NelderMeadConfig { iterations: 50, ..NelderMeadConfig::default() },
+        NelderMeadConfig {
+            iterations: 50,
+            ..NelderMeadConfig::default()
+        },
         so_bounds(),
     );
     black_box(o.run(black_box(&Sphere1D)).evaluations)
@@ -388,8 +415,7 @@ library_benchmark_group!(
 fn schaffer_bounds() -> Vec<(f64, f64)> {
     vec![(-3.0, 3.0)]
 }
-fn mo_variation()
--> CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation> {
+fn mo_variation() -> CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation> {
     let bounds = schaffer_bounds();
     CompositeVariation {
         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
@@ -400,7 +426,12 @@ fn mo_variation()
 #[library_benchmark]
 fn nsga3_short() -> usize {
     let mut o = Nsga3::new(
-        Nsga3Config { population_size: 12, generations: 1, reference_divisions: 11, seed: 0 },
+        Nsga3Config {
+            population_size: 12,
+            generations: 1,
+            reference_divisions: 11,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -410,7 +441,12 @@ fn nsga3_short() -> usize {
 #[library_benchmark]
 fn spea2_short() -> usize {
     let mut o = Spea2::new(
-        Spea2Config { population_size: 10, archive_size: 10, generations: 1, seed: 0 },
+        Spea2Config {
+            population_size: 10,
+            archive_size: 10,
+            generations: 1,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -420,7 +456,12 @@ fn spea2_short() -> usize {
 #[library_benchmark]
 fn moead_short() -> usize {
     let mut o = Moead::new(
-        MoeadConfig { generations: 1, reference_divisions: 9, neighborhood_size: 4, seed: 0 },
+        MoeadConfig {
+            generations: 1,
+            reference_divisions: 9,
+            neighborhood_size: 4,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -431,8 +472,13 @@ fn moead_short() -> usize {
 fn mopso_short() -> usize {
     let mut o = Mopso::new(
         MopsoConfig {
-            swarm_size: 10, generations: 1, archive_size: 10,
-            inertia: 0.7, cognitive: 1.5, social: 1.5, seed: 0,
+            swarm_size: 10,
+            generations: 1,
+            archive_size: 10,
+            inertia: 0.7,
+            cognitive: 1.5,
+            social: 1.5,
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
     );
@@ -442,7 +488,12 @@ fn mopso_short() -> usize {
 #[library_benchmark]
 fn ibea_short() -> usize {
     let mut o = Ibea::new(
-        IbeaConfig { population_size: 10, generations: 1, kappa: 0.05, seed: 0 },
+        IbeaConfig {
+            population_size: 10,
+            generations: 1,
+            kappa: 0.05,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -453,8 +504,10 @@ fn ibea_short() -> usize {
 fn sms_emoa_short() -> usize {
     let mut o = SmsEmoa::new(
         SmsEmoaConfig {
-            population_size: 8, generations: 5,
-            reference_point: vec![10.0, 10.0], seed: 0,
+            population_size: 8,
+            generations: 5,
+            reference_point: vec![10.0, 10.0],
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
@@ -466,8 +519,11 @@ fn sms_emoa_short() -> usize {
 fn hype_short() -> usize {
     let mut o = Hype::new(
         HypeConfig {
-            population_size: 10, generations: 1,
-            reference_point: vec![10.0, 10.0], mc_samples: 100, seed: 0,
+            population_size: 10,
+            generations: 1,
+            reference_point: vec![10.0, 10.0],
+            mc_samples: 100,
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
@@ -479,8 +535,11 @@ fn hype_short() -> usize {
 fn pesa2_short() -> usize {
     let mut o = PesaII::new(
         PesaIIConfig {
-            population_size: 10, archive_size: 10, generations: 1,
-            grid_divisions: 4, seed: 0,
+            population_size: 10,
+            archive_size: 10,
+            generations: 1,
+            grid_divisions: 4,
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
@@ -492,8 +551,10 @@ fn pesa2_short() -> usize {
 fn epsilon_moea_short() -> usize {
     let mut o = EpsilonMoea::new(
         EpsilonMoeaConfig {
-            population_size: 10, evaluations: 30,
-            epsilon: vec![0.05, 0.05], seed: 0,
+            population_size: 10,
+            evaluations: 30,
+            epsilon: vec![0.05, 0.05],
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
@@ -504,7 +565,11 @@ fn epsilon_moea_short() -> usize {
 #[library_benchmark]
 fn age_moea_short() -> usize {
     let mut o = AgeMoea::new(
-        AgeMoeaConfig { population_size: 10, generations: 1, seed: 0 },
+        AgeMoeaConfig {
+            population_size: 10,
+            generations: 1,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -514,7 +579,12 @@ fn age_moea_short() -> usize {
 #[library_benchmark]
 fn grea_short() -> usize {
     let mut o = Grea::new(
-        GreaConfig { population_size: 10, generations: 1, grid_divisions: 4, seed: 0 },
+        GreaConfig {
+            population_size: 10,
+            generations: 1,
+            grid_divisions: 4,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -524,7 +594,11 @@ fn grea_short() -> usize {
 #[library_benchmark]
 fn knea_short() -> usize {
     let mut o = Knea::new(
-        KneaConfig { population_size: 10, generations: 1, seed: 0 },
+        KneaConfig {
+            population_size: 10,
+            generations: 1,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
     );
@@ -535,8 +609,11 @@ fn knea_short() -> usize {
 fn rvea_short() -> usize {
     let mut o = Rvea::new(
         RveaConfig {
-            population_size: 10, generations: 1,
-            reference_divisions: 9, alpha: 2.0, seed: 0,
+            population_size: 10,
+            generations: 1,
+            reference_divisions: 9,
+            alpha: 2.0,
+            seed: 0,
         },
         RealBounds::new(schaffer_bounds()),
         mo_variation(),
@@ -547,7 +624,11 @@ fn rvea_short() -> usize {
 #[library_benchmark]
 fn paes_short() -> usize {
     let mut o = Paes::new(
-        PaesConfig { iterations: 30, archive_size: 10, seed: 0 },
+        PaesConfig {
+            iterations: 30,
+            archive_size: 10,
+            seed: 0,
+        },
         RealBounds::new(schaffer_bounds()),
         GaussianMutation { sigma: 0.1 },
     );
@@ -562,5 +643,9 @@ library_benchmark_group!(
         age_moea_short, grea_short, knea_short, rvea_short, paes_short
 );
 
-main!(library_benchmark_groups =
-    pareto_group, algorithm_group, single_objective_group, multi_objective_group);
+main!(
+    library_benchmark_groups = pareto_group,
+    algorithm_group,
+    single_objective_group,
+    multi_objective_group
+);

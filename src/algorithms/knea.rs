@@ -26,7 +26,11 @@ pub struct KneaConfig {
 
 impl Default for KneaConfig {
     fn default() -> Self {
-        Self { population_size: 100, generations: 250, seed: 42 }
+        Self {
+            population_size: 100,
+            generations: 250,
+            seed: 42,
+        }
     }
 }
 
@@ -48,7 +52,11 @@ pub struct Knea<I, V> {
 impl<I, V> Knea<I, V> {
     /// Construct a `Knea`.
     pub fn new(config: KneaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -60,7 +68,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Knea population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "Knea population_size must be > 0"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
@@ -75,8 +86,10 @@ where
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
                 let p2 = rng.random_range(0..population.len());
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(!children.is_empty(), "Knea variation returned no children");
                 for child in children {
@@ -191,11 +204,7 @@ fn environmental_selection<D: Clone>(
 
 /// Perpendicular distance from `point` to the hyperplane through the M
 /// extreme points (indices into `oriented`).
-fn perpendicular_distance(
-    point: &[f64],
-    extremes: &[usize],
-    oriented: &[Vec<f64>],
-) -> f64 {
+fn perpendicular_distance(point: &[f64], extremes: &[usize], oriented: &[Vec<f64>]) -> f64 {
     let m = point.len();
     if extremes.len() < m {
         // Degenerate: just return the L2 norm relative to first extreme.
@@ -237,7 +246,11 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         Knea::new(
-            KneaConfig { population_size: 20, generations: 15, seed },
+            KneaConfig {
+                population_size: 20,
+                generations: 15,
+                seed,
+            },
             initializer,
             variation,
         )
@@ -256,10 +269,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 }

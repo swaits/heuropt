@@ -72,7 +72,10 @@ where
     P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.initial_samples >= 2, "Tpe initial_samples must be >= 2");
+        assert!(
+            self.config.initial_samples >= 2,
+            "Tpe initial_samples must be >= 2"
+        );
         assert!(
             self.config.good_fraction > 0.0 && self.config.good_fraction < 1.0,
             "Tpe good_fraction must be in (0, 1)",
@@ -81,7 +84,10 @@ where
             self.config.candidate_samples >= 1,
             "Tpe candidate_samples must be >= 1",
         );
-        assert!(self.config.bandwidth_factor > 0.0, "Tpe bandwidth_factor must be > 0");
+        assert!(
+            self.config.bandwidth_factor > 0.0,
+            "Tpe bandwidth_factor must be > 0"
+        );
         let objectives = problem.objectives();
         assert!(
             objectives.is_single_objective(),
@@ -110,9 +116,27 @@ where
             let mut best_x: Option<Vec<f64>> = None;
             let mut best_ratio = f64::NEG_INFINITY;
             for _ in 0..self.config.candidate_samples {
-                let cand = sample_from_kde(&decisions, &good_idx, &self.bounds, self.config.bandwidth_factor, &mut rng);
-                let l = log_kde_density(&cand, &decisions, &good_idx, &self.bounds, self.config.bandwidth_factor);
-                let g = log_kde_density(&cand, &decisions, &bad_idx, &self.bounds, self.config.bandwidth_factor);
+                let cand = sample_from_kde(
+                    &decisions,
+                    &good_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                    &mut rng,
+                );
+                let l = log_kde_density(
+                    &cand,
+                    &decisions,
+                    &good_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                );
+                let g = log_kde_density(
+                    &cand,
+                    &decisions,
+                    &bad_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                );
                 let ratio = l - g;
                 if ratio > best_ratio {
                     best_ratio = ratio;
@@ -180,7 +204,13 @@ fn sample_uniform_in_bounds(bounds: &RealBounds, rng: &mut Rng) -> Vec<f64> {
     bounds
         .bounds
         .iter()
-        .map(|&(lo, hi)| if lo == hi { lo } else { lo + (hi - lo) * rng.random::<f64>() })
+        .map(|&(lo, hi)| {
+            if lo == hi {
+                lo
+            } else {
+                lo + (hi - lo) * rng.random::<f64>()
+            }
+        })
         .collect()
 }
 
@@ -191,7 +221,9 @@ fn split_good_bad(targets: &[f64], good_fraction: f64) -> (Vec<usize>, Vec<usize
     let n = targets.len();
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&a, &b| {
-        targets[a].partial_cmp(&targets[b]).unwrap_or(std::cmp::Ordering::Equal)
+        targets[a]
+            .partial_cmp(&targets[b])
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let n_good = ((n as f64) * good_fraction).round() as usize;
     let n_good = n_good.clamp(1, n.saturating_sub(1));
@@ -288,7 +320,9 @@ fn scott_bandwidths(decisions: &[Vec<f64>], support: &[usize], factor: f64) -> V
         *v /= denom;
     }
     let scott_n = (support.len() as f64).powf(-0.2);
-    vars.into_iter().map(|v| factor * v.sqrt().max(1e-6) * scott_n).collect()
+    vars.into_iter()
+        .map(|v| factor * v.sqrt().max(1e-6) * scott_n)
+        .collect()
 }
 
 #[cfg(test)]

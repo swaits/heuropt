@@ -69,7 +69,10 @@ where
     P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.reflection > 0.0, "NelderMead reflection must be > 0");
+        assert!(
+            self.config.reflection > 0.0,
+            "NelderMead reflection must be > 0"
+        );
         assert!(
             self.config.expansion > 1.0,
             "NelderMead expansion must be > 1",
@@ -111,8 +114,7 @@ where
             v[j] = (v[j] + step).clamp(lo, hi);
             vertices.push(v);
         }
-        let mut evals: Vec<Evaluation> =
-            vertices.iter().map(|v| problem.evaluate(v)).collect();
+        let mut evals: Vec<Evaluation> = vertices.iter().map(|v| problem.evaluate(v)).collect();
         let mut evaluations = evals.len();
 
         for _ in 0..self.config.iterations {
@@ -141,8 +143,7 @@ where
 
             if better(&r_eval, &evals[best_idx], direction) {
                 // Reflection beat the best — try expansion.
-                let expanded =
-                    self.reflect(&centroid, &vertices[worst_idx], self.config.expansion);
+                let expanded = self.reflect(&centroid, &vertices[worst_idx], self.config.expansion);
                 let e_eval = problem.evaluate(&expanded);
                 evaluations += 1;
                 if better(&e_eval, &r_eval, direction) {
@@ -177,11 +178,11 @@ where
                         if idx == best_idx {
                             continue;
                         }
-                        #[allow(clippy::needless_range_loop)] // body indexes both vertices and best_pt.
+                        #[allow(clippy::needless_range_loop)]
+                        // body indexes both vertices and best_pt.
                         for j in 0..n {
                             vertices[idx][j] = best_pt[j]
-                                + self.config.shrinkage
-                                    * (vertices[idx][j] - best_pt[j]);
+                                + self.config.shrinkage * (vertices[idx][j] - best_pt[j]);
                         }
                         // Clamp to bounds.
                         for (j, x) in vertices[idx].iter_mut().enumerate() {

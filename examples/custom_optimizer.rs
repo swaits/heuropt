@@ -26,7 +26,10 @@ where
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
         let objectives = problem.objectives();
-        assert!(objectives.is_single_objective(), "HillClimber needs one objective");
+        assert!(
+            objectives.is_single_objective(),
+            "HillClimber needs one objective"
+        );
         let mut rng = rng_from_seed(self.seed);
         let mut variation = GaussianMutation { sigma: self.sigma };
 

@@ -26,7 +26,11 @@ pub struct AgeMoeaConfig {
 
 impl Default for AgeMoeaConfig {
     fn default() -> Self {
-        Self { population_size: 100, generations: 250, seed: 42 }
+        Self {
+            population_size: 100,
+            generations: 250,
+            seed: 42,
+        }
     }
 }
 
@@ -49,7 +53,11 @@ pub struct AgeMoea<I, V> {
 impl<I, V> AgeMoea<I, V> {
     /// Construct an `AgeMoea`.
     pub fn new(config: AgeMoeaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -61,7 +69,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "AgeMoea population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "AgeMoea population_size must be > 0"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
@@ -77,10 +88,15 @@ where
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
                 let p2 = rng.random_range(0..population.len());
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
-                assert!(!children.is_empty(), "AgeMoea variation returned no children");
+                assert!(
+                    !children.is_empty(),
+                    "AgeMoea variation returned no children"
+                );
                 for child in children {
                     if offspring_decisions.len() >= n {
                         break;
@@ -153,7 +169,11 @@ fn environmental_selection<D: Clone>(
         .iter()
         .map(|c| {
             let oriented = objectives.as_minimization(&c.evaluation.objectives);
-            oriented.iter().enumerate().map(|(k, v)| (v - ideal[k]).max(0.0)).collect()
+            oriented
+                .iter()
+                .enumerate()
+                .map(|(k, v)| (v - ideal[k]).max(0.0))
+                .collect()
         })
         .collect();
 
@@ -199,15 +219,14 @@ fn lp_norm(v: &[f64], p: f64) -> f64 {
 }
 
 fn lp_distance(a: &[f64], b: &[f64], p: f64) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| (x - y).abs().powf(p)).sum::<f64>().powf(1.0 / p)
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).abs().powf(p))
+        .sum::<f64>()
+        .powf(1.0 / p)
 }
 
-fn nearest_neighbor_distance(
-    i: usize,
-    translated: &[Vec<f64>],
-    selected: &[usize],
-    p: f64,
-) -> f64 {
+fn nearest_neighbor_distance(i: usize, translated: &[Vec<f64>], selected: &[usize], p: f64) -> f64 {
     if selected.is_empty() {
         return f64::INFINITY;
     }
@@ -295,7 +314,11 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         AgeMoea::new(
-            AgeMoeaConfig { population_size: 20, generations: 15, seed },
+            AgeMoeaConfig {
+                population_size: 20,
+                generations: 15,
+                seed,
+            },
             initializer,
             variation,
         )
@@ -315,10 +338,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 
@@ -332,7 +361,11 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         let mut opt = AgeMoea::new(
-            AgeMoeaConfig { population_size: 0, generations: 1, seed: 0 },
+            AgeMoeaConfig {
+                population_size: 0,
+                generations: 1,
+                seed: 0,
+            },
             initializer,
             variation,
         );

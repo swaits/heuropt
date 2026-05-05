@@ -76,7 +76,10 @@ where
             self.config.population_size >= 2,
             "SeparableNes population_size must be >= 2",
         );
-        assert!(self.config.initial_sigma > 0.0, "SeparableNes initial_sigma must be > 0");
+        assert!(
+            self.config.initial_sigma > 0.0,
+            "SeparableNes initial_sigma must be > 0"
+        );
         let objectives = problem.objectives();
         assert!(
             objectives.is_single_objective(),
@@ -97,9 +100,10 @@ where
         let mut sigma = vec![self.config.initial_sigma; n];
 
         // Default sigma learning rate (Wierstra et al. 2014, Eq. 11).
-        let eta_sigma = self.config.sigma_learning_rate.unwrap_or_else(|| {
-            (3.0 + (n as f64).ln()) / (5.0 * (n as f64).sqrt())
-        });
+        let eta_sigma = self
+            .config
+            .sigma_learning_rate
+            .unwrap_or_else(|| (3.0 + (n as f64).ln()) / (5.0 * (n as f64).sqrt()));
         let eta_mean = self.config.mean_learning_rate;
 
         // Rank utilities — the standard NES weighting:

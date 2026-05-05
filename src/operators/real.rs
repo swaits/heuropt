@@ -38,7 +38,11 @@ impl Initializer<Vec<f64>> for RealBounds {
         for _ in 0..size {
             let mut decision = Vec::with_capacity(self.bounds.len());
             for &(lo, hi) in &self.bounds {
-                let v = if lo == hi { lo } else { rng.random_range(lo..=hi) };
+                let v = if lo == hi {
+                    lo
+                } else {
+                    rng.random_range(lo..=hi)
+                };
                 decision.push(v);
             }
             out.push(decision);
@@ -63,8 +67,7 @@ impl Variation<Vec<f64>> for GaussianMutation {
             !parents.is_empty(),
             "GaussianMutation requires at least one parent",
         );
-        let normal =
-            Normal::new(0.0, self.sigma).expect("Normal distribution rejected sigma");
+        let normal = Normal::new(0.0, self.sigma).expect("Normal distribution rejected sigma");
         let mut child = parents[0].clone();
         for x in child.iter_mut() {
             *x += normal.sample(rng);
@@ -113,7 +116,11 @@ impl SimulatedBinaryCrossover {
             (0.0..=1.0).contains(&per_variable_probability),
             "SimulatedBinaryCrossover per_variable_probability must be in [0.0, 1.0]",
         );
-        Self { bounds, eta, per_variable_probability }
+        Self {
+            bounds,
+            eta,
+            per_variable_probability,
+        }
     }
 }
 
@@ -201,7 +208,11 @@ impl PolynomialMutation {
             (0.0..=1.0).contains(&per_variable_probability),
             "PolynomialMutation per_variable_probability must be in [0.0, 1.0]",
         );
-        Self { bounds, eta, per_variable_probability }
+        Self {
+            bounds,
+            eta,
+            per_variable_probability,
+        }
     }
 }
 
@@ -257,7 +268,10 @@ impl BoundedGaussianMutation {
     /// # Panics
     /// If `sigma <= 0.0` or any bound has `lo > hi`.
     pub fn new(sigma: f64, bounds: Vec<(f64, f64)>) -> Self {
-        assert!(sigma > 0.0, "BoundedGaussianMutation sigma must be positive");
+        assert!(
+            sigma > 0.0,
+            "BoundedGaussianMutation sigma must be positive"
+        );
         for (i, &(lo, hi)) in bounds.iter().enumerate() {
             assert!(
                 lo <= hi,
@@ -279,8 +293,7 @@ impl Variation<Vec<f64>> for BoundedGaussianMutation {
             self.bounds.len(),
             "BoundedGaussianMutation parent length must match bounds length",
         );
-        let normal =
-            Normal::new(0.0, self.sigma).expect("Normal distribution rejected sigma");
+        let normal = Normal::new(0.0, self.sigma).expect("Normal distribution rejected sigma");
         let mut child = parents[0].clone();
         for (x, &(lo, hi)) in child.iter_mut().zip(self.bounds.iter()) {
             *x = (*x + normal.sample(rng)).clamp(lo, hi);
@@ -330,13 +343,20 @@ impl LevyMutation {
                 "LevyMutation bound at index {i} has lo > hi: ({lo}, {hi})",
             );
         }
-        Self { alpha, scale, bounds }
+        Self {
+            alpha,
+            scale,
+            bounds,
+        }
     }
 }
 
 impl Variation<Vec<f64>> for LevyMutation {
     fn vary(&mut self, parents: &[Vec<f64>], rng: &mut Rng) -> Vec<Vec<f64>> {
-        assert!(!parents.is_empty(), "LevyMutation requires at least one parent");
+        assert!(
+            !parents.is_empty(),
+            "LevyMutation requires at least one parent"
+        );
         let alpha = self.alpha;
         // Mantegna's algorithm σ for the numerator Normal:
         //   sigma_u = (Γ(1+α)·sin(π·α/2) / (Γ((1+α)/2)·α·2^((α-1)/2)))^(1/α)

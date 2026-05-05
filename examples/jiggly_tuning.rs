@@ -152,7 +152,10 @@ impl JigglyTuning {
         let mut rng = StdRng::seed_from_u64(day_seed);
         let mut expire = s + rt;
         // Boot press at workday start: user presses to begin cycle 1.
-        let mut o = DayOutcome { presses: 1, ..Default::default() };
+        let mut o = DayOutcome {
+            presses: 1,
+            ..Default::default()
+        };
         // Allow the loop to extend past the larger of (workday end, last
         // possible cycle end given any in-loop expire bumps). Cap at one
         // extra cycle's worth so a long string of presses can't blow the
@@ -348,7 +351,11 @@ fn print_header() {
 }
 
 fn print_row(label: &str, r: &Row) {
-    let prefix = if label.is_empty() { String::new() } else { format!("{label} ") };
+    let prefix = if label.is_empty() {
+        String::new()
+    } else {
+        format!("{label} ")
+    };
     println!(
         "{}{:<6} {:>3} {:>3} {:>3}   {:>9}   {:>9}   {:>7.2}/d   {:>8}   {:>6.1}%",
         prefix,
@@ -440,7 +447,11 @@ fn main() {
 
     println!("=== Pareto front (sorted by lunch sleep, descending) ===");
     print_header();
-    rows.sort_by(|a, b| b.lunch.partial_cmp(&a.lunch).unwrap_or(std::cmp::Ordering::Equal));
+    rows.sort_by(|a, b| {
+        b.lunch
+            .partial_cmp(&a.lunch)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for r in rows.iter().take(15) {
         print_row("", r);
     }
@@ -507,8 +518,12 @@ fn main() {
     let shipping_candidate_idx = candidates.len();
     candidates.push(("shipping default".to_string(), shipping_row.clone()));
 
-    let scores =
-        compute_weighted_scores(&candidates.iter().map(|(_, r)| r.clone()).collect::<Vec<_>>());
+    let scores = compute_weighted_scores(
+        &candidates
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect::<Vec<_>>(),
+    );
     let mut ranked: Vec<(usize, f64)> = scores.iter().copied().enumerate().collect();
     ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -529,7 +544,10 @@ fn main() {
         "  balance bonus: min(yellow_width, red_width), saturates at {:.0} min",
         BALANCE_SATURATION_MIN,
     );
-    println!("  candidate set: {} Pareto-front rows + 1 shipping default", rows.len());
+    println!(
+        "  candidate set: {} Pareto-front rows + 1 shipping default",
+        rows.len()
+    );
     println!();
     println!("{:>4}  {:>5}  source", "rank", "score");
     print_header();
@@ -548,7 +566,10 @@ fn main() {
         .map(|p| p + 1)
         .unwrap_or(0);
 
-    let max_work = candidates.iter().map(|(_, r)| r.work_fail).fold(0.0, f64::max);
+    let max_work = candidates
+        .iter()
+        .map(|(_, r)| r.work_fail)
+        .fold(0.0, f64::max);
 
     println!("=== RECOMMENDED PICK ({top_label}) ===");
     println!(
@@ -591,9 +612,7 @@ fn main() {
         "  • {:.2} button presses/day total — {}",
         top.presses, press_note,
     );
-    println!(
-        "    (counts: boot + 13:00 retap + warning-phase reactions + death-restarts)"
-    );
+    println!("    (counts: boot + 13:00 retap + warning-phase reactions + death-restarts)");
     println!(
         "  • warning phases: yellow {} min, red {} min, fast-red {} min (balance score {:.2})",
         yellow_w,
@@ -629,12 +648,24 @@ fn main() {
 /// phases, computed as `min(YA - RA, RA - FRA)` saturated at
 /// `BALANCE_SATURATION_MIN`.
 fn compute_weighted_scores(rows: &[Row]) -> Vec<f64> {
-    let work_min = rows.iter().map(|r| r.work_fail).fold(f64::INFINITY, f64::min);
-    let work_max = rows.iter().map(|r| r.work_fail).fold(f64::NEG_INFINITY, f64::max);
+    let work_min = rows
+        .iter()
+        .map(|r| r.work_fail)
+        .fold(f64::INFINITY, f64::min);
+    let work_max = rows
+        .iter()
+        .map(|r| r.work_fail)
+        .fold(f64::NEG_INFINITY, f64::max);
     let lunch_min = rows.iter().map(|r| r.lunch).fold(f64::INFINITY, f64::min);
-    let lunch_max = rows.iter().map(|r| r.lunch).fold(f64::NEG_INFINITY, f64::max);
+    let lunch_max = rows
+        .iter()
+        .map(|r| r.lunch)
+        .fold(f64::NEG_INFINITY, f64::max);
     let after_min = rows.iter().map(|r| r.after).fold(f64::INFINITY, f64::min);
-    let after_max = rows.iter().map(|r| r.after).fold(f64::NEG_INFINITY, f64::max);
+    let after_max = rows
+        .iter()
+        .map(|r| r.after)
+        .fold(f64::NEG_INFINITY, f64::max);
 
     rows.iter()
         .map(|r| {
@@ -676,12 +707,20 @@ fn balance_score_for(r: &Row) -> f64 {
 
 /// Normalize a minimize-direction value to `[0, 1]` (best→1, worst→0).
 fn norm_min(v: f64, lo: f64, hi: f64) -> f64 {
-    if (hi - lo).abs() < 1e-12 { 1.0 } else { (hi - v) / (hi - lo) }
+    if (hi - lo).abs() < 1e-12 {
+        1.0
+    } else {
+        (hi - v) / (hi - lo)
+    }
 }
 
 /// Normalize a maximize-direction value to `[0, 1]` (best→1, worst→0).
 fn norm_max(v: f64, lo: f64, hi: f64) -> f64 {
-    if (hi - lo).abs() < 1e-12 { 1.0 } else { (v - lo) / (hi - lo) }
+    if (hi - lo).abs() < 1e-12 {
+        1.0
+    } else {
+        (v - lo) / (hi - lo)
+    }
 }
 
 /// Render `worst / best` as e.g. "7.5×" for the recommendation rationale.

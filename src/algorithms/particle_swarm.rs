@@ -133,9 +133,8 @@ where
                         self.config.cognitive * r1 * (pbest_decisions[i][j] - positions[i][j]);
                     let social_term =
                         self.config.social * r2 * (gbest_decision[j] - positions[i][j]);
-                    let mut v = self.config.inertia * velocities[i][j]
-                        + cognitive_term
-                        + social_term;
+                    let mut v =
+                        self.config.inertia * velocities[i][j] + cognitive_term + social_term;
                     if v > v_max[j] {
                         v = v_max[j];
                     } else if v < -v_max[j] {

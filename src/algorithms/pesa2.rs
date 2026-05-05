@@ -60,7 +60,11 @@ pub struct PesaII<I, V> {
 impl<I, V> PesaII<I, V> {
     /// Construct a `PesaII`.
     pub fn new(config: PesaIIConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -72,9 +76,18 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "PesaII population_size must be > 0");
-        assert!(self.config.archive_size > 0, "PesaII archive_size must be > 0");
-        assert!(self.config.grid_divisions >= 1, "PesaII grid_divisions must be >= 1");
+        assert!(
+            self.config.population_size > 0,
+            "PesaII population_size must be > 0"
+        );
+        assert!(
+            self.config.archive_size > 0,
+            "PesaII archive_size must be > 0"
+        );
+        assert!(
+            self.config.grid_divisions >= 1,
+            "PesaII grid_divisions must be >= 1"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
@@ -95,7 +108,11 @@ where
         for c in &internal {
             archive.insert(c.clone());
         }
-        truncate_by_grid(&mut archive, self.config.archive_size, self.config.grid_divisions);
+        truncate_by_grid(
+            &mut archive,
+            self.config.archive_size,
+            self.config.grid_divisions,
+        );
 
         for _ in 0..self.config.generations {
             // Build grid + box counts on the archive.
@@ -106,9 +123,15 @@ where
             while offspring.len() < n {
                 let p1 = region_tournament(&archive, &boxes, &counts, &mut rng);
                 let p2 = region_tournament(&archive, &boxes, &counts, &mut rng);
-                let parents = vec![archive.members()[p1].decision.clone(), archive.members()[p2].decision.clone()];
+                let parents = vec![
+                    archive.members()[p1].decision.clone(),
+                    archive.members()[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
-                assert!(!children.is_empty(), "PesaII variation returned no children");
+                assert!(
+                    !children.is_empty(),
+                    "PesaII variation returned no children"
+                );
                 for child in children {
                     if offspring.len() >= n {
                         break;
@@ -124,7 +147,11 @@ where
             for c in &offspring {
                 archive.insert(c.clone());
             }
-            truncate_by_grid(&mut archive, self.config.archive_size, self.config.grid_divisions);
+            truncate_by_grid(
+                &mut archive,
+                self.config.archive_size,
+                self.config.grid_divisions,
+            );
             internal = offspring;
         }
 
@@ -213,11 +240,7 @@ fn region_tournament<D: Clone>(
 
 /// Truncate the archive to `max_size` by repeatedly evicting a uniform-random
 /// member of the most-occupied grid box (PESA-II's standard approach).
-fn truncate_by_grid<D: Clone>(
-    archive: &mut ParetoArchive<D>,
-    max_size: usize,
-    divisions: usize,
-) {
+fn truncate_by_grid<D: Clone>(archive: &mut ParetoArchive<D>, max_size: usize, divisions: usize) {
     while archive.members().len() > max_size {
         let objectives = archive.objectives.clone();
         let (boxes, counts) = build_grid(archive, &objectives, divisions);
@@ -291,10 +314,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 
@@ -320,5 +349,4 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
-
 }

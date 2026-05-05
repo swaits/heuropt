@@ -62,7 +62,11 @@ pub struct SmsEmoa<I, V> {
 impl<I, V> SmsEmoa<I, V> {
     /// Construct a `SmsEmoa`.
     pub fn new(config: SmsEmoaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -74,7 +78,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "SmsEmoa population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "SmsEmoa population_size must be > 0"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         assert_eq!(
@@ -100,10 +107,15 @@ where
             // --- One offspring (steady-state) ---
             let p1 = rng.random_range(0..population.len());
             let p2 = rng.random_range(0..population.len());
-            let parents =
-                vec![population[p1].decision.clone(), population[p2].decision.clone()];
+            let parents = vec![
+                population[p1].decision.clone(),
+                population[p2].decision.clone(),
+            ];
             let children = self.variation.vary(&parents, &mut rng);
-            assert!(!children.is_empty(), "SmsEmoa variation returned no children");
+            assert!(
+                !children.is_empty(),
+                "SmsEmoa variation returned no children"
+            );
             let child_decision = children.into_iter().next().unwrap();
             let child_eval = problem.evaluate(&child_decision);
             evaluations += 1;
@@ -212,10 +224,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 
@@ -263,4 +281,3 @@ mod tests {
         let _ = opt.run(&SchafferN1);
     }
 }
-

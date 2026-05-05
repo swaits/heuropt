@@ -56,7 +56,11 @@ pub struct Nsga3<I, V> {
 impl<I, V> Nsga3<I, V> {
     /// Construct an `Nsga3` optimizer.
     pub fn new(config: Nsga3Config, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -99,8 +103,10 @@ where
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
                 let p2 = rng.random_range(0..population.len());
-                let parents =
-                    vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(
                     !children.is_empty(),
@@ -117,11 +123,11 @@ where
             evaluations += offspring.len();
 
             // --- Combine + survival selection ---
-            let mut combined: Vec<Candidate<P::Decision>> =
-                Vec::with_capacity(2 * n);
+            let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
             combined.extend(population);
             combined.extend(offspring);
-            population = environmental_selection(&combined, &objectives, &reference_points, n, &mut rng);
+            population =
+                environmental_selection(&combined, &objectives, &reference_points, n, &mut rng);
         }
 
         let front = pareto_front(&population, &objectives);
@@ -205,7 +211,9 @@ fn environmental_selection<D: Clone>(
         let candidate_refs: Vec<usize> = (0..reference_points.len())
             .filter(|&j| !available_in_fl[j].is_empty() && niche_count[j] == min_count)
             .collect();
-        let &chosen_ref = candidate_refs.choose(rng).expect("non-empty by construction");
+        let &chosen_ref = candidate_refs
+            .choose(rng)
+            .expect("non-empty by construction");
 
         let pool = &available_in_fl[chosen_ref];
         let pick_local = if niche_count[chosen_ref] == 0 {
@@ -420,10 +428,7 @@ mod tests {
 
     fn make_optimizer(
         seed: u64,
-    ) -> Nsga3<
-        RealBounds,
-        CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>,
-    > {
+    ) -> Nsga3<RealBounds, CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>> {
         let bounds = vec![(-5.0, 5.0)];
         let initializer = RealBounds::new(bounds.clone());
         let variation = CompositeVariation {
@@ -457,10 +462,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

@@ -28,7 +28,12 @@ pub struct Spea2Config {
 
 impl Default for Spea2Config {
     fn default() -> Self {
-        Self { population_size: 100, archive_size: 100, generations: 250, seed: 42 }
+        Self {
+            population_size: 100,
+            archive_size: 100,
+            generations: 250,
+            seed: 42,
+        }
     }
 }
 
@@ -46,7 +51,11 @@ pub struct Spea2<I, V> {
 impl<I, V> Spea2<I, V> {
     /// Construct a `Spea2` optimizer.
     pub fn new(config: Spea2Config, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -190,7 +199,11 @@ fn compute_fitness<D>(pool: &[Candidate<D>], objectives: &ObjectiveSpace) -> Vec
 }
 
 fn euclidean(a: &[f64], b: &[f64]) -> f64 {
-    a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (x - y).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 
 /// Build the next archive of exactly `target_size` members.
@@ -213,10 +226,11 @@ fn build_archive<D: Clone>(
 
     if nondom.len() < target_size {
         // Fill from dominated members ordered by ascending fitness.
-        let mut dominated: Vec<usize> =
-            (0..pool.len()).filter(|&i| fitness[i] >= 1.0).collect();
+        let mut dominated: Vec<usize> = (0..pool.len()).filter(|&i| fitness[i] >= 1.0).collect();
         dominated.sort_by(|&a, &b| {
-            fitness[a].partial_cmp(&fitness[b]).unwrap_or(std::cmp::Ordering::Equal)
+            fitness[a]
+                .partial_cmp(&fitness[b])
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
         let needed = target_size - nondom.len();
         nondom.extend(dominated.into_iter().take(needed));
@@ -244,8 +258,7 @@ fn build_archive<D: Clone>(
                 }
                 neighbor_dists[i].push(euclidean(&oriented[i], &oriented[j]));
             }
-            neighbor_dists[i]
-                .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            neighbor_dists[i].sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         }
         // Find the alive member whose neighbor-distance vector is lex-smallest.
         let mut victim = usize::MAX;
@@ -263,7 +276,11 @@ fn build_archive<D: Clone>(
                 .zip(neighbor_dists[victim].iter())
                 .find_map(|(a, b)| {
                     let c = a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
-                    if c != std::cmp::Ordering::Equal { Some(c) } else { None }
+                    if c != std::cmp::Ordering::Equal {
+                        Some(c)
+                    } else {
+                        None
+                    }
                 })
                 .unwrap_or(std::cmp::Ordering::Equal);
             if cmp == std::cmp::Ordering::Less {
@@ -277,7 +294,13 @@ fn build_archive<D: Clone>(
     nondom
         .into_iter()
         .enumerate()
-        .filter_map(|(local, idx)| if alive[local] { Some(pool[idx].clone()) } else { None })
+        .filter_map(|(local, idx)| {
+            if alive[local] {
+                Some(pool[idx].clone())
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
@@ -354,10 +377,16 @@ mod tests {
         let mut b = make();
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

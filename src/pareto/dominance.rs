@@ -29,11 +29,7 @@ pub enum Dominance {
 ///    `constraint_violation` dominates.
 /// 3. Otherwise compare objective values after converting both to
 ///    minimization orientation via [`ObjectiveSpace::as_minimization`].
-pub fn pareto_compare(
-    a: &Evaluation,
-    b: &Evaluation,
-    objectives: &ObjectiveSpace,
-) -> Dominance {
+pub fn pareto_compare(a: &Evaluation, b: &Evaluation, objectives: &ObjectiveSpace) -> Dominance {
     let a_feasible = a.is_feasible();
     let b_feasible = b.is_feasible();
     match (a_feasible, b_feasible) {
@@ -78,10 +74,7 @@ mod tests {
     use crate::core::objective::Objective;
 
     fn space_min2() -> ObjectiveSpace {
-        ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ])
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
     }
 
     #[test]

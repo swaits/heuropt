@@ -68,7 +68,10 @@ where
     P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.initial_sigma > 0.0, "OnePlusOneEs initial_sigma must be > 0");
+        assert!(
+            self.config.initial_sigma > 0.0,
+            "OnePlusOneEs initial_sigma must be > 0"
+        );
         assert!(
             self.config.step_increase > 1.0,
             "OnePlusOneEs step_increase must be > 1",
@@ -123,8 +126,7 @@ where
             }
             // Apply one-fifth rule once we have a full window.
             if window.len() == self.config.adaptation_period {
-                let success_count: usize =
-                    window.iter().map(|&b| b as usize).sum();
+                let success_count: usize = window.iter().map(|&b| b as usize).sum();
                 let rate = success_count as f64 / window.len() as f64;
                 if rate > 0.2 {
                     sigma *= self.config.step_increase;

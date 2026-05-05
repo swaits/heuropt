@@ -25,7 +25,11 @@ pub struct RandomSearchConfig {
 
 impl Default for RandomSearchConfig {
     fn default() -> Self {
-        Self { iterations: 100, batch_size: 1, seed: 42 }
+        Self {
+            iterations: 100,
+            batch_size: 1,
+            seed: 42,
+        }
     }
 }
 
@@ -45,7 +49,10 @@ pub struct RandomSearch<I> {
 impl<I> RandomSearch<I> {
     /// Construct a `RandomSearch` from its config and initializer.
     pub fn new(config: RandomSearchConfig, initializer: I) -> Self {
-        Self { config, initializer }
+        Self {
+            config,
+            initializer,
+        }
     }
 }
 
@@ -62,7 +69,9 @@ where
         let mut evaluations = 0usize;
 
         for _ in 0..self.config.iterations {
-            let decisions = self.initializer.initialize(self.config.batch_size, &mut rng);
+            let decisions = self
+                .initializer
+                .initialize(self.config.batch_size, &mut rng);
             evaluations += decisions.len();
             all.extend(evaluate_batch(problem, decisions));
         }
@@ -88,7 +97,11 @@ mod tests {
     #[test]
     fn evaluation_count_matches_iterations_times_batch() {
         let mut opt = RandomSearch::new(
-            RandomSearchConfig { iterations: 30, batch_size: 4, seed: 1 },
+            RandomSearchConfig {
+                iterations: 30,
+                batch_size: 4,
+                seed: 1,
+            },
             RealBounds::new(vec![(-2.0, 2.0)]),
         );
         let r = opt.run(&Sphere1D);
@@ -100,7 +113,11 @@ mod tests {
     #[test]
     fn pareto_front_non_empty_for_multi_objective() {
         let mut opt = RandomSearch::new(
-            RandomSearchConfig { iterations: 50, batch_size: 1, seed: 42 },
+            RandomSearchConfig {
+                iterations: 50,
+                batch_size: 1,
+                seed: 42,
+            },
             RealBounds::new(vec![(-5.0, 5.0)]),
         );
         let r = opt.run(&SchafferN1);
@@ -112,7 +129,11 @@ mod tests {
     #[test]
     fn single_objective_returns_best() {
         let mut opt = RandomSearch::new(
-            RandomSearchConfig { iterations: 100, batch_size: 1, seed: 7 },
+            RandomSearchConfig {
+                iterations: 100,
+                batch_size: 1,
+                seed: 7,
+            },
             RealBounds::new(vec![(-1.0, 1.0)]),
         );
         let r = opt.run(&Sphere1D);

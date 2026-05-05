@@ -31,7 +31,13 @@ impl<D> OptimizationResult<D> {
         evaluations: usize,
         generations: usize,
     ) -> Self {
-        Self { population, pareto_front, best, evaluations, generations }
+        Self {
+            population,
+            pareto_front,
+            best,
+            evaluations,
+            generations,
+        }
     }
 
     /// The final population.

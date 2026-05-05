@@ -27,7 +27,11 @@ pub struct TlboConfig {
 
 impl Default for TlboConfig {
     fn default() -> Self {
-        Self { population_size: 30, generations: 200, seed: 42 }
+        Self {
+            population_size: 30,
+            generations: 200,
+            seed: 42,
+        }
     }
 }
 
@@ -58,7 +62,10 @@ where
     P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size >= 2, "Tlbo population_size must be >= 2");
+        assert!(
+            self.config.population_size >= 2,
+            "Tlbo population_size must be >= 2"
+        );
         let objectives = problem.objectives();
         assert!(
             objectives.is_single_objective(),
@@ -73,8 +80,7 @@ where
             use crate::traits::Initializer as _;
             self.bounds.initialize(n, &mut rng)
         };
-        let mut evals: Vec<Evaluation> =
-            decisions.iter().map(|d| problem.evaluate(d)).collect();
+        let mut evals: Vec<Evaluation> = decisions.iter().map(|d| problem.evaluate(d)).collect();
         let mut evaluations = decisions.len();
 
         for _ in 0..self.config.generations {

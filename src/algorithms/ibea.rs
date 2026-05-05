@@ -27,7 +27,12 @@ pub struct IbeaConfig {
 
 impl Default for IbeaConfig {
     fn default() -> Self {
-        Self { population_size: 100, generations: 250, kappa: 0.05, seed: 42 }
+        Self {
+            population_size: 100,
+            generations: 250,
+            kappa: 0.05,
+            seed: 42,
+        }
     }
 }
 
@@ -45,7 +50,11 @@ pub struct Ibea<I, V> {
 impl<I, V> Ibea<I, V> {
     /// Construct an `Ibea` optimizer.
     pub fn new(config: IbeaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -57,7 +66,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Ibea population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "Ibea population_size must be > 0"
+        );
         assert!(self.config.kappa > 0.0, "Ibea kappa must be > 0");
         let n = self.config.population_size;
         let objectives = problem.objectives();
@@ -76,7 +88,10 @@ where
             while offspring_decisions.len() < n {
                 let p1 = binary_tournament(&fitness, &mut rng);
                 let p2 = binary_tournament(&fitness, &mut rng);
-                let parents = vec![population[p1].decision.clone(), population[p2].decision.clone()];
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
                 let children = self.variation.vary(&parents, &mut rng);
                 assert!(!children.is_empty(), "Ibea variation returned no children");
                 for child in children {
@@ -204,11 +219,7 @@ fn environmental_selection<D: Clone>(
 }
 
 /// Compute IBEA fitness without mutating, for use in tournament selection.
-fn compute_fitness<D>(
-    pool: &[Candidate<D>],
-    objectives: &ObjectiveSpace,
-    kappa: f64,
-) -> Vec<f64> {
+fn compute_fitness<D>(pool: &[Candidate<D>], objectives: &ObjectiveSpace, kappa: f64) -> Vec<f64> {
     if pool.is_empty() {
         return Vec::new();
     }
@@ -284,7 +295,12 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         Ibea::new(
-            IbeaConfig { population_size: 20, generations: 15, kappa: 0.05, seed },
+            IbeaConfig {
+                population_size: 20,
+                generations: 15,
+                kappa: 0.05,
+                seed,
+            },
             initializer,
             variation,
         )
@@ -304,10 +320,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 
@@ -321,7 +343,12 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         let mut opt = Ibea::new(
-            IbeaConfig { population_size: 0, generations: 1, kappa: 0.05, seed: 0 },
+            IbeaConfig {
+                population_size: 0,
+                generations: 1,
+                kappa: 0.05,
+                seed: 0,
+            },
             initializer,
             variation,
         );

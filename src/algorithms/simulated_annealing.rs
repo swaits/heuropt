@@ -54,7 +54,11 @@ pub struct SimulatedAnnealing<I, V> {
 impl<I, V> SimulatedAnnealing<I, V> {
     /// Construct a `SimulatedAnnealing`.
     pub fn new(config: SimulatedAnnealingConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -109,7 +113,10 @@ where
         for _ in 0..self.config.iterations {
             let parents = vec![current_decision.clone()];
             let children = self.variation.vary(&parents, &mut rng);
-            assert!(!children.is_empty(), "SimulatedAnnealing variation returned no children");
+            assert!(
+                !children.is_empty(),
+                "SimulatedAnnealing variation returned no children"
+            );
             let child_decision = children.into_iter().next().unwrap();
             let child_eval = problem.evaluate(&child_decision);
             evaluations += 1;

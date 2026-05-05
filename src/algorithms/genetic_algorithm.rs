@@ -59,7 +59,11 @@ pub struct GeneticAlgorithm<I, V> {
 impl<I, V> GeneticAlgorithm<I, V> {
     /// Construct a `GeneticAlgorithm`.
     pub fn new(config: GeneticAlgorithmConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -109,7 +113,10 @@ where
                     &mut rng,
                 );
                 let children = self.variation.vary(&parents_decisions, &mut rng);
-                assert!(!children.is_empty(), "GeneticAlgorithm variation returned no children");
+                assert!(
+                    !children.is_empty(),
+                    "GeneticAlgorithm variation returned no children"
+                );
                 for child in children {
                     if offspring_decisions.len() >= n {
                         break;
@@ -123,13 +130,8 @@ where
             evaluations += offspring.len();
 
             // --- Phase 3: survival = elites + best offspring ---
-            population = survival_selection(
-                &population,
-                offspring,
-                direction,
-                n,
-                self.config.elitism,
-            );
+            population =
+                survival_selection(&population, offspring, direction, n, self.config.elitism);
         }
 
         let best = best_candidate(&population, &objectives);
@@ -202,8 +204,10 @@ mod tests {
 
     fn make_optimizer(
         seed: u64,
-    ) -> GeneticAlgorithm<RealBounds, CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>>
-    {
+    ) -> GeneticAlgorithm<
+        RealBounds,
+        CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>,
+    > {
         let bounds = vec![(-5.0, 5.0)];
         let initializer = RealBounds::new(bounds.clone());
         let variation = CompositeVariation {

@@ -122,9 +122,7 @@ where
         // Standard CMA-ES strategy parameters (Hansen tutorial §7.1).
         // ---------------------------------------------------------------
         let c_sigma = (mu_eff + 2.0) / (n_f + mu_eff + 5.0);
-        let d_sigma = 1.0
-            + 2.0 * ((mu_eff - 1.0) / (n_f + 1.0)).sqrt().max(0.0)
-            + c_sigma;
+        let d_sigma = 1.0 + 2.0 * ((mu_eff - 1.0) / (n_f + 1.0)).sqrt().max(0.0) + c_sigma;
         let c_c = (4.0 + mu_eff / n_f) / (n_f + 4.0 + 2.0 * mu_eff / n_f);
         let c_1 = 2.0 / ((n_f + 1.3).powi(2) + mu_eff);
         let c_mu = ((1.0 - c_1) * 2.0 * (mu_eff - 2.0 + 1.0 / mu_eff)
@@ -150,7 +148,11 @@ where
                 .map(|(v, &(lo, hi))| v.clamp(lo, hi))
                 .collect()
         } else {
-            self.bounds.bounds.iter().map(|&(lo, hi)| 0.5 * (lo + hi)).collect()
+            self.bounds
+                .bounds
+                .iter()
+                .map(|&(lo, hi)| 0.5 * (lo + hi))
+                .collect()
         };
         let mut sigma = self.config.initial_sigma;
         // Covariance C, eigenvectors B, eigenvalues d (square roots of eigenvalues of C).
@@ -181,10 +183,7 @@ where
                 let (eigenvalues, eigenvectors) = symmetric_eigen(&c_matrix, 1e-14, 100);
                 // eigenvectors is sorted descending; we don't depend on order
                 // for sampling correctness, but we do need positive eigenvalues.
-                d = eigenvalues
-                    .iter()
-                    .map(|&v| v.max(1e-20).sqrt())
-                    .collect();
+                d = eigenvalues.iter().map(|&v| v.max(1e-20).sqrt()).collect();
                 // B is the matrix whose columns are the eigenvectors. The
                 // helper returns `eigenvectors[i]` as the i-th *eigenvector*,
                 // so b[r][c] should equal eigenvectors[c][r].
@@ -232,7 +231,11 @@ where
             // Sort offspring by fitness ascending (best first).
             let mut order: Vec<usize> = (0..lambda).collect();
             order.sort_by(|&a, &b_| {
-                compare_so(&evaluated[a].evaluation, &evaluated[b_].evaluation, direction)
+                compare_so(
+                    &evaluated[a].evaluation,
+                    &evaluated[b_].evaluation,
+                    direction,
+                )
             });
 
             // ----- Recompute mean from the μ best (weighted average of x) -----
@@ -284,13 +287,13 @@ where
             // ----- Evolution path for C: p_c = (1 - c_c) p_c + h_σ · sqrt(c_c (2 - c_c) μ_eff) · (m_new - m_old)/σ -----
             let factor_p_c = h_sigma * (c_c * (2.0 - c_c) * mu_eff).sqrt();
             for i in 0..n {
-                p_c[i] = (1.0 - c_c) * p_c[i]
-                    + factor_p_c * (mean[i] - old_mean[i]) / sigma;
+                p_c[i] = (1.0 - c_c) * p_c[i] + factor_p_c * (mean[i] - old_mean[i]) / sigma;
             }
 
             // ----- Covariance matrix update (rank-1 + rank-μ) -----
             let delta_h = (1.0 - h_sigma) * c_c * (2.0 - c_c);
-            #[allow(clippy::needless_range_loop)] // body uses both i and j to index c_matrix and offspring.
+            #[allow(clippy::needless_range_loop)]
+            // body uses both i and j to index c_matrix and offspring.
             for i in 0..n {
                 for j in 0..n {
                     let mut update = (1.0 - c_1 - c_mu) * c_matrix[i][j]
@@ -443,7 +446,7 @@ mod tests {
             generations: 30,
             initial_sigma: 0.5,
             eigen_decomposition_period: 1,
-                initial_mean: None,
+            initial_mean: None,
             seed: 99,
         };
         let mut a = CmaEs::new(cfg.clone(), RealBounds::new(vec![(-5.0, 5.0)]));
@@ -459,10 +462,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "single-objective")]
     fn multi_objective_panics() {
-        let mut opt = CmaEs::new(
-            CmaEsConfig::default(),
-            RealBounds::new(vec![(-5.0, 5.0)]),
-        );
+        let mut opt = CmaEs::new(CmaEsConfig::default(), RealBounds::new(vec![(-5.0, 5.0)]));
         let _ = opt.run(&SchafferN1);
     }
 

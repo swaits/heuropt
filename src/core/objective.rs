@@ -26,12 +26,18 @@ pub struct Objective {
 impl Objective {
     /// Create a minimize objective with the given name.
     pub fn minimize(name: impl Into<String>) -> Self {
-        Self { name: name.into(), direction: Direction::Minimize }
+        Self {
+            name: name.into(),
+            direction: Direction::Minimize,
+        }
     }
 
     /// Create a maximize objective with the given name.
     pub fn maximize(name: impl Into<String>) -> Self {
-        Self { name: name.into(), direction: Direction::Maximize }
+        Self {
+            name: name.into(),
+            direction: Direction::Maximize,
+        }
     }
 }
 
@@ -125,10 +131,7 @@ mod tests {
         assert!(!single.is_empty());
         assert_eq!(single.len(), 1);
 
-        let multi = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
+        let multi = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
         assert!(multi.is_multi_objective());
         assert!(!multi.is_single_objective());
 

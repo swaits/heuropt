@@ -145,8 +145,7 @@ impl Problem for Ackley {
         let n = self.dim as f64;
         let sum_sq: f64 = x.iter().map(|v| v * v).sum();
         let sum_cos: f64 = x.iter().map(|v| (2.0 * PI * v).cos()).sum();
-        let f = -20.0 * (-0.2 * (sum_sq / n).sqrt()).exp()
-            - (sum_cos / n).exp()
+        let f = -20.0 * (-0.2 * (sum_sq / n).sqrt()).exp() - (sum_cos / n).exp()
             + 20.0
             + std::f64::consts::E;
         Evaluation::new(vec![f])
@@ -228,7 +227,9 @@ impl Problem for Rastrigin {
     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
         let n = self.dim as f64;
         let value = 10.0 * n
-            + x.iter().map(|v| v * v - 10.0 * (2.0 * PI * v).cos()).sum::<f64>();
+            + x.iter()
+                .map(|v| v * v - 10.0 * (2.0 * PI * v).cos())
+                .sum::<f64>();
         Evaluation::new(vec![value])
     }
 }
@@ -297,7 +298,10 @@ fn zdt1_random(seed: u64) -> MoRun {
     let mut opt = RandomSearch::new(config, initializer);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_paes(seed: u64) -> MoRun {
@@ -312,7 +316,10 @@ fn zdt1_paes(seed: u64) -> MoRun {
     let mut opt = Paes::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_spea2(seed: u64) -> MoRun {
@@ -336,7 +343,10 @@ fn zdt1_spea2(seed: u64) -> MoRun {
     let mut opt = Spea2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_nsga2(seed: u64) -> MoRun {
@@ -349,11 +359,18 @@ fn zdt1_nsga2(seed: u64) -> MoRun {
     };
     let pop = 100;
     let gens = ZDT1_BUDGET / pop;
-    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let config = Nsga2Config {
+        population_size: pop,
+        generations: gens,
+        seed,
+    };
     let mut opt = Nsga2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_sms_emoa(seed: u64) -> MoRun {
@@ -376,7 +393,10 @@ fn zdt1_sms_emoa(seed: u64) -> MoRun {
     let mut opt = SmsEmoa::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_hype(seed: u64) -> MoRun {
@@ -402,7 +422,10 @@ fn zdt1_hype(seed: u64) -> MoRun {
     let mut opt = Hype::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_rvea(seed: u64) -> MoRun {
@@ -425,7 +448,10 @@ fn zdt1_rvea(seed: u64) -> MoRun {
     let mut opt = Rvea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_pesa2(seed: u64) -> MoRun {
@@ -448,7 +474,10 @@ fn zdt1_pesa2(seed: u64) -> MoRun {
     let mut opt = PesaII::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_epsilon_moea(seed: u64) -> MoRun {
@@ -468,7 +497,10 @@ fn zdt1_epsilon_moea(seed: u64) -> MoRun {
     let mut opt = EpsilonMoea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_mopso(seed: u64) -> MoRun {
@@ -488,7 +520,10 @@ fn zdt1_mopso(seed: u64) -> MoRun {
     let mut opt = Mopso::new(config, bounds);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_ibea(seed: u64) -> MoRun {
@@ -501,11 +536,19 @@ fn zdt1_ibea(seed: u64) -> MoRun {
     };
     let pop = 100;
     let gens = ZDT1_BUDGET / pop;
-    let config = IbeaConfig { population_size: pop, generations: gens, kappa: 0.05, seed };
+    let config = IbeaConfig {
+        population_size: pop,
+        generations: gens,
+        kappa: 0.05,
+        seed,
+    };
     let mut opt = Ibea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_moead(seed: u64) -> MoRun {
@@ -529,7 +572,10 @@ fn zdt1_moead(seed: u64) -> MoRun {
     let mut opt = Moead::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt1_nsga3(seed: u64) -> MoRun {
@@ -552,7 +598,10 @@ fn zdt1_nsga3(seed: u64) -> MoRun {
     let mut opt = Nsga3::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -560,7 +609,10 @@ fn zdt1_nsga3(seed: u64) -> MoRun {
 // -----------------------------------------------------------------------------
 
 fn dtlz2_problem() -> Dtlz2 {
-    Dtlz2 { num_objectives: DTLZ2_OBJECTIVES, dim: DTLZ2_DIM }
+    Dtlz2 {
+        num_objectives: DTLZ2_OBJECTIVES,
+        dim: DTLZ2_DIM,
+    }
 }
 
 fn dtlz2_random(seed: u64) -> MoRun {
@@ -574,7 +626,10 @@ fn dtlz2_random(seed: u64) -> MoRun {
     let mut opt = RandomSearch::new(config, initializer);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_nsga2(seed: u64) -> MoRun {
@@ -587,11 +642,18 @@ fn dtlz2_nsga2(seed: u64) -> MoRun {
     };
     let pop = 92; // close to the 91-ref-point NSGA-III pop, for fairness
     let gens = DTLZ2_BUDGET / pop;
-    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let config = Nsga2Config {
+        population_size: pop,
+        generations: gens,
+        seed,
+    };
     let mut opt = Nsga2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_spea2(seed: u64) -> MoRun {
@@ -614,7 +676,10 @@ fn dtlz2_spea2(seed: u64) -> MoRun {
     let mut opt = Spea2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_sms_emoa(seed: u64) -> MoRun {
@@ -638,7 +703,10 @@ fn dtlz2_sms_emoa(seed: u64) -> MoRun {
     let mut opt = SmsEmoa::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_hype(seed: u64) -> MoRun {
@@ -661,7 +729,10 @@ fn dtlz2_hype(seed: u64) -> MoRun {
     let mut opt = Hype::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_rvea(seed: u64) -> MoRun {
@@ -684,7 +755,10 @@ fn dtlz2_rvea(seed: u64) -> MoRun {
     let mut opt = Rvea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_pesa2(seed: u64) -> MoRun {
@@ -707,7 +781,10 @@ fn dtlz2_pesa2(seed: u64) -> MoRun {
     let mut opt = PesaII::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_epsilon_moea(seed: u64) -> MoRun {
@@ -727,7 +804,10 @@ fn dtlz2_epsilon_moea(seed: u64) -> MoRun {
     let mut opt = EpsilonMoea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_mopso(seed: u64) -> MoRun {
@@ -747,7 +827,10 @@ fn dtlz2_mopso(seed: u64) -> MoRun {
     let mut opt = Mopso::new(config, bounds);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_ibea(seed: u64) -> MoRun {
@@ -760,11 +843,19 @@ fn dtlz2_ibea(seed: u64) -> MoRun {
     };
     let pop = 92;
     let gens = DTLZ2_BUDGET / pop;
-    let config = IbeaConfig { population_size: pop, generations: gens, kappa: 0.05, seed };
+    let config = IbeaConfig {
+        population_size: pop,
+        generations: gens,
+        kappa: 0.05,
+        seed,
+    };
     let mut opt = Ibea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_moead(seed: u64) -> MoRun {
@@ -787,7 +878,10 @@ fn dtlz2_moead(seed: u64) -> MoRun {
     let mut opt = Moead::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz2_nsga3(seed: u64) -> MoRun {
@@ -811,7 +905,10 @@ fn dtlz2_nsga3(seed: u64) -> MoRun {
     let mut opt = Nsga3::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 /// DTLZ2's analytical Pareto front is the unit sphere octant in objective
@@ -824,7 +921,13 @@ fn mean_distance_to_dtlz2_front(front: &[Candidate<Vec<f64>>]) -> f64 {
     let total: f64 = front
         .iter()
         .map(|c| {
-            let norm: f64 = c.evaluation.objectives.iter().map(|v| v * v).sum::<f64>().sqrt();
+            let norm: f64 = c
+                .evaluation
+                .objectives
+                .iter()
+                .map(|v| v * v)
+                .sum::<f64>()
+                .sqrt();
             (norm - 1.0).abs()
         })
         .sum();
@@ -880,7 +983,11 @@ fn rastrigin_nsga2(seed: u64) -> SoRun {
     };
     let pop = 50;
     let gens = RASTRIGIN_BUDGET / pop;
-    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let config = Nsga2Config {
+        population_size: pop,
+        generations: gens,
+        seed,
+    };
     let mut opt = Nsga2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
@@ -915,7 +1022,10 @@ fn rastrigin_hill_climber(seed: u64) -> SoRun {
     let problem = Rastrigin { dim: RASTRIGIN_DIM };
     let initializer = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
     let variation = BoundedGaussianMutation::new(0.3, vec![(-5.12, 5.12); RASTRIGIN_DIM]);
-    let config = HillClimberConfig { iterations: RASTRIGIN_BUDGET, seed };
+    let config = HillClimberConfig {
+        iterations: RASTRIGIN_BUDGET,
+        seed,
+    };
     let mut opt = HillClimber::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
@@ -1137,7 +1247,9 @@ fn ackley_bo(seed: u64) -> SoRun {
 // -----------------------------------------------------------------------------
 
 fn rosenbrock_problem() -> Rosenbrock {
-    Rosenbrock { dim: ROSENBROCK_DIM }
+    Rosenbrock {
+        dim: ROSENBROCK_DIM,
+    }
 }
 fn ackley_problem() -> Ackley {
     Ackley { dim: ACKLEY_DIM }
@@ -1176,7 +1288,7 @@ macro_rules! so_run_cma {
             generations: $budget / pop,
             initial_sigma: 1.0,
             eigen_decomposition_period: 1,
-        initial_mean: None,
+            initial_mean: None,
             seed: $seed,
         };
         let mut opt = CmaEs::new(config, bounds);
@@ -1219,7 +1331,11 @@ macro_rules! so_run_tlbo {
         let pop = 30;
         // TLBO does ~2N evaluations per generation.
         let gens = ($budget - pop) / (2 * pop);
-        let config = TlboConfig { population_size: pop, generations: gens, seed: $seed };
+        let config = TlboConfig {
+            population_size: pop,
+            generations: gens,
+            seed: $seed,
+        };
         let mut opt = Tlbo::new(config, bounds);
         let t0 = Instant::now();
         let result = opt.run(&problem);
@@ -1230,21 +1346,95 @@ macro_rules! so_run_tlbo {
     }};
 }
 
-fn rosenbrock_de(seed: u64) -> SoRun { so_run_de!(rosenbrock_problem(), ROSENBROCK_DIM, -5.0, 10.0, ROSENBROCK_BUDGET, seed) }
-fn rosenbrock_cma(seed: u64) -> SoRun { so_run_cma!(rosenbrock_problem(), ROSENBROCK_DIM, -5.0, 10.0, ROSENBROCK_BUDGET, seed) }
-fn rosenbrock_pso(seed: u64) -> SoRun { so_run_pso!(rosenbrock_problem(), ROSENBROCK_DIM, -5.0, 10.0, ROSENBROCK_BUDGET, seed) }
-fn rosenbrock_tlbo(seed: u64) -> SoRun { so_run_tlbo!(rosenbrock_problem(), ROSENBROCK_DIM, -5.0, 10.0, ROSENBROCK_BUDGET, seed) }
+fn rosenbrock_de(seed: u64) -> SoRun {
+    so_run_de!(
+        rosenbrock_problem(),
+        ROSENBROCK_DIM,
+        -5.0,
+        10.0,
+        ROSENBROCK_BUDGET,
+        seed
+    )
+}
+fn rosenbrock_cma(seed: u64) -> SoRun {
+    so_run_cma!(
+        rosenbrock_problem(),
+        ROSENBROCK_DIM,
+        -5.0,
+        10.0,
+        ROSENBROCK_BUDGET,
+        seed
+    )
+}
+fn rosenbrock_pso(seed: u64) -> SoRun {
+    so_run_pso!(
+        rosenbrock_problem(),
+        ROSENBROCK_DIM,
+        -5.0,
+        10.0,
+        ROSENBROCK_BUDGET,
+        seed
+    )
+}
+fn rosenbrock_tlbo(seed: u64) -> SoRun {
+    so_run_tlbo!(
+        rosenbrock_problem(),
+        ROSENBROCK_DIM,
+        -5.0,
+        10.0,
+        ROSENBROCK_BUDGET,
+        seed
+    )
+}
 
-fn ackley_de(seed: u64) -> SoRun { so_run_de!(ackley_problem(), ACKLEY_DIM, -32.768, 32.768, ACKLEY_BUDGET, seed) }
-fn ackley_cma(seed: u64) -> SoRun { so_run_cma!(ackley_problem(), ACKLEY_DIM, -32.768, 32.768, ACKLEY_BUDGET, seed) }
-fn ackley_pso(seed: u64) -> SoRun { so_run_pso!(ackley_problem(), ACKLEY_DIM, -32.768, 32.768, ACKLEY_BUDGET, seed) }
-fn ackley_tlbo(seed: u64) -> SoRun { so_run_tlbo!(ackley_problem(), ACKLEY_DIM, -32.768, 32.768, ACKLEY_BUDGET, seed) }
+fn ackley_de(seed: u64) -> SoRun {
+    so_run_de!(
+        ackley_problem(),
+        ACKLEY_DIM,
+        -32.768,
+        32.768,
+        ACKLEY_BUDGET,
+        seed
+    )
+}
+fn ackley_cma(seed: u64) -> SoRun {
+    so_run_cma!(
+        ackley_problem(),
+        ACKLEY_DIM,
+        -32.768,
+        32.768,
+        ACKLEY_BUDGET,
+        seed
+    )
+}
+fn ackley_pso(seed: u64) -> SoRun {
+    so_run_pso!(
+        ackley_problem(),
+        ACKLEY_DIM,
+        -32.768,
+        32.768,
+        ACKLEY_BUDGET,
+        seed
+    )
+}
+fn ackley_tlbo(seed: u64) -> SoRun {
+    so_run_tlbo!(
+        ackley_problem(),
+        ACKLEY_DIM,
+        -32.768,
+        32.768,
+        ACKLEY_BUDGET,
+        seed
+    )
+}
 
 // -----------------------------------------------------------------------------
 // ZDT3 runners (curated MO subset)
 // -----------------------------------------------------------------------------
 
-fn zdt3_problem() -> Zdt3 { Zdt3 { dim: ZDT3_DIM } }
+fn zdt3_problem() -> Zdt3 {
+    Zdt3 { dim: ZDT3_DIM }
+}
 
 fn zdt3_nsga2(seed: u64) -> MoRun {
     let problem = zdt3_problem();
@@ -1255,11 +1445,18 @@ fn zdt3_nsga2(seed: u64) -> MoRun {
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT3_DIM as f64),
     };
     let pop = 100;
-    let config = Nsga2Config { population_size: pop, generations: ZDT3_BUDGET / pop, seed };
+    let config = Nsga2Config {
+        population_size: pop,
+        generations: ZDT3_BUDGET / pop,
+        seed,
+    };
     let mut opt = Nsga2::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt3_moead(seed: u64) -> MoRun {
@@ -1280,7 +1477,10 @@ fn zdt3_moead(seed: u64) -> MoRun {
     let mut opt = Moead::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt3_ibea(seed: u64) -> MoRun {
@@ -1292,11 +1492,19 @@ fn zdt3_ibea(seed: u64) -> MoRun {
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT3_DIM as f64),
     };
     let pop = 100;
-    let config = IbeaConfig { population_size: pop, generations: ZDT3_BUDGET / pop, kappa: 0.05, seed };
+    let config = IbeaConfig {
+        population_size: pop,
+        generations: ZDT3_BUDGET / pop,
+        kappa: 0.05,
+        seed,
+    };
     let mut opt = Ibea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn zdt3_age_moea(seed: u64) -> MoRun {
@@ -1308,11 +1516,18 @@ fn zdt3_age_moea(seed: u64) -> MoRun {
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT3_DIM as f64),
     };
     let pop = 100;
-    let config = AgeMoeaConfig { population_size: pop, generations: ZDT3_BUDGET / pop, seed };
+    let config = AgeMoeaConfig {
+        population_size: pop,
+        generations: ZDT3_BUDGET / pop,
+        seed,
+    };
     let mut opt = AgeMoea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1320,7 +1535,10 @@ fn zdt3_age_moea(seed: u64) -> MoRun {
 // -----------------------------------------------------------------------------
 
 fn dtlz1_problem() -> Dtlz1 {
-    Dtlz1 { num_objectives: DTLZ1_OBJECTIVES, dim: DTLZ1_DIM }
+    Dtlz1 {
+        num_objectives: DTLZ1_OBJECTIVES,
+        dim: DTLZ1_DIM,
+    }
 }
 
 fn dtlz1_nsga3(seed: u64) -> MoRun {
@@ -1341,7 +1559,10 @@ fn dtlz1_nsga3(seed: u64) -> MoRun {
     let mut opt = Nsga3::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz1_moead(seed: u64) -> MoRun {
@@ -1362,7 +1583,10 @@ fn dtlz1_moead(seed: u64) -> MoRun {
     let mut opt = Moead::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz1_age_moea(seed: u64) -> MoRun {
@@ -1374,11 +1598,18 @@ fn dtlz1_age_moea(seed: u64) -> MoRun {
         mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ1_DIM as f64),
     };
     let pop = 92;
-    let config = AgeMoeaConfig { population_size: pop, generations: DTLZ1_BUDGET / pop, seed };
+    let config = AgeMoeaConfig {
+        population_size: pop,
+        generations: DTLZ1_BUDGET / pop,
+        seed,
+    };
     let mut opt = AgeMoea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 fn dtlz1_grea(seed: u64) -> MoRun {
@@ -1399,7 +1630,10 @@ fn dtlz1_grea(seed: u64) -> MoRun {
     let mut opt = Grea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
-    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
 }
 
 /// Mean L2 distance from each front point to the analytical DTLZ1 front
@@ -1424,9 +1658,7 @@ fn mean_distance_to_dtlz1_front(front: &[Candidate<Vec<f64>>]) -> f64 {
 // -----------------------------------------------------------------------------
 
 fn run_zdt1_comparison() {
-    println!(
-        "== ZDT1 (dim={ZDT1_DIM}, {ZDT1_BUDGET} evals/run × {SEEDS} seeds) =="
-    );
+    println!("== ZDT1 (dim={ZDT1_DIM}, {ZDT1_BUDGET} evals/run × {SEEDS} seeds) ==");
     println!("metric arrows: hypervolume↑ (higher better), others↓ (lower better)");
     println!();
     println!(
@@ -1461,10 +1693,11 @@ fn run_zdt1_comparison() {
             .iter()
             .map(|r| hypervolume_2d(&r.front, &zdt1_objs, ZDT1_REFERENCE))
             .collect();
-        let sp: Vec<f64> =
-            runs.iter().map(|r| spacing(&r.front, &zdt1_objs)).collect();
-        let l2: Vec<f64> =
-            runs.iter().map(|r| mean_l2_to_zdt1_front(&r.front)).collect();
+        let sp: Vec<f64> = runs.iter().map(|r| spacing(&r.front, &zdt1_objs)).collect();
+        let l2: Vec<f64> = runs
+            .iter()
+            .map(|r| mean_l2_to_zdt1_front(&r.front))
+            .collect();
         let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
 
@@ -1488,9 +1721,7 @@ fn run_zdt1_comparison() {
 
 fn run_dtlz2_comparison() {
     println!();
-    println!(
-        "== DTLZ2 (3-obj, dim={DTLZ2_DIM}, {DTLZ2_BUDGET} evals/run × {SEEDS} seeds) =="
-    );
+    println!("== DTLZ2 (3-obj, dim={DTLZ2_DIM}, {DTLZ2_BUDGET} evals/run × {SEEDS} seeds) ==");
     println!("Pareto front: unit sphere octant (Σf²=1, all f≥0); 'mean dist' is |‖f‖−1|");
     println!();
     println!(
@@ -1520,10 +1751,14 @@ fn run_dtlz2_comparison() {
 
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
-        let dist: Vec<f64> =
-            runs.iter().map(|r| mean_distance_to_dtlz2_front(&r.front)).collect();
-        let sp: Vec<f64> =
-            runs.iter().map(|r| spacing(&r.front, &dtlz2_objs)).collect();
+        let dist: Vec<f64> = runs
+            .iter()
+            .map(|r| mean_distance_to_dtlz2_front(&r.front))
+            .collect();
+        let sp: Vec<f64> = runs
+            .iter()
+            .map(|r| spacing(&r.front, &dtlz2_objs))
+            .collect();
         let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
 
@@ -1545,9 +1780,7 @@ fn run_dtlz2_comparison() {
 
 fn run_rastrigin_comparison() {
     println!();
-    println!(
-        "== Rastrigin (dim={RASTRIGIN_DIM}, {RASTRIGIN_BUDGET} evals/run × {SEEDS} seeds) =="
-    );
+    println!("== Rastrigin (dim={RASTRIGIN_DIM}, {RASTRIGIN_BUDGET} evals/run × {SEEDS} seeds) ==");
     println!("global minimum: f = 0  (lower is better)");
     println!();
     println!("{:<14} {:>20} {:>10}", "algorithm", "best f", "ms");
@@ -1668,7 +1901,10 @@ fn run_zdt3_comparison() {
     ];
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
-        let hv: Vec<f64> = runs.iter().map(|r| hypervolume_2d(&r.front, &objs, ZDT3_REFERENCE)).collect();
+        let hv: Vec<f64> = runs
+            .iter()
+            .map(|r| hypervolume_2d(&r.front, &objs, ZDT3_REFERENCE))
+            .collect();
         let sp: Vec<f64> = runs.iter().map(|r| spacing(&r.front, &objs)).collect();
         let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
@@ -1708,7 +1944,10 @@ fn run_dtlz1_comparison() {
     ];
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
-        let dist: Vec<f64> = runs.iter().map(|r| mean_distance_to_dtlz1_front(&r.front)).collect();
+        let dist: Vec<f64> = runs
+            .iter()
+            .map(|r| mean_distance_to_dtlz1_front(&r.front))
+            .collect();
         let sp: Vec<f64> = runs.iter().map(|r| spacing(&r.front, &objs)).collect();
         let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();

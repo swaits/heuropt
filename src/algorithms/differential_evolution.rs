@@ -91,8 +91,10 @@ where
         };
         let initial_pop = evaluate_batch(problem, decisions.clone());
         let mut evaluations = initial_pop.len();
-        let mut evals: Vec<f64> =
-            initial_pop.iter().map(|c| c.evaluation.objectives[0]).collect();
+        let mut evals: Vec<f64> = initial_pop
+            .iter()
+            .map(|c| c.evaluation.objectives[0])
+            .collect();
 
         for _gen in 0..self.config.generations {
             // Phase 1 (serial): construct one trial per target. RNG state is
@@ -151,7 +153,11 @@ where
     }
 }
 
-fn pick_three_distinct(n: usize, exclude: usize, rng: &mut crate::core::rng::Rng) -> (usize, usize, usize) {
+fn pick_three_distinct(
+    n: usize,
+    exclude: usize,
+    rng: &mut crate::core::rng::Rng,
+) -> (usize, usize, usize) {
     let pick = |rng: &mut crate::core::rng::Rng, taken: &[usize]| -> usize {
         loop {
             let v = rng.random_range(0..n);
@@ -185,7 +191,10 @@ mod tests {
         );
         let r = opt.run(&Sphere1D);
         let best = r.best.unwrap();
-        assert!(best.evaluation.objectives[0] < 1e-3, "DE should converge near 0");
+        assert!(
+            best.evaluation.objectives[0] < 1e-3,
+            "DE should converge near 0"
+        );
     }
 
     #[test]
@@ -197,8 +206,7 @@ mod tests {
             crossover_probability: 0.7,
             seed: 99,
         };
-        let mut a =
-            DifferentialEvolution::new(cfg.clone(), RealBounds::new(vec![(-5.0, 5.0)]));
+        let mut a = DifferentialEvolution::new(cfg.clone(), RealBounds::new(vec![(-5.0, 5.0)]));
         let mut b = DifferentialEvolution::new(cfg, RealBounds::new(vec![(-5.0, 5.0)]));
         let ra = a.run(&Sphere1D);
         let rb = b.run(&Sphere1D);

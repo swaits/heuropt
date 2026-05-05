@@ -52,7 +52,11 @@ pub struct EpsilonMoea<I, V> {
 impl<I, V> EpsilonMoea<I, V> {
     /// Construct an `EpsilonMoea`.
     pub fn new(config: EpsilonMoeaConfig, initializer: I, variation: V) -> Self {
-        Self { config, initializer, variation }
+        Self {
+            config,
+            initializer,
+            variation,
+        }
     }
 }
 
@@ -64,7 +68,10 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "EpsilonMoea population_size must be > 0");
+        assert!(
+            self.config.population_size > 0,
+            "EpsilonMoea population_size must be > 0"
+        );
         let n = self.config.population_size;
         let objectives = problem.objectives();
         assert_eq!(
@@ -110,7 +117,10 @@ where
             };
             let parents = vec![parent_a, parent_b];
             let children = self.variation.vary(&parents, &mut rng);
-            assert!(!children.is_empty(), "EpsilonMoea variation returned no children");
+            assert!(
+                !children.is_empty(),
+                "EpsilonMoea variation returned no children"
+            );
             let child_decision = children.into_iter().next().unwrap();
             let child_eval = problem.evaluate(&child_decision);
             evaluations += 1;
@@ -205,12 +215,8 @@ fn insert_into_epsilon_archive<D: Clone>(
     }
     if let Some(idx) = child_box_index {
         // Same box: keep whichever is closer to box's ideal corner.
-        let member_corner_dist = corner_distance(
-            &archive[idx].evaluation,
-            objectives,
-            epsilon,
-            &child_box,
-        );
+        let member_corner_dist =
+            corner_distance(&archive[idx].evaluation, objectives, epsilon, &child_box);
         if child_corner_dist < member_corner_dist {
             archive[idx] = child;
         }
@@ -302,10 +308,16 @@ mod tests {
         let mut b = make_optimizer(99);
         let ra = a.run(&SchafferN1);
         let rb = b.run(&SchafferN1);
-        let oa: Vec<Vec<f64>> =
-            ra.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let ob: Vec<Vec<f64>> =
-            rb.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let oa: Vec<Vec<f64>> = ra
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let ob: Vec<Vec<f64>> = rb
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(oa, ob);
     }
 

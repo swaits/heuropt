@@ -70,10 +70,16 @@ impl AntColonyTsp {
     /// and has a zero diagonal.
     pub fn new(config: AntColonyTspConfig, distances: Vec<Vec<f64>>) -> Self {
         let n = distances.len();
-        assert!(n >= 2, "AntColonyTsp distances matrix must have >= 2 cities");
+        assert!(
+            n >= 2,
+            "AntColonyTsp distances matrix must have >= 2 cities"
+        );
         for (i, row) in distances.iter().enumerate() {
             assert_eq!(row.len(), n, "AntColonyTsp distances matrix must be square");
-            assert_eq!(row[i], 0.0, "AntColonyTsp distance from city to itself must be 0");
+            assert_eq!(
+                row[i], 0.0,
+                "AntColonyTsp distance from city to itself must be 0"
+            );
         }
         Self { config, distances }
     }
@@ -99,12 +105,15 @@ where
         let eta: Vec<Vec<f64>> = self
             .distances
             .iter()
-            .map(|row| row.iter().map(|&d| if d > 0.0 { 1.0 / d } else { 0.0 }).collect())
+            .map(|row| {
+                row.iter()
+                    .map(|&d| if d > 0.0 { 1.0 / d } else { 0.0 })
+                    .collect()
+            })
             .collect();
 
         // Pheromone matrix.
-        let mut pheromone: Vec<Vec<f64>> =
-            vec![vec![self.config.initial_pheromone; n]; n];
+        let mut pheromone: Vec<Vec<f64>> = vec![vec![self.config.initial_pheromone; n]; n];
 
         let mut best_decision: Option<Vec<usize>> = None;
         let mut best_eval: Option<crate::core::evaluation::Evaluation> = None;
@@ -153,7 +162,12 @@ where
 
             // Pheromone deposit on each ant's tour.
             for (tour, eval) in tours.iter().zip(tour_evals.iter()) {
-                let length = eval.objectives.first().copied().unwrap_or(f64::INFINITY).max(1e-12);
+                let length = eval
+                    .objectives
+                    .first()
+                    .copied()
+                    .unwrap_or(f64::INFINITY)
+                    .max(1e-12);
                 let deposit = self.config.deposit / length;
                 for w in tour.windows(2) {
                     let (i, j) = (w[0], w[1]);
@@ -313,10 +327,7 @@ mod tests {
         type Decision = Vec<usize>;
 
         fn objectives(&self) -> ObjectiveSpace {
-            ObjectiveSpace::new(vec![
-                Objective::minimize("a"),
-                Objective::minimize("b"),
-            ])
+            ObjectiveSpace::new(vec![Objective::minimize("a"), Objective::minimize("b")])
         }
 
         fn evaluate(&self, _tour: &Vec<usize>) -> Evaluation {

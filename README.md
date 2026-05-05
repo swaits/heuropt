@@ -2,28 +2,39 @@
 
 [![Crates.io](https://img.shields.io/crates/v/heuropt.svg)](https://crates.io/crates/heuropt)
 [![Documentation](https://docs.rs/heuropt/badge.svg)](https://docs.rs/heuropt)
+[![Book](https://img.shields.io/badge/book-online-blue.svg)](https://swaits.github.io/heuropt/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/swaits/heuropt/actions/workflows/ci.yml/badge.svg)](https://github.com/swaits/heuropt/actions/workflows/ci.yml)
 
-A practical Rust toolkit for implementing heuristic single-objective,
-multi-objective, and many-objective optimization algorithms.
+**A practical Rust toolkit for heuristic optimization.** Single-objective.
+Multi-objective. Many-objective. 35 algorithms. One small set of traits.
+Bit-identical seeded determinism. No trait objects, no GATs, no generic-RNG
+plumbing in the public API.
 
-`heuropt` is **not** a research framework full of abstract machinery — it is a
-small set of concrete types, a handful of simple traits, and a few reference
-algorithms. The goal: an entry-level Rust engineer can define a problem, run a
-built-in optimizer, or implement a new optimizer without learning any
-framework concepts.
+If you can write a `Problem` impl and read `RandomSearch`, you can write your
+own optimizer. That's the whole pitch.
+
+- 📖 **Read the [user guide](https://swaits.github.io/heuropt/)** for tutorials,
+  cookbook recipes, comparison with pymoo / hyperopt / MOEA Framework, and
+  stability policy.
+- 🔧 **[API reference on docs.rs](https://docs.rs/heuropt)** has runnable
+  ` ```rust ` examples on every algorithm.
+- 🧪 Tested with **316+ unit / integration / property tests** plus 8
+  cargo-fuzz targets running on every PR.
+- ⚡ Hot paths heavily optimized — comparison harness 3.27× faster as of
+  v0.4.0, all bit-identical to the reference output.
 
 ## Installation
 
 ```toml
 [dependencies]
-heuropt = "0.3"
+heuropt = "0.5"
 
 # Optional features:
 # - "serde":     derive Serialize/Deserialize on the core data types.
 # - "parallel":  evaluate populations across rayon's thread pool.
 #                Seeded runs stay bit-identical to serial mode.
-# heuropt = { version = "0.3", features = ["serde", "parallel"] }
+# heuropt = { version = "0.5", features = ["serde", "parallel"] }
 ```
 
 ## Define a problem
@@ -503,6 +514,16 @@ heuropt is exhaustively tested across several layers:
   `.cargo/mutants.toml`.
 - **CI** (`.github/workflows/ci.yml`) — fmt, clippy
   (`-D warnings`), test (4-feature matrix), doc, MSRV (1.85), fuzz.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local-test checklist,
+conventional-commits requirement, and project-governance docs.
+
+This project follows the [Builder's Code of Conduct](CODE_OF_CONDUCT.md):
+stay professional, stay technical, focus on the work and its merit.
+
+For security disclosures, see [SECURITY.md](SECURITY.md).
 
 ## License
 

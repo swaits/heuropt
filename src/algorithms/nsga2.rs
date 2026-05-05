@@ -35,6 +35,43 @@ impl Default for Nsga2Config {
 }
 
 /// NSGA-II optimizer (spec §12.3).
+///
+/// The canonical Pareto-based EA: combines non-dominated sorting with
+/// crowding-distance secondary ranking. A strong default for 2- or
+/// 3-objective problems.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![
+///             Objective::minimize("f1"),
+///             Objective::minimize("f2"),
+///         ])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = Nsga2::new(
+///     Nsga2Config { population_size: 30, generations: 20, seed: 42 },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert_eq!(r.population.len(), 30);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Nsga2<I, V> {
     /// Algorithm configuration.

@@ -51,6 +51,37 @@ impl Default for SeparableNesConfig {
 /// following the natural gradient of expected fitness, with rank-shaped
 /// fitness utilities for invariance to monotone transforms of the
 /// objective.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = SeparableNes::new(
+///     SeparableNesConfig {
+///         population_size: 16,
+///         generations: 80,
+///         initial_sigma: 1.0,
+///         mean_learning_rate: 1.0,
+///         sigma_learning_rate: None, // use NES default
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct SeparableNes {
     /// Algorithm configuration.

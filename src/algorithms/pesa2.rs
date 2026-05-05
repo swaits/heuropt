@@ -47,6 +47,41 @@ impl Default for PesaIIConfig {
 /// Maintains an internal population (used to drive variation) and an
 /// external non-dominated archive. Selection biases toward members in
 /// sparsely-populated grid boxes so the front spreads out.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = PesaII::new(
+///     PesaIIConfig {
+///         population_size: 20,
+///         archive_size: 30,
+///         generations: 20,
+///         grid_divisions: 8,
+///         seed: 42,
+///     },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct PesaII<I, V> {
     /// Algorithm configuration.

@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-05
+
+Theme: comprehensive documentation and project polish. No public-API
+changes — bumping `heuropt = "0.5"` in your `Cargo.toml` is enough.
+
+### Added
+
+#### User guide (mdbook)
+
+A new mdbook user guide at `docs/book/`, deployed to
+<https://swaits.github.io/heuropt/> via a CI workflow on tag pushes.
+Chapters:
+
+- **Introduction** — what heuropt is, who it's for, what's in the box.
+- **Five-minute walkthrough** — install, define a problem, run an
+  optimizer, look at the result.
+- **Defining a problem** — the `Problem` trait in depth: single- vs
+  multi-objective, constraints, custom decision types
+  (`Vec<f64>`, `Vec<bool>`, `Vec<usize>`, custom structs).
+- **Choosing an algorithm** — the README's decision tree, expanded
+  to a full chapter with the reasoning behind every branch.
+- **Cookbook** — seven recipes covering parallelism, expensive
+  evaluations, comparison harnesses, permutation problems,
+  constraint repair, picking one answer off a Pareto front, and
+  writing your own optimizer.
+- **Comparison with other libraries** — heuropt vs pymoo, hyperopt,
+  optuna, MOEA Framework, metaheuristics-rs, argmin. Honest about
+  when *not* to pick heuropt.
+- **Stability and SemVer** — explicit guarantees about which surfaces
+  are stable; what's likely to change before 1.0; bit-identical
+  determinism contract.
+- **Migration guides** — per-release upgrade notes.
+
+#### Runnable rustdoc examples
+
+Every algorithm now has a runnable ` ```rust ` example block in its
+rustdoc — 35 algorithms, all exercised by `cargo test --doc`. Plus
+the existing crate-level example in `lib.rs` and the
+`CompositeVariation` operator example.
+
+#### Real-world examples
+
+Three new polished examples covering distinct domains:
+
+- `examples/portfolio.rs` — multi-objective portfolio optimization
+  with budget constraint via `ProjectToSimplex`. Pareto front of
+  return-vs-risk trade-offs, plus a-posteriori weighted decision.
+- `examples/hyperparam_tuning.rs` — sample-efficient hyperparameter
+  tuning with `BayesianOpt` and `Tpe`, demonstrating mixed-scale
+  decoding (log-uniform learning rate, integer depth) and a 60-eval
+  budget.
+- `examples/scheduling.rs` — single-machine weighted-completion-time
+  scheduling: permutation decisions optimized via
+  `SimulatedAnnealing` + `SwapMutation`, comparing against the
+  Smith's-rule oracle.
+
+#### Governance docs
+
+- `CONTRIBUTING.md` — local-test checklist, conventional-commits
+  requirement, contribution areas that land easily vs. those that
+  need prior discussion.
+- `SECURITY.md` — disclosure policy, supported versions, what counts
+  as a security issue.
+- `CODE_OF_CONDUCT.md` — adopts the
+  [Builder's Code of Conduct](https://builderscode.org/) (CC0).
+- `.github/ISSUE_TEMPLATE/` — bug, feature, docs templates plus a
+  `config.yml` that points security reports to the private
+  vulnerability-disclosure flow.
+- `.github/PULL_REQUEST_TEMPLATE.md` — short, opinionated PR
+  template.
+
+#### CI / tooling
+
+- `.github/workflows/docs.yml` — builds the mdbook user guide and
+  deploys it to GitHub Pages on `main` pushes and tag pushes.
+
+### Changed
+
+- README hero block expanded with badges and a punchier opening;
+  added explicit links to the user guide, the docs.rs API reference,
+  and the testing-coverage breakdown.
+- `lib.rs` crate-level docs polished — better intro, points readers
+  at the user guide and the design spec.
+
+[0.5.0]: https://github.com/swaits/heuropt/releases/tag/v0.5.0
+
 ## [0.4.0] — 2026-05-05
 
 Theme: testing infrastructure, two real bug fixes surfaced by that
@@ -383,5 +469,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.5.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

@@ -39,6 +39,45 @@ impl Default for MoeadConfig {
 }
 
 /// MOEA/D optimizer using the Tchebycheff scalarizing function.
+///
+/// Decomposes the multi-objective problem into many single-objective
+/// scalarizations along Das–Dennis weight vectors and solves them
+/// in parallel with neighborhood-based mating. Very fast per generation;
+/// scales naturally to many objectives.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = Moead::new(
+///     MoeadConfig {
+///         generations: 30,
+///         reference_divisions: 19, // 20 weights for 2 objectives
+///         neighborhood_size: 5,
+///         seed: 42,
+///     },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Moead<I, V> {
     /// Algorithm configuration.

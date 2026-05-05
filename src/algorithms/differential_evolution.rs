@@ -44,6 +44,37 @@ impl Default for DifferentialEvolutionConfig {
 ///
 /// `Vec<f64>` decisions only; single-objective problems only. Bounds come from
 /// the embedded `RealBounds`, and mutant vectors are clamped to those bounds.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = DifferentialEvolution::new(
+///     DifferentialEvolutionConfig {
+///         population_size: 20,
+///         generations: 50,
+///         differential_weight: 0.5,
+///         crossover_probability: 0.9,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 5]),
+/// );
+/// let r = opt.run(&Sphere);
+/// // DE crushes Sphere; expect very small objective.
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct DifferentialEvolution {
     /// Algorithm configuration.

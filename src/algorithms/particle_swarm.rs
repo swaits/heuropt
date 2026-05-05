@@ -55,6 +55,37 @@ impl Default for ParticleSwarmConfig {
 /// Velocities are clamped to `±(hi - lo)` per dimension to prevent
 /// "swarm explosion." Pair with `RealBounds` for both the search bounds
 /// and the initial particle positions.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = ParticleSwarm::new(
+///     ParticleSwarmConfig {
+///         swarm_size: 20,
+///         generations: 50,
+///         inertia: 0.7,
+///         cognitive: 1.5,
+///         social: 1.5,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct ParticleSwarm {
     /// Algorithm configuration.

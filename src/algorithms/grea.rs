@@ -38,6 +38,40 @@ impl Default for GreaConfig {
 }
 
 /// Grid-based Evolutionary Algorithm (GrEA).
+///
+/// Many-objective EA that uses three grid-based metrics — grid rank,
+/// grid crowding distance, and grid coordinate point distance — to
+/// select survivors. Particularly strong on linear / simplex-shaped
+/// fronts (e.g. DTLZ1).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = Grea::new(
+///     GreaConfig { population_size: 30, generations: 20, grid_divisions: 8, seed: 42 },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Grea<I, V> {
     /// Algorithm configuration.

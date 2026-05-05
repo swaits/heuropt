@@ -39,6 +39,45 @@ impl Default for EpsilonMoeaConfig {
 }
 
 /// ε-dominance MOEA.
+///
+/// Steady-state EA with an ε-grid archive: every member that lands in
+/// the same ε-box as an existing one is replaced by the closer point
+/// to the box's grid corner. Auto-bounds the front size by the choice
+/// of `epsilon`.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = EpsilonMoea::new(
+///     EpsilonMoeaConfig {
+///         population_size: 20,
+///         evaluations: 1_000,
+///         epsilon: vec![0.1, 0.1],
+///         seed: 42,
+///     },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct EpsilonMoea<I, V> {
     /// Algorithm configuration.

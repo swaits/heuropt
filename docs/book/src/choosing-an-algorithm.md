@@ -1,0 +1,285 @@
+# Choosing an algorithm
+
+The README has a compact decision tree. This chapter expands it with
+the *reasoning* behind each branch.
+
+## Step 0: How expensive is one evaluation?
+
+This is the first fork because it changes everything that comes
+after it.
+
+| Eval cost                  | Budget you can afford     | Algorithm family            |
+|----------------------------|---------------------------|-----------------------------|
+| Microseconds (pure math)   | 10 000 – 1 000 000 evals | Population-based            |
+| Milliseconds (sim, IO)     | 1 000 – 10 000 evals     | Population-based            |
+| Seconds (small training)   | 100 – 1 000 evals        | Sample-efficient (BO, TPE)  |
+| Minutes+ (full training)   | 50 – 500 evals            | Sample-efficient + multi-fidelity |
+
+For the cheap-eval branch, you have the run of the catalog. For the
+expensive branch, classical evolutionary methods waste your evaluation
+budget — go to [`BayesianOpt`] or [`Tpe`]. For the *very* expensive
+branch where each eval has a tunable budget (epochs, MC samples, sim
+steps), [`Hyperband`] over the [`PartialProblem`] trait is the move.
+
+## Step 1: How many objectives?
+
+The biggest fork.
+
+- **One** — there's a single best answer. Pick from the
+  single-objective branch.
+- **Two or three** — a Pareto front. Pick from the multi-objective
+  branch.
+- **Four or more** — a many-objective Pareto front; classical
+  multi-objective methods break down here because almost every pair
+  of points is non-dominated. Pick from the many-objective branch.
+
+> **Pareto front:** the set of decisions where you cannot improve any
+> objective without sacrificing another. In a 2-objective minimize
+> problem, plot every solution; the Pareto front is the lower-left
+> envelope.
+
+If you found yourself staring at a single composite score that's a
+weighted sum of conflicting goals, you probably have a multi-objective
+problem in disguise. A weighted sum bakes in your preferences before
+you've seen the trade-off; running a multi-objective optimizer first
+and picking off the front later is almost always a better workflow
+(see [Pick one answer off a Pareto front](./cookbook/pick-one.md)).
+
+## Step 2 — single-objective continuous
+
+These all take `Vec<f64>` decisions.
+
+### Smooth, low-to-moderate dimension
+
+[`CmaEs`] is the strong default. It adapts the search distribution's
+covariance to the local landscape. On the comparison harness it
+hits machine epsilon on Rosenbrock at 30 000 evaluations.
+
+For very low-dimensional smooth problems (≤ 5 dim), [`NelderMead`] is
+deterministic and converges to f = 0 exactly on Rosenbrock.
+
+### High dimension, smooth
+
+[`SeparableNes`] uses a diagonal covariance — cheaper per step than
+CmaEs at the cost of being unable to model rotated landscapes. Worth
+trying when CmaEs's `O(d²)` per-step cost hurts.
+
+### Multimodal landscapes
+
+Multimodal = many local minima that aren't the global one. Rastrigin
+and Ackley are classic traps.
+
+[`IpopCmaEs`] is CmaEs with an increasing-population restart strategy
+specifically designed for this. On the harness it drops vanilla CmaEs's
+Rastrigin score from f = 2.35 to f = 0.13.
+
+[`DifferentialEvolution`] is rarely beaten on cheap multimodal
+continuous problems. On Rastrigin it ties with `(1+1)-ES` at f = 0.
+
+[`SimulatedAnnealing`] is a cheap, generic baseline that escapes local
+optima via temperature decay.
+
+### Want parameter-free
+
+[`Tlbo`] (Teaching-Learning-Based Optimization) has no `F`, `CR`, `w`,
+or `σ` to tune. Often a respectable middle-of-the-pack performer.
+
+### Smallest possible self-adapting baseline
+
+[`OnePlusOneEs`] — Rechenberg's 1973 `(1+1)`-ES with the one-fifth
+success rule. On the harness it hits f = 0 on Rastrigin in 50 000
+evaluations.
+
+### Just want a baseline
+
+[`RandomSearch`]. Useful as a sanity check: if your fancy optimizer
+can't beat random search, something is wrong (with the fancy
+optimizer or with the problem).
+
+## Step 2 — single-objective other types
+
+| Decision type | Algorithm | Notes |
+|---|---|---|
+| `Vec<bool>` | [`Umda`] | Per-bit marginal EDA. Independent-bit assumption. |
+| `Vec<bool>` | [`GeneticAlgorithm`] + [`BitFlipMutation`] | When bit interactions matter. |
+| `Vec<usize>` (permutation) | [`AntColonyTsp`] | TSP-style with a distance matrix. |
+| `Vec<usize>` (permutation) | [`SimulatedAnnealing`] + [`SwapMutation`] | Generic discrete baseline. |
+| `Vec<usize>` or custom | [`TabuSearch`] | You supply the neighbor function. |
+| Custom struct | [`SimulatedAnnealing`] / [`HillClimber`] | With your own `Variation` impl. |
+
+## Step 2 — multi-objective (2 or 3)
+
+### Strong default
+
+[`Nsga2`] is the canonical Pareto-based EA. Fast, well-understood,
+maintains diversity via crowding distance. On the harness it lands
+on the Pareto front of every test problem.
+
+### Real-valued, smooth front, want best convergence
+
+[`Mopso`] (multi-objective PSO with archive). On ZDT1 it wins
+hypervolume outright and converges 100× tighter than the
+dominance-based methods.
+
+### Better front quality than NSGA-II
+
+[`Ibea`] (indicator-based) is consistently the best of the
+dominance-based methods on the harness — wins ZDT3 hypervolume and
+DTLZ2 mean distance by 24×. It uses an additive ε-indicator for
+selection rather than dominance + crowding.
+
+[`Spea2`] (strength + density) — solid alternative; explicit external
+archive separate from the population.
+
+[`SmsEmoa`] uses exact hypervolume contribution for selection. Elegant
+in theory; in practice on the harness budgets here it underperforms
+NSGA-II. Worth the higher per-step cost only when exact HV
+contribution is the right discriminator.
+
+### Decomposition / weight-vector style
+
+[`Moead`] decomposes the multi-objective problem into many scalar
+sub-problems (Tchebycheff or weighted sum) and solves them in
+parallel. Very fast per generation; scales naturally to many
+objectives.
+
+### Disconnected or non-convex front
+
+[`AgeMoea`] estimates the front geometry adaptively (the L_p
+parameter `p` is fit from data each generation).
+
+[`Knea`] favors knee points — the regions of the front where small
+gains in one objective cost large losses in another.
+
+[`Ibea`] also handles disconnected fronts well.
+
+### Region-based diversity
+
+[`PesaII`] uses grid hyperboxes to drive selection — divide the
+objective space into a grid, pick from the least-crowded boxes.
+
+[`EpsilonMoea`] uses an ε-grid archive that auto-limits its size.
+
+### Just one starting decision (no population budget)
+
+[`Paes`] — `(1+1)`-ES with a Pareto archive. Cheap, simple, useful
+when your evaluations are expensive enough that you can't afford a
+population.
+
+## Step 2 — many-objective (4+)
+
+### Linear / simplex-shaped front (e.g., DTLZ1)
+
+[`Grea`] — grid coords drive ranking. On DTLZ1 it beats NSGA-III by
+3× and AGE-MOEA by 2.5×.
+
+[`Moead`] — decomposition shines on linear fronts; second on DTLZ1
+and among the fastest per generation.
+
+### Curved / unknown front geometry
+
+[`Nsga3`] — reference-point niching; canonical many-objective method;
+strong default when the front isn't simplex-shaped.
+
+[`AgeMoea`] — estimates L_p geometry per generation.
+
+[`Rvea`] — reference vectors with adaptive penalty.
+
+### Indicator-based selection
+
+[`Ibea`] — additive ε-indicator; doesn't degrade at high obj count.
+
+[`HypE`] — Monte Carlo hypervolume estimation; scales to arbitrary
+objective count where exact HV is too expensive.
+
+## Step 3: Are there hard constraints?
+
+heuropt models constraints as a single scalar `constraint_violation`
+on each `Evaluation`. Three escalations when the feasibility region
+is hard to find:
+
+1. **Penalty-only.** Just set `constraint_violation > 0` for
+   infeasible decisions. The default tournament/Pareto comparisons
+   prefer feasibles automatically.
+2. **Repair.** Implement [`Repair<D>`] (or use the provided
+   [`ClampToBounds`] / [`ProjectToSimplex`]) to project infeasible
+   decisions back into the feasible region. Pair with a `Variation`
+   in a [`CompositeVariation`] for bounds-aware variants.
+3. **Stochastic ranking.** Use [`stochastic_ranking_select`] instead
+   of `tournament_select_single_objective`. It probabilistically
+   explores near-feasibility instead of strict feasibility-first
+   ordering, which helps when feasible regions are narrow.
+
+See [Constrain your search with `Repair`](./cookbook/constraints.md)
+for worked examples.
+
+## Step 4: Should you parallelize?
+
+Enable the `parallel` feature flag if your `evaluate` takes more
+than ~50 µs. Population-based algorithms ([`RandomSearch`], [`Nsga2`],
+[`DifferentialEvolution`], [`Spea2`], [`Ibea`], [`Mopso`], …) batch-
+evaluate via rayon when the feature is on. **Seeded runs stay
+bit-identical** to serial mode.
+
+```toml
+heuropt = { version = "0.5", features = ["parallel"] }
+```
+
+## TL;DR table
+
+| Situation | Pick |
+|---|---|
+| Smooth single-objective continuous | [`CmaEs`] |
+| Multimodal single-objective continuous | [`IpopCmaEs`] or [`DifferentialEvolution`] |
+| Expensive single-objective | [`BayesianOpt`] or [`Tpe`] |
+| Multi-fidelity single-objective | [`Hyperband`] |
+| 2- or 3-objective default | [`Nsga2`] |
+| 2-objective real-valued smooth front | [`Mopso`] |
+| Disconnected / non-convex front | [`Ibea`] |
+| Many-objective default (curved front) | [`Nsga3`] |
+| Many-objective linear / simplex front | [`Grea`] |
+| Permutation problem | [`AntColonyTsp`] |
+| Binary problem | [`Umda`] |
+| Custom decision type | [`SimulatedAnnealing`] + your `Variation` |
+| Sanity baseline | [`RandomSearch`] |
+
+[`CmaEs`]: https://docs.rs/heuropt/latest/heuropt/algorithms/cma_es/struct.CmaEs.html
+[`IpopCmaEs`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ipop_cma_es/struct.IpopCmaEs.html
+[`SeparableNes`]: https://docs.rs/heuropt/latest/heuropt/algorithms/snes/struct.SeparableNes.html
+[`NelderMead`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nelder_mead/struct.NelderMead.html
+[`DifferentialEvolution`]: https://docs.rs/heuropt/latest/heuropt/algorithms/differential_evolution/struct.DifferentialEvolution.html
+[`SimulatedAnnealing`]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
+[`Tlbo`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tlbo/struct.Tlbo.html
+[`OnePlusOneEs`]: https://docs.rs/heuropt/latest/heuropt/algorithms/one_plus_one_es/struct.OnePlusOneEs.html
+[`RandomSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/random_search/struct.RandomSearch.html
+[`HillClimber`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hill_climber/struct.HillClimber.html
+[`BayesianOpt`]: https://docs.rs/heuropt/latest/heuropt/algorithms/bayesian_opt/struct.BayesianOpt.html
+[`Tpe`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tpe/struct.Tpe.html
+[`Hyperband`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hyperband/struct.Hyperband.html
+[`PartialProblem`]: https://docs.rs/heuropt/latest/heuropt/core/partial_problem/trait.PartialProblem.html
+[`Umda`]: https://docs.rs/heuropt/latest/heuropt/algorithms/umda/struct.Umda.html
+[`GeneticAlgorithm`]: https://docs.rs/heuropt/latest/heuropt/algorithms/genetic_algorithm/struct.GeneticAlgorithm.html
+[`BitFlipMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.BitFlipMutation.html
+[`AntColonyTsp`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
+[`SwapMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.SwapMutation.html
+[`TabuSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html
+[`Nsga2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
+[`Nsga3`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga3/struct.Nsga3.html
+[`Mopso`]: https://docs.rs/heuropt/latest/heuropt/algorithms/mopso/struct.Mopso.html
+[`Ibea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ibea/struct.Ibea.html
+[`Spea2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/spea2/struct.Spea2.html
+[`SmsEmoa`]: https://docs.rs/heuropt/latest/heuropt/algorithms/sms_emoa/struct.SmsEmoa.html
+[`Moead`]: https://docs.rs/heuropt/latest/heuropt/algorithms/moead/struct.Moead.html
+[`AgeMoea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/age_moea/struct.AgeMoea.html
+[`Knea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/knea/struct.Knea.html
+[`PesaII`]: https://docs.rs/heuropt/latest/heuropt/algorithms/pesa2/struct.PesaII.html
+[`EpsilonMoea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/epsilon_moea/struct.EpsilonMoea.html
+[`Paes`]: https://docs.rs/heuropt/latest/heuropt/algorithms/paes/struct.Paes.html
+[`Grea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/grea/struct.Grea.html
+[`Rvea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/rvea/struct.Rvea.html
+[`HypE`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hype/struct.Hype.html
+[`Repair<D>`]: https://docs.rs/heuropt/latest/heuropt/traits/trait.Repair.html
+[`ClampToBounds`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.ClampToBounds.html
+[`ProjectToSimplex`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.ProjectToSimplex.html
+[`stochastic_ranking_select`]: https://docs.rs/heuropt/latest/heuropt/selection/tournament/fn.stochastic_ranking_select.html
+[`CompositeVariation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.CompositeVariation.html

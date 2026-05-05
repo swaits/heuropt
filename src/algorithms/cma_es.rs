@@ -59,6 +59,38 @@ impl Default for CmaEsConfig {
 /// `Vec<f64>` decisions only. Bounds come from the embedded `RealBounds`
 /// field; both the initial mean and every offspring are clamped per
 /// dimension.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = CmaEs::new(
+///     CmaEsConfig {
+///         population_size: 12,
+///         generations: 100,
+///         initial_sigma: 1.0,
+///         eigen_decomposition_period: 1,
+///         initial_mean: None,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 5]),
+/// );
+/// let r = opt.run(&Sphere);
+/// // CMA-ES converges aggressively on Sphere.
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct CmaEs {
     /// Algorithm configuration.

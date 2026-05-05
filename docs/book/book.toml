@@ -1,0 +1,34 @@
+[book]
+title = "heuropt — the user guide"
+description = "A practical Rust toolkit for heuristic single-, multi-, and many-objective optimization."
+authors = ["Stephen Waits"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../target/book"
+create-missing = false
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/swaits/heuropt"
+edit-url-template = "https://github.com/swaits/heuropt/edit/main/docs/book/{path}"
+site-url = "/heuropt/"
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+
+[output.html.print]
+enable = true
+
+[rust]
+edition = "2024"

@@ -41,6 +41,36 @@ impl Default for SimulatedAnnealingConfig {
 /// and `T` anneals geometrically from `initial_temperature` to
 /// `final_temperature` over the iteration count. Generic over decision
 /// type — pair with any `Variation` impl that returns one child per call.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = SimulatedAnnealing::new(
+///     SimulatedAnnealingConfig {
+///         iterations: 2_000,
+///         initial_temperature: 1.0,
+///         final_temperature: 1e-3,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+///     GaussianMutation { sigma: 0.3 },
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct SimulatedAnnealing<I, V> {
     /// Algorithm configuration.

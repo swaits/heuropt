@@ -61,6 +61,40 @@ impl Default for BayesianOptConfig {
 /// evaluation budgets (50–500). The GP kernel is anisotropic RBF; the
 /// acquisition function is EI; both are optimized by best-of-N random
 /// sampling each step (simple, predictable cost).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = BayesianOpt::new(
+///     BayesianOptConfig {
+///         initial_samples: 10,
+///         iterations: 30,
+///         length_scales: None, // default per-axis length scales
+///         signal_variance: 1.0,
+///         noise_variance: 1e-6,
+///         acquisition_samples: 200,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-3.0, 3.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// // 10 random + 30 BO steps = 40 total evaluations.
+/// assert_eq!(r.evaluations, 40);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct BayesianOpt {
     /// Algorithm configuration.

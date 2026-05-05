@@ -1,16 +1,37 @@
-//! `heuropt` — a practical Rust toolkit for implementing heuristic
-//! single-objective, multi-objective, and many-objective optimization
-//! algorithms.
+//! `heuropt` — a practical Rust toolkit for heuristic single-,
+//! multi-, and many-objective optimization.
 //!
 //! The crate aims to make three things obvious:
 //!
-//! 1. Define an optimization problem by implementing [`Problem`](crate::core::Problem).
-//! 2. Run a built-in optimizer such as [`Nsga2`](crate::algorithms::Nsga2) or
-//!    [`RandomSearch`](crate::algorithms::RandomSearch).
-//! 3. Implement a new optimizer by implementing
-//!    [`Optimizer`](crate::traits::Optimizer).
+//! 1. **Define a problem** by implementing [`Problem`](crate::core::Problem).
+//! 2. **Run a built-in optimizer** — pick from 35 algorithms in
+//!    [`algorithms`] covering single-objective continuous (CMA-ES,
+//!    Differential Evolution, Nelder-Mead, …), multi-objective
+//!    (NSGA-II, MOPSO, IBEA, MOEA/D, …), many-objective (NSGA-III,
+//!    GrEA, RVEA, …), and sample-efficient regimes (Bayesian
+//!    Optimization, TPE, Hyperband).
+//! 3. **Or implement your own** by implementing
+//!    [`Optimizer`](crate::traits::Optimizer). The trait is one
+//!    method long.
 //!
-//! See `docs/heuropt_tech_design_spec.md` for the full design rationale.
+//! ## Where to read more
+//!
+//! - **User guide / cookbook / comparison vs pymoo & friends:**
+//!   <https://swaits.github.io/heuropt/>.
+//! - **Algorithm selection:** the README's decision tree, or the
+//!   "Choosing an algorithm" book chapter.
+//! - **Design rationale:** `docs/heuropt_tech_design_spec.md` in the
+//!   repository.
+//!
+//! ## Optional features
+//!
+//! - `serde` — derives `Serialize` / `Deserialize` on the core data
+//!   types ([`Candidate`](crate::core::Candidate),
+//!   [`Population`](crate::core::Population),
+//!   [`Evaluation`](crate::core::Evaluation), …).
+//! - `parallel` — rayon-backed parallel population evaluation in
+//!   every population-based algorithm. Seeded runs stay bit-
+//!   identical to serial mode.
 //!
 //! # Quick example
 //!

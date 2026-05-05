@@ -36,6 +36,31 @@ impl Default for PaesConfig {
 /// One current candidate, one mutation per iteration, one bounded archive.
 /// Intentionally a readable baseline rather than a research-perfect PAES
 /// (spec §12.2).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let mut opt = Paes::new(
+///     PaesConfig { iterations: 200, archive_size: 30, seed: 42 },
+///     RealBounds::new(vec![(-5.0, 5.0)]),
+///     GaussianMutation { sigma: 0.3 },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Paes<I, V> {
     /// Algorithm configuration.

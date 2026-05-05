@@ -48,6 +48,38 @@ impl Default for NelderMeadConfig {
 /// `Vec<f64>` decisions only. Single-objective only. Initial simplex is
 /// built around the midpoint of the configured bounds; every new vertex
 /// is clamped to those bounds.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = NelderMead::new(
+///     NelderMeadConfig {
+///         iterations: 200,
+///         reflection: 1.0,
+///         expansion: 2.0,
+///         contraction: 0.5,
+///         shrinkage: 0.5,
+///         initial_step: 1.0,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// // Nelder-Mead reaches machine precision on Sphere.
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-10);
+/// ```
 #[derive(Debug, Clone)]
 pub struct NelderMead {
     /// Algorithm configuration.

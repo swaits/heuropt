@@ -49,6 +49,40 @@ impl Default for SmsEmoaConfig {
 /// non-dominated front. Excellent convergence quality at the price of
 /// quadratic-in-N hypervolume evaluations per generation, so practical
 /// up to ~4 objectives at population sizes ≤ 200.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64)];
+/// let mut opt = SmsEmoa::new(
+///     SmsEmoaConfig {
+///         population_size: 20,
+///         generations: 100,
+///         reference_point: vec![30.0, 30.0],
+///         seed: 42,
+///     },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct SmsEmoa<I, V> {
     /// Algorithm configuration.

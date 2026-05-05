@@ -41,6 +41,30 @@ impl Default for TlboConfig {
 /// population_size and generations. Compared with the rest of heuropt's
 /// SO toolkit (DE has F+CR, PSO has w+c1+c2, CMA-ES has σ, GA needs
 /// crossover+mutation operators), TLBO works out of the box.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = Tlbo::new(
+///     TlboConfig { population_size: 20, generations: 50, seed: 42 },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Tlbo {
     /// Algorithm configuration.

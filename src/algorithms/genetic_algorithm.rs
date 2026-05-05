@@ -46,6 +46,41 @@ impl Default for GeneticAlgorithmConfig {
 /// produces offspring, those are evaluated, and the next population is
 /// the top `elitism` from the previous generation plus the best
 /// `population_size - elitism` offspring (by fitness).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let bounds = vec![(-5.0_f64, 5.0_f64); 3];
+/// let mut opt = GeneticAlgorithm::new(
+///     GeneticAlgorithmConfig {
+///         population_size: 30,
+///         generations: 50,
+///         tournament_size: 2,
+///         elitism: 2,
+///         seed: 42,
+///     },
+///     RealBounds::new(bounds.clone()),
+///     CompositeVariation {
+///         crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+///         mutation:  PolynomialMutation::new(bounds, 20.0, 1.0),
+///     },
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct GeneticAlgorithm<I, V> {
     /// Algorithm configuration.

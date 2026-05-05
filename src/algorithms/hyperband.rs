@@ -52,6 +52,38 @@ impl Default for HyperbandConfig {
 /// low budget), later brackets favor exploitation (fewer configs run
 /// near the max budget). The single best result across all brackets
 /// is returned.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+/// use heuropt::core::partial_problem::PartialProblem;
+///
+/// struct Tuning;
+/// impl PartialProblem for Tuning {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("loss")])
+///     }
+///     fn evaluate_at_budget(&self, x: &Vec<f64>, budget: f64) -> Evaluation {
+///         // Pretend a model where more budget = lower loss.
+///         let loss = x[0].powi(2) + x[1].powi(2) + 1.0 / (budget + 1.0);
+///         Evaluation::new(vec![loss])
+///     }
+/// }
+///
+/// let mut opt = Hyperband::new(
+///     HyperbandConfig {
+///         max_budget: 27.0,
+///         eta: 3.0,
+///         max_brackets: 4,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-1.0, 1.0); 2]),
+/// );
+/// let r = opt.run(&Tuning);
+/// assert!(r.best.is_some());
+/// ```
 pub struct Hyperband<I, D>
 where
     D: Clone,

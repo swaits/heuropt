@@ -49,6 +49,34 @@ impl Default for UmdaConfig {
 /// `[1 / (2·selected_size), 1 - 1 / (2·selected_size)]` (Laplace-style
 /// smoothing) so the population never collapses to a single deterministic
 /// string.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct OneMax;
+/// impl Problem for OneMax {
+///     type Decision = Vec<bool>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::maximize("ones")])
+///     }
+///     fn evaluate(&self, x: &Vec<bool>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().filter(|b| **b).count() as f64])
+///     }
+/// }
+///
+/// let mut opt = Umda::new(UmdaConfig {
+///     population_size: 50,
+///     selected_size: 20,
+///     generations: 30,
+///     bits: 16,
+///     seed: 42,
+/// });
+/// let r = opt.run(&OneMax);
+/// // OneMax with 16 bits: optimum is 16. UMDA should be very close.
+/// assert!(r.best.unwrap().evaluation.objectives[0] >= 14.0);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Umda {
     /// Algorithm configuration.

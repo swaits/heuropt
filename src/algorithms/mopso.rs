@@ -52,6 +52,38 @@ impl Default for MopsoConfig {
 /// `Vec<f64>` decisions only. Each particle maintains a personal best (the
 /// last position that was Pareto-non-dominated by any later position). The
 /// social leader is sampled uniformly from the external archive each step.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Schaffer;
+/// impl Problem for Schaffer {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
+///     }
+/// }
+///
+/// let mut opt = Mopso::new(
+///     MopsoConfig {
+///         swarm_size: 30,
+///         generations: 50,
+///         archive_size: 30,
+///         inertia: 0.4,
+///         cognitive: 1.5,
+///         social: 1.5,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0)]),
+/// );
+/// let r = opt.run(&Schaffer);
+/// assert!(!r.pareto_front.is_empty());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Mopso {
     /// Algorithm configuration.

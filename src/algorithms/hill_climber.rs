@@ -34,6 +34,31 @@ impl Default for HillClimberConfig {
 /// feasible beats infeasible, smaller violation wins among infeasibles.
 ///
 /// Single-objective only.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = HillClimber::new(
+///     HillClimberConfig { iterations: 500, seed: 42 },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+///     GaussianMutation { sigma: 0.3 },
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct HillClimber<I, V> {
     /// Algorithm configuration.

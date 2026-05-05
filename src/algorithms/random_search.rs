@@ -38,6 +38,31 @@ impl Default for RandomSearchConfig {
 /// Each iteration the configured `Initializer` produces `batch_size` decisions
 /// which are evaluated and pushed into the population. Cheap, parallelism-free,
 /// and useful as a sanity-check baseline.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = RandomSearch::new(
+///     RandomSearchConfig { iterations: 200, batch_size: 10, seed: 42 },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert_eq!(r.evaluations, 200 * 10);
+/// assert!(r.best.is_some());
+/// ```
 #[derive(Debug, Clone)]
 pub struct RandomSearch<I> {
     /// Algorithm configuration.

@@ -57,6 +57,53 @@ impl Default for AntColonyTspConfig {
 /// Each ant builds a tour by repeatedly choosing the next node with
 /// probability `∝ τ_ij^α · η_ij^β` over the unvisited cities, where
 /// `η_ij = 1 / distance_ij` is the heuristic desirability.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Tsp { distances: Vec<Vec<f64>> }
+/// impl Problem for Tsp {
+///     type Decision = Vec<usize>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("length")])
+///     }
+///     fn evaluate(&self, tour: &Vec<usize>) -> Evaluation {
+///         let mut len = 0.0;
+///         for w in tour.windows(2) { len += self.distances[w[0]][w[1]]; }
+///         len += self.distances[*tour.last().unwrap()][tour[0]];
+///         Evaluation::new(vec![len])
+///     }
+/// }
+///
+/// // 5 cities laid out in a small square + center. The optimal tour
+/// // is the perimeter; the diagonal is suboptimal.
+/// let cities = [(0.0_f64, 0.0), (3.0, 0.0), (3.0, 3.0), (0.0, 3.0), (1.5, 1.5)];
+/// let n = cities.len();
+/// let mut d = vec![vec![0.0; n]; n];
+/// for i in 0..n {
+///     for j in 0..n {
+///         let dx = cities[i].0 - cities[j].0;
+///         let dy = cities[i].1 - cities[j].1;
+///         d[i][j] = (dx * dx + dy * dy).sqrt();
+///     }
+/// }
+/// let problem = Tsp { distances: d.clone() };
+///
+/// let mut opt = AntColonyTsp::new(AntColonyTspConfig {
+///     ants: 10,
+///     generations: 50,
+///     alpha: 1.0,
+///     beta: 5.0,
+///     evaporation: 0.5,
+///     deposit: 1.0,
+///     initial_pheromone: 0.1,
+///     seed: 42,
+/// }, d);
+/// let r = opt.run(&problem);
+/// assert!(r.best.is_some());
+/// ```
 pub struct AntColonyTsp {
     /// Algorithm configuration.
     pub config: AntColonyTspConfig,

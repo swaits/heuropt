@@ -47,6 +47,36 @@ impl Default for OnePlusOneEsConfig {
 
 /// (1+1)-ES with the one-fifth rule: tiny, parameter-light continuous
 /// optimizer. `Vec<f64>` decisions only; single-objective only.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = OnePlusOneEs::new(
+///     OnePlusOneEsConfig {
+///         iterations: 1_000,
+///         initial_sigma: 0.5,
+///         adaptation_period: 50,
+///         step_increase: 1.22,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-5.0, 5.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert!(r.best.unwrap().evaluation.objectives[0] < 1e-3);
+/// ```
 #[derive(Debug, Clone)]
 pub struct OnePlusOneEs {
     /// Algorithm configuration.

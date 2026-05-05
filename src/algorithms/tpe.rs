@@ -52,6 +52,37 @@ impl Default for TpeConfig {
 /// `BayesianOpt`, no GP — TPE models `p(x | y < y*)` and `p(x | y >= y*)`
 /// as per-axis Gaussian KDEs and picks the next candidate by maximizing
 /// the ratio of the two densities.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// struct Sphere;
+/// impl Problem for Sphere {
+///     type Decision = Vec<f64>;
+///     fn objectives(&self) -> ObjectiveSpace {
+///         ObjectiveSpace::new(vec![Objective::minimize("f")])
+///     }
+///     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+///         Evaluation::new(vec![x.iter().map(|v| v * v).sum::<f64>()])
+///     }
+/// }
+///
+/// let mut opt = Tpe::new(
+///     TpeConfig {
+///         initial_samples: 10,
+///         iterations: 50,
+///         good_fraction: 0.25,
+///         candidate_samples: 24,
+///         bandwidth_factor: 1.0,
+///         seed: 42,
+///     },
+///     RealBounds::new(vec![(-3.0, 3.0); 3]),
+/// );
+/// let r = opt.run(&Sphere);
+/// assert_eq!(r.evaluations, 60);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Tpe {
     /// Algorithm configuration.

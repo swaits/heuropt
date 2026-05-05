@@ -2,6 +2,7 @@
 
 use rand::Rng as _;
 
+use crate::algorithms::parallel_eval::evaluate_batch;
 use crate::core::candidate::Candidate;
 use crate::core::objective::Direction;
 use crate::core::population::Population;
@@ -60,7 +61,7 @@ impl DifferentialEvolution {
 
 impl<P> Optimizer<P> for DifferentialEvolution
 where
-    P: Problem<Decision = Vec<f64>>,
+    P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
         assert!(
@@ -88,57 +89,56 @@ where
             use crate::traits::Initializer as _;
             self.bounds.initialize(n, &mut rng)
         };
-        let mut evaluations = 0usize;
-        let mut evals: Vec<f64> = decisions
-            .iter()
-            .map(|d| {
-                let e = problem.evaluate(d);
-                evaluations += 1;
-                e.objectives[0]
-            })
-            .collect();
+        let initial_pop = evaluate_batch(problem, decisions.clone());
+        let mut evaluations = initial_pop.len();
+        let mut evals: Vec<f64> =
+            initial_pop.iter().map(|c| c.evaluation.objectives[0]).collect();
 
         for _gen in 0..self.config.generations {
-            for i in 0..n {
-                let (r1, r2, r3) = pick_three_distinct(n, i, &mut rng);
-                let j_rand = rng.random_range(0..dim);
-                let mut trial = decisions[i].clone();
-                for j in 0..dim {
-                    let take_donor =
-                        rng.random_bool(self.config.crossover_probability) || j == j_rand;
-                    if take_donor {
-                        let mutant = decisions[r1][j]
-                            + self.config.differential_weight
-                                * (decisions[r2][j] - decisions[r3][j]);
-                        let (lo, hi) = self.bounds.bounds[j];
-                        trial[j] = mutant.clamp(lo, hi);
+            // Phase 1 (serial): construct one trial per target. RNG state is
+            // consumed in deterministic order so seeded runs reproduce
+            // exactly regardless of the `parallel` feature.
+            let trials: Vec<Vec<f64>> = (0..n)
+                .map(|i| {
+                    let (r1, r2, r3) = pick_three_distinct(n, i, &mut rng);
+                    let j_rand = rng.random_range(0..dim);
+                    let mut trial = decisions[i].clone();
+                    for j in 0..dim {
+                        let take_donor =
+                            rng.random_bool(self.config.crossover_probability) || j == j_rand;
+                        if take_donor {
+                            let mutant = decisions[r1][j]
+                                + self.config.differential_weight
+                                    * (decisions[r2][j] - decisions[r3][j]);
+                            let (lo, hi) = self.bounds.bounds[j];
+                            trial[j] = mutant.clamp(lo, hi);
+                        }
                     }
-                }
-                let trial_obj = {
-                    let e = problem.evaluate(&trial);
-                    evaluations += 1;
-                    e.objectives[0]
-                };
+                    trial
+                })
+                .collect();
+
+            // Phase 2 (parallel-friendly): evaluate every trial.
+            let trial_cands = evaluate_batch(problem, trials);
+            evaluations += trial_cands.len();
+
+            // Phase 3 (serial): greedy replacement.
+            for (i, trial_cand) in trial_cands.into_iter().enumerate() {
+                let trial_obj = trial_cand.evaluation.objectives[0];
                 let target_obj = evals[i];
                 let trial_better = match direction {
                     Direction::Minimize => trial_obj <= target_obj,
                     Direction::Maximize => trial_obj >= target_obj,
                 };
                 if trial_better {
-                    decisions[i] = trial;
+                    decisions[i] = trial_cand.decision;
                     evals[i] = trial_obj;
                 }
             }
         }
 
-        let final_pop: Vec<Candidate<Vec<f64>>> = decisions
-            .into_iter()
-            .map(|d| {
-                let e = problem.evaluate(&d);
-                evaluations += 1;
-                Candidate::new(d, e)
-            })
-            .collect();
+        let final_pop: Vec<Candidate<Vec<f64>>> = evaluate_batch(problem, decisions);
+        evaluations += final_pop.len();
         let front = pareto_front(&final_pop, &objectives);
         let best = best_candidate(&final_pop, &objectives);
         OptimizationResult::new(

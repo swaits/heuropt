@@ -3,6 +3,7 @@
 //! This is the reference example for spec §2.4 / §12.1: read this file before
 //! writing your own optimizer.
 
+use crate::algorithms::parallel_eval::evaluate_batch;
 use crate::core::candidate::Candidate;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
@@ -50,7 +51,8 @@ impl<I> RandomSearch<I> {
 
 impl<P, I> Optimizer<P> for RandomSearch<I>
 where
-    P: Problem,
+    P: Problem + Sync,
+    P::Decision: Send,
     I: Initializer<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
@@ -61,11 +63,8 @@ where
 
         for _ in 0..self.config.iterations {
             let decisions = self.initializer.initialize(self.config.batch_size, &mut rng);
-            for decision in decisions {
-                let eval = problem.evaluate(&decision);
-                evaluations += 1;
-                all.push(Candidate::new(decision, eval));
-            }
+            evaluations += decisions.len();
+            all.extend(evaluate_batch(problem, decisions));
         }
 
         let front = pareto_front(&all, &objectives);

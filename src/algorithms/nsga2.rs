@@ -2,6 +2,7 @@
 
 use rand::Rng as _;
 
+use crate::algorithms::parallel_eval::evaluate_batch;
 use crate::core::candidate::Candidate;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
@@ -56,7 +57,8 @@ struct Nsga2Entry<D> {
 
 impl<P, I, V> Optimizer<P> for Nsga2<I, V>
 where
-    P: Problem,
+    P: Problem + Sync,
+    P::Decision: Send,
     I: Initializer<P::Decision>,
     V: Variation<P::Decision>,
 {
@@ -76,13 +78,8 @@ where
             n,
             "NSGA-II initializer must return exactly population_size decisions",
         );
-        let mut population: Vec<Candidate<P::Decision>> = initial_decisions
-            .into_iter()
-            .map(|d| {
-                let e = problem.evaluate(&d);
-                Candidate::new(d, e)
-            })
-            .collect();
+        let population: Vec<Candidate<P::Decision>> =
+            evaluate_batch(problem, initial_decisions);
         let mut evaluations = population.len();
 
         // Annotate the starting population with rank and crowding so the first
@@ -90,9 +87,9 @@ where
         let mut annotated = annotate(population, &objectives);
 
         for _ in 0..self.config.generations {
-            // --- Parent selection + offspring generation ---
-            let mut offspring: Vec<Candidate<P::Decision>> = Vec::with_capacity(n);
-            while offspring.len() < n {
+            // --- Phase 1: serial parent selection + variation ---
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
                 let p1 = binary_tournament(&annotated, &mut rng);
                 let p2 = binary_tournament(&annotated, &mut rng);
                 let parents = vec![
@@ -105,14 +102,16 @@ where
                     "NSGA-II variation returned no children",
                 );
                 for child_decision in children {
-                    if offspring.len() >= n {
+                    if offspring_decisions.len() >= n {
                         break;
                     }
-                    let eval = problem.evaluate(&child_decision);
-                    evaluations += 1;
-                    offspring.push(Candidate::new(child_decision, eval));
+                    offspring_decisions.push(child_decision);
                 }
             }
+            // --- Phase 2: parallel-friendly batch evaluation ---
+            let offspring: Vec<Candidate<P::Decision>> =
+                evaluate_batch(problem, offspring_decisions);
+            evaluations += offspring.len();
 
             // --- Combine + survival selection ---
             let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
@@ -143,8 +142,7 @@ where
                     break;
                 }
             }
-            population = next;
-            annotated = annotate(population, &objectives);
+            annotated = annotate(next, &objectives);
         }
 
         // Return final state.

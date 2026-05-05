@@ -180,9 +180,18 @@ money) force you to be sample-efficient: 50–500 evaluations total.
 
 This decides whether you can afford a **population-based** algorithm
 that throws hundreds of evaluations at each generation, or whether
-you need a **sample-efficient** approach. heuropt's current toolkit
-is mostly population-based; for budgets under a few hundred
-evaluations you may want Bayesian optimization (out of scope today).
+you need a **sample-efficient** or **multi-fidelity** approach:
+
+- **Cheap (1k+ evals affordable):** any of the population-based
+  algorithms — DE, GA, CMA-ES, NSGA-II, etc.
+- **Expensive (50–500 evals):** `BayesianOpt` (Gaussian-process
+  surrogate + Expected Improvement) or `Tpe` (Parzen-density
+  surrogate, cheaper per step, more robust without hyperparameter
+  tuning).
+- **Multi-fidelity (each eval has a tunable budget — epochs, sim
+  steps, MC samples):** `Hyperband`. Implement the `PartialProblem`
+  trait on your problem and Hyperband allocates compute aggressively
+  across promising configs.
 
 The `parallel` feature flag also matters here — if your `evaluate`
 function takes more than ~50 µs, enabling rayon-backed parallel
@@ -199,10 +208,19 @@ violation magnitude, so the rule "feasibility comes first" is
 enforced automatically.
 
 If your constraints are very tight and the search keeps hitting them,
-consider also adding a **repair operator** (clamping, rounding, or a
-greedy fix) inside your `Variation` impl so children come out feasible
-in the first place. The example `BoundedGaussianMutation` does this for
-real-valued bounds.
+you have three options:
+
+- **Repair**: implement the `Repair<D>` trait (or use the provided
+  `ClampToBounds` / `ProjectToSimplex` impls) to in-place project
+  infeasible decisions back into the feasible region. Pair with a
+  `Variation` operator to get bounds-aware variants without writing a
+  custom `Variation` impl.
+- **Stochastic ranking**: use `stochastic_ranking_select` instead of
+  `tournament_select_single_objective`. It probabilistically explores
+  near-feasibility instead of strict feasibility-first ordering, which
+  helps when feasible regions are narrow.
+- **Penalty-only**: stick with `constraint_violation` — the simplest,
+  works well when the feasible region is large and convex.
 
 ---
 
@@ -213,113 +231,194 @@ A flow you can run mentally:
 ```
 START
  │
- ├─ How many objectives?
+ ├─ Is each evaluation EXPENSIVE (>1 sec) or BUDGETED (50–500 total)?
  │   │
- │   ├─ 1 (single-objective)
+ │   ├─ Yes → sample-efficient regime
+ │   │    ├─ Standard expensive black-box, single-objective
+ │   │    │     → BayesianOpt   (GP + Expected Improvement; gold standard)
+ │   │    │     → Tpe           (KDE-based; cheaper per-step,
+ │   │    │                      more robust without tuning)
  │   │    │
- │   │    ├─ Decision is Vec<f64> (continuous)
- │   │    │   ├─ Smooth, low-dim, expensive evals
- │   │    │   │     → CmaEs              (sample-efficient,
- │   │    │   │                            invariant to scale & rotation)
- │   │    │   ├─ Multimodal or jagged
- │   │    │   │     → DifferentialEvolution
- │   │    │   │     → ParticleSwarm
- │   │    │   │     → SimulatedAnnealing  (cheap & generic)
- │   │    │   ├─ Just want a strong default
- │   │    │   │     → DifferentialEvolution  (rarely beaten on cheap
- │   │    │   │                                evaluators)
- │   │    │   └─ Just want a baseline
- │   │    │         → RandomSearch
- │   │    │
- │   │    ├─ Decision is Vec<bool> (binary)
- │   │    │   ├─ Independent bits, smooth fitness
- │   │    │   │     → Umda            (estimates per-bit marginals)
- │   │    │   └─ Bit interactions matter
- │   │    │         → GeneticAlgorithm with BitFlipMutation +
- │   │    │           a bit-string crossover
- │   │    │
- │   │    ├─ Decision is Vec<usize> (permutation, e.g., TSP)
- │   │    │     → AntColonyTsp (with a distance matrix)
- │   │    │     → TabuSearch  (with your own neighbor function)
- │   │    │     → SimulatedAnnealing with SwapMutation
- │   │    │
- │   │    └─ Custom decision type (a struct, a tree, …)
- │   │          → SimulatedAnnealing or HillClimber
- │   │            with your own Variation impl
- │   │            (the trait is generic over D)
+ │   │    └─ Each eval has a tunable fidelity (epochs, sim steps, …)
+ │   │          → Hyperband     (implement PartialProblem; allocates
+ │   │                           compute across configs adaptively)
  │   │
- │   ├─ 2 or 3 (multi-objective)
- │   │    │
- │   │    ├─ Just want a strong default
- │   │    │     → Nsga2  (canonical, fast, well-understood)
- │   │    │
- │   │    ├─ Convergence quality matters more than speed
- │   │    │     → Spea2  (slower, comparable quality)
- │   │    │     → Ibea   (often beats Nsga2 on tough fronts)
- │   │    │
- │   │    ├─ Want decomposition / weight-vector style
- │   │    │     → Moead  (very fast per generation, scales well)
- │   │    │
- │   │    ├─ Real-valued and want swarm style
- │   │    │     → Mopso  (good on simple 2-obj fronts)
- │   │    │
- │   │    └─ Just one starting decision (no population budget)
- │   │          → Paes  (1+1 ES with a Pareto archive)
- │   │
- │   └─ 4+ (many-objective)
- │        │
- │        ├─ Just want a strong default
- │        │     → Nsga3  (reference-point niching, the canonical
- │        │              many-obj choice)
- │        │     → Moead  (also scales naturally past 3 objectives)
- │        │
- │        └─ Convergence vs diversity tradeoff matters
- │              → Ibea   (indicator-based, doesn't lose discrimination
- │                       at high obj count)
+ │   └─ No → continue to the population-based branches below
  │
- └─ Don't forget:
-     - Set a seed for reproducibility (every Config has one).
-     - Enable the `parallel` feature if your evaluate is expensive.
-     - Use `examples/compare.rs` as a template for benchmarking
-       multiple algorithms on your own problem.
+ └─ How many objectives?
+     │
+     ├─ 1 (single-objective)
+     │    │
+     │    ├─ Decision is Vec<f64> (continuous)
+     │    │   ├─ Smooth landscape (well-conditioned)
+     │    │   │     → CmaEs        (full-cov adaptive Gaussian)
+     │    │   │     → SeparableNes (cheaper diag-cov; high-dim)
+     │    │   │     → NelderMead   (low-dim, deterministic, simple)
+     │    │   ├─ Multimodal landscape
+     │    │   │     → IpopCmaEs            (CMA-ES with restart;
+     │    │   │                              fixes vanilla CMA-ES's
+     │    │   │                              multimodal failure)
+     │    │   │     → DifferentialEvolution (rarely beaten on cheap
+     │    │   │                              multimodal continuous)
+     │    │   │     → SimulatedAnnealing   (cheap & generic)
+     │    │   ├─ Want parameter-free (no F, CR, w, σ to tune)
+     │    │   │     → Tlbo
+     │    │   ├─ Want minimum self-adapting baseline
+     │    │   │     → OnePlusOneEs          (one-fifth rule,
+     │    │   │                               smallest possible ES)
+     │    │   ├─ Just want a strong default for cheap continuous
+     │    │   │     → DifferentialEvolution
+     │    │   └─ Just want a baseline
+     │    │         → RandomSearch
+     │    │
+     │    ├─ Decision is Vec<bool> (binary)
+     │    │   ├─ Independent bits, smooth fitness
+     │    │   │     → Umda            (per-bit marginal EDA)
+     │    │   └─ Bit interactions matter
+     │    │         → GeneticAlgorithm with BitFlipMutation +
+     │    │           a bit-string crossover
+     │    │
+     │    ├─ Decision is Vec<usize> (permutation, e.g., TSP)
+     │    │     → AntColonyTsp (with a distance matrix)
+     │    │     → TabuSearch  (with your own neighbor function)
+     │    │     → SimulatedAnnealing with SwapMutation
+     │    │
+     │    └─ Custom decision type (a struct, a tree, …)
+     │          → SimulatedAnnealing or HillClimber
+     │            with your own Variation impl
+     │
+     ├─ 2 or 3 (multi-objective)
+     │    │
+     │    ├─ Strong default, fast, well-understood
+     │    │     → Nsga2
+     │    │
+     │    ├─ Want better front quality than NSGA-II
+     │    │     → Ibea     (indicator-based; often best of the
+     │    │                 dominance-based methods)
+     │    │     → SmsEmoa  (hypervolume-contribution selection;
+     │    │                 great on 2–3 obj at higher per-step cost)
+     │    │     → Spea2    (strength + density)
+     │    │
+     │    ├─ Want decomposition / weight-vector style
+     │    │     → Moead    (very fast per generation, scales well)
+     │    │
+     │    ├─ Disconnected or non-convex front
+     │    │     → AgeMoea  (estimates front geometry adaptively)
+     │    │     → Knea     (favors knee points)
+     │    │     → Ibea
+     │    │
+     │    ├─ Want region-based diversity
+     │    │     → PesaII   (grid hyperboxes drive selection)
+     │    │     → EpsilonMoea (ε-grid archive,
+     │    │                     archive size auto-limits)
+     │    │
+     │    ├─ Real-valued and want swarm style
+     │    │     → Mopso
+     │    │
+     │    └─ Just one starting decision (no population budget)
+     │          → Paes  (1+1 ES with a Pareto archive)
+     │
+     └─ 4+ (many-objective)
+          │
+          ├─ Strong default
+          │     → Nsga3      (reference-point niching, canonical)
+          │     → Moead      (decomposition; scales naturally)
+          │
+          ├─ Want geometric structure inferred (vs assumed)
+          │     → AgeMoea    (estimates L_p geometry per generation)
+          │     → Rvea       (reference vectors with adaptive penalty)
+          │
+          ├─ Want indicator-based selection
+          │     → Ibea       (additive ε-indicator; doesn't degrade
+          │                   at high obj count)
+          │     → Hype       (Monte Carlo HV estimation; scales
+          │                   to arbitrary M)
+          │
+          └─ Want grid-based diversity
+                → Grea       (grid coords drive ranking; particularly
+                              good on linear/simplex fronts)
 ```
 
 ### Quick reference
 
-| Algorithm | Objectives | Decision type | Strengths |
+**Sample-efficient / expensive evaluation (50–500 evals):**
+
+| Algorithm        | Objectives | Decision   | Strengths |
 |---|---|---|---|
-| `RandomSearch`            | any   | any            | sanity baseline |
-| `HillClimber`             | 1     | any            | simplest greedy local search |
-| `SimulatedAnnealing`      | 1     | any            | escapes local optima, decision-type-agnostic |
-| `TabuSearch`              | 1     | any            | combinatorial / discrete, you supply neighbors |
-| `GeneticAlgorithm`        | 1     | any            | classic SO GA with elitism |
-| `ParticleSwarm`           | 1     | `Vec<f64>`     | simple swarm, good baseline |
-| `DifferentialEvolution`   | 1     | `Vec<f64>`     | strong default for cheap continuous problems |
-| `CmaEs`                   | 1     | `Vec<f64>`     | sample-efficient, smooth landscapes |
-| `Umda`                    | 1     | `Vec<bool>`    | independent-bit binary problems |
-| `AntColonyTsp`            | 1     | `Vec<usize>`   | TSP / permutation problems |
-| `Paes`                    | 2–3   | any (variation defines) | 1+1 ES with archive |
-| `Nsga2`                   | 2–3   | any            | canonical multi-objective EA |
-| `Spea2`                   | 2–3   | any            | strength + density-based MOEA |
-| `Moead`                   | 2+    | any            | decomposition-based, fast per gen |
-| `Mopso`                   | 2–3   | `Vec<f64>`     | multi-objective PSO with archive |
-| `Ibea`                    | 2+    | any            | indicator-based, scales to many obj |
-| `Nsga3`                   | 4+    | any            | reference-point niching for many-obj |
+| `BayesianOpt`    | 1          | `Vec<f64>` | GP surrogate + Expected Improvement; the gold standard |
+| `Tpe`            | 1          | `Vec<f64>` | KDE surrogate; robust without hyperparameter tuning |
+| `Hyperband`      | 1          | any        | multi-fidelity; needs `PartialProblem` |
+
+**Single-objective continuous (`Vec<f64>`):**
+
+| Algorithm                | Strengths |
+|---|---|
+| `RandomSearch`           | sanity baseline |
+| `HillClimber`            | simplest greedy local search |
+| `OnePlusOneEs`           | one-fifth-rule self-adapting baseline |
+| `SimulatedAnnealing`     | escapes local optima |
+| `GeneticAlgorithm`       | classic SO GA with elitism |
+| `ParticleSwarm`          | simple swarm baseline |
+| `DifferentialEvolution`  | strong default for cheap continuous |
+| `Tlbo`                   | parameter-free (no F, CR, w, σ) |
+| `CmaEs`                  | smooth landscapes; full covariance |
+| `IpopCmaEs`              | CMA-ES + restart for multimodal |
+| `SeparableNes`           | diagonal-cov NES; cheap per-step |
+| `NelderMead`             | classical simplex; deterministic |
+
+**Single-objective other decision types:**
+
+| Algorithm        | Decision        | Strengths |
+|---|---|---|
+| `Umda`           | `Vec<bool>`     | independent-bit EDA |
+| `TabuSearch`     | any             | discrete, you supply neighbors |
+| `AntColonyTsp`   | `Vec<usize>`    | TSP / permutation |
+
+**Multi-objective (2–3) and many-objective (4+):**
+
+| Algorithm     | Objectives | Strengths |
+|---|---|---|
+| `Paes`        | 2–3        | 1+1 ES with Pareto archive |
+| `Nsga2`       | 2–3        | canonical Pareto-based EA |
+| `Spea2`       | 2–3        | strength + density |
+| `Mopso`       | 2–3        | multi-objective PSO with archive |
+| `Ibea`        | 2+         | indicator-based; scales to many-obj |
+| `SmsEmoa`     | 2+         | hypervolume-contribution selection |
+| `Hype`        | 2+         | Monte Carlo HV estimation |
+| `EpsilonMoea` | 2+         | ε-grid archive; auto-sized |
+| `PesaII`      | 2+         | grid-based region selection |
+| `AgeMoea`     | 2+         | adaptive front-geometry estimation |
+| `Knea`        | 2+         | knee-point favored survival |
+| `Moead`       | 2+         | decomposition; fast per-gen |
+| `Nsga3`       | 4+         | reference-point niching |
+| `Rvea`        | 4+         | reference vectors with penalty |
+| `Grea`        | 4+         | grid coords drive selection |
 
 ## Current algorithms
 
 The full list with one-line descriptions:
 
+**Sample-efficient / multi-fidelity:**
+
+- `BayesianOpt` — Gaussian-process surrogate + Expected Improvement.
+- `Tpe` — Bergstra et al. 2011 Tree-structured Parzen Estimator.
+- `Hyperband` — Li et al. 2017 multi-fidelity (uses `PartialProblem`).
+
 **Single-objective:**
 
 - `RandomSearch` — sample-evaluate-keep baseline.
 - `HillClimber` — greedy single-step local search.
+- `OnePlusOneEs` — Rechenberg 1973 (1+1)-ES with one-fifth rule.
 - `SimulatedAnnealing` — Kirkpatrick et al. 1983, generic over decision type.
 - `TabuSearch` — Glover 1986, with a user-supplied neighbor generator.
 - `GeneticAlgorithm` — generational GA with tournament selection + elitism.
 - `ParticleSwarm` — Eberhart & Kennedy 1995 PSO for `Vec<f64>`.
 - `DifferentialEvolution` — Storn & Price DE/rand/1/bin for `Vec<f64>`.
+- `Tlbo` — Rao 2011 Teaching-Learning-Based Optimization (parameter-free).
 - `CmaEs` — Hansen & Ostermeier 2001 covariance-matrix adaptation.
+- `IpopCmaEs` — Auger & Hansen 2005 CMA-ES with restart, for multimodal.
+- `SeparableNes` — Wierstra et al. 2008/2014 diagonal-cov NES.
+- `NelderMead` — Nelder & Mead 1965 simplex direct search.
 - `Umda` — Mühlenbein 1997 univariate marginal-distribution EDA for `Vec<bool>`.
 - `AntColonyTsp` — Dorigo Ant System for permutation problems.
 
@@ -331,10 +430,18 @@ The full list with one-line descriptions:
 - `Moead` — Zhang & Li 2007 decomposition-based MOEA with Tchebycheff scalarization.
 - `Mopso` — Coello, Pulido & Lechuga 2004 multi-objective PSO.
 - `Ibea` — Zitzler & Künzli 2004 indicator-based EA.
+- `SmsEmoa` — Beume, Naujoks & Emmerich 2007 hypervolume-selection EMOA.
+- `Hype` — Bader & Zitzler 2011 Hypervolume Estimation Algorithm.
+- `EpsilonMoea` — Deb, Mohan & Mishra 2003 ε-dominance MOEA.
+- `PesaII` — Corne et al. 2001 Pareto Envelope Selection II.
+- `AgeMoea` — Panichella 2019 Adaptive Geometry Estimation MOEA.
+- `Knea` — Zhang, Tian & Jin 2015 Knee point-driven EA.
 
 **Many-objective (4+):**
 
 - `Nsga3` — Deb & Jain 2014 reference-point NSGA-III.
+- `Rvea` — Cheng et al. 2016 Reference Vector-guided EA.
+- `Grea` — Yang et al. 2013 Grid-based EA.
 
 **Reusable utilities:** `pareto_compare`, `pareto_front`, `best_candidate`,
 `non_dominated_sort`, `crowding_distance`, `ParetoArchive`, `das_dennis`,

@@ -7,34 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-05
+
+Theme: filling heuropt's expensive-evaluation, gradient-free, and
+constraint-handling gaps. No breaking changes to the v0.2.0 public API.
+
 ### Added
 
-#### New algorithms (the "expensive-eval and gradient-free" cohort)
+#### New algorithms (9)
+
+**Sample-efficient / surrogate-based:**
+
+- `BayesianOpt` — Gaussian-process Bayesian Optimization with Expected
+  Improvement acquisition. heuropt's first sample-efficient algorithm:
+  targets the 50–500 evaluation regime.
+- `Tpe` — Bergstra et al. 2011 Tree-structured Parzen Estimator
+  (workhorse of Hyperopt and Optuna). KDE-based surrogate; cheaper
+  per-step than BO and more robust without hyperparameter tuning.
+
+**Classical and modern evolution strategies:**
 
 - `OnePlusOneEs` — Rechenberg 1973 (1+1)-ES with the one-fifth success
   rule. Smallest possible self-adapting evolution strategy.
-- `NelderMead` — Nelder & Mead 1965 simplex direct-search method. Fills
-  a real gap: heuropt's first classical gradient-free local optimizer.
 - `IpopCmaEs` — Auger & Hansen 2005 increasing-population CMA-ES with
   restart. Specifically fixes vanilla CMA-ES's known weakness on
-  multimodal problems (e.g. Rastrigin: 2.35 → 0.13).
-- `BayesianOpt` — Gaussian-process-based Bayesian Optimization with
-  Expected Improvement acquisition. heuropt's first sample-efficient
-  algorithm: targets the 50–500 evaluation regime where every other
-  algorithm is way over-budget.
+  multimodal problems.
+- `SeparableNes` — Wierstra et al. 2008/2014 Natural Evolution Strategy
+  with diagonal covariance (sNES). Different theoretical foundation
+  than CMA-ES; cheaper per-step at the cost of being unable to model
+  rotated landscapes.
+
+**Direct search:**
+
+- `NelderMead` — Nelder & Mead 1965 simplex method. Classical gradient-
+  free local optimizer; superb on low-dim smooth problems
+  (Rosenbrock 5-D: f = 0 exactly).
+
+**Multi-fidelity:**
+
+- `Hyperband` — Li et al. 2017 multi-fidelity hyperparameter optimizer
+  built on Successive Halving. Operates on a new `PartialProblem`
+  trait so configurations can be evaluated at adjustable fidelity
+  budgets.
+
+#### New operators
+
+- `LevyMutation` — heavy-tailed Lévy-flight mutation via Mantegna's
+  algorithm. The actual algorithmic contribution from Cuckoo Search
+  packaged as a reusable `Variation` operator.
+
+#### New traits + impls
+
+- `PartialProblem` — multi-fidelity problem contract:
+  `evaluate_at_budget(decision, budget) -> Evaluation`. Used by
+  `Hyperband`. Intentionally not a sub-trait of `Problem`.
+- `Repair<D>` — in-place projection trait for restoring decisions to
+  feasibility. Pair with `Variation` operators to get bounds-aware
+  variants. Provided impls:
+  - `ClampToBounds` for `Vec<f64>` per-axis clamping
+  - `ProjectToSimplex` for L1-budget / probability-simplex projection
+
+#### New selection helpers
+
+- `stochastic_ranking_select` — Runarsson & Yao 2000 stochastic
+  ranking. Better than strict feasibility-first tournament selection
+  on heavily-constrained problems.
 
 #### Internal helpers
 
 - `internal::cholesky` — Cholesky factorization + triangular solves
-  for symmetric positive-definite matrices, used by the GP posterior
-  in `BayesianOpt`. Hand-rolled to avoid pulling in nalgebra.
+  for SPD matrices, used by the GP posterior in `BayesianOpt`.
 
-#### CmaEs API change (additive)
+### Changed
 
-- `CmaEsConfig` gained an `initial_mean: Option<Vec<f64>>` field
-  (defaulting to `None`, which keeps the existing midpoint-of-bounds
-  behavior). `IpopCmaEs` uses it to inject restart diversity without
-  shrinking the search box.
+- `CmaEsConfig` gained `initial_mean: Option<Vec<f64>>`. `None`
+  preserves the existing midpoint-of-bounds default; `IpopCmaEs` sets
+  it to inject restart diversity without shrinking the search box.
+
+[0.3.0]: https://github.com/swaits/heuropt/releases/tag/v0.3.0
 
 ## [0.2.0] — 2026-05-05
 
@@ -195,5 +245,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.3.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

@@ -1,0 +1,347 @@
+//! Multi-seed algorithm comparison harness.
+//!
+//! Runs every applicable optimizer on each test problem across N seeds and
+//! prints aggregate quality metrics. Adding a new algorithm to the
+//! comparison is a single-line edit to the runner table — see the bottom
+//! of this file.
+//!
+//! ```bash
+//! cargo run --release --example compare
+//! ```
+
+use std::f64::consts::PI;
+use std::time::Instant;
+
+use heuropt::metrics::{hypervolume::hypervolume_2d, spacing::spacing};
+use heuropt::prelude::*;
+
+const SEEDS: u64 = 10;
+
+const ZDT1_DIM: usize = 30;
+const ZDT1_BUDGET: usize = 25_000;
+// Standard ZDT1 reference point. Using [11, 11] (rather than the
+// near-front [1.1, 1.1]) so under-converged algorithms with large `g`
+// values still register a meaningful — if poor — hypervolume.
+const ZDT1_REFERENCE: [f64; 2] = [11.0, 11.0];
+
+const RASTRIGIN_DIM: usize = 5;
+const RASTRIGIN_BUDGET: usize = 50_000;
+
+// -----------------------------------------------------------------------------
+// Test problems
+// -----------------------------------------------------------------------------
+
+struct Zdt1 {
+    dim: usize,
+}
+
+impl Problem for Zdt1 {
+    type Decision = Vec<f64>;
+
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+    }
+
+    fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+        let f1 = x[0];
+        let tail_sum: f64 = x[1..].iter().sum();
+        let g = 1.0 + 9.0 * tail_sum / (self.dim as f64 - 1.0);
+        let f2 = g * (1.0 - (f1 / g).sqrt());
+        Evaluation::new(vec![f1, f2])
+    }
+}
+
+struct Rastrigin {
+    dim: usize,
+}
+
+impl Problem for Rastrigin {
+    type Decision = Vec<f64>;
+
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f")])
+    }
+
+    fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+        let n = self.dim as f64;
+        let value = 10.0 * n
+            + x.iter().map(|v| v * v - 10.0 * (2.0 * PI * v).cos()).sum::<f64>();
+        Evaluation::new(vec![value])
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Run results + metrics aggregation
+// -----------------------------------------------------------------------------
+
+#[derive(Clone)]
+struct MoRun {
+    front: Vec<Candidate<Vec<f64>>>,
+    wall_ms: u128,
+}
+
+#[derive(Clone)]
+struct SoRun {
+    best_value: f64,
+    wall_ms: u128,
+}
+
+fn mean_l2_to_zdt1_front(front: &[Candidate<Vec<f64>>]) -> f64 {
+    if front.is_empty() {
+        return f64::INFINITY;
+    }
+    let samples: Vec<(f64, f64)> = (0..=1000)
+        .map(|i| {
+            let f1 = i as f64 / 1000.0;
+            (f1, 1.0 - f1.sqrt())
+        })
+        .collect();
+    let mut total = 0.0;
+    for c in front {
+        let f1 = c.evaluation.objectives[0];
+        let f2 = c.evaluation.objectives[1];
+        let mut best = f64::INFINITY;
+        for &(rf1, rf2) in &samples {
+            let d = ((rf1 - f1).powi(2) + (rf2 - f2).powi(2)).sqrt();
+            if d < best {
+                best = d;
+            }
+        }
+        total += best;
+    }
+    total / front.len() as f64
+}
+
+fn mean_std(values: &[f64]) -> (f64, f64) {
+    let n = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / n;
+    let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n;
+    (mean, var.sqrt())
+}
+
+// -----------------------------------------------------------------------------
+// ZDT1 algorithm runners
+// -----------------------------------------------------------------------------
+
+fn zdt1_random(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let initializer = RealBounds::new(vec![(0.0, 1.0); ZDT1_DIM]);
+    let config = RandomSearchConfig {
+        iterations: ZDT1_BUDGET,
+        batch_size: 1,
+        seed,
+    };
+    let mut opt = RandomSearch::new(config, initializer);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_paes(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let initializer = RealBounds::new(vec![(0.0, 1.0); ZDT1_DIM]);
+    let variation = BoundedGaussianMutation::new(0.05, vec![(0.0, 1.0); ZDT1_DIM]);
+    let config = PaesConfig {
+        iterations: ZDT1_BUDGET,
+        archive_size: 100,
+        seed,
+    };
+    let mut opt = Paes::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_nsga2(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 100;
+    let gens = ZDT1_BUDGET / pop;
+    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let mut opt = Nsga2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+// -----------------------------------------------------------------------------
+// Rastrigin algorithm runners
+// -----------------------------------------------------------------------------
+
+fn rastrigin_random(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let initializer = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let config = RandomSearchConfig {
+        iterations: RASTRIGIN_BUDGET,
+        batch_size: 1,
+        seed,
+    };
+    let mut opt = RandomSearch::new(config, initializer);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_paes(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let initializer = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let variation = BoundedGaussianMutation::new(0.3, vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let config = PaesConfig {
+        iterations: RASTRIGIN_BUDGET,
+        archive_size: 32,
+        seed,
+    };
+    let mut opt = Paes::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_nsga2(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = vec![(-5.12, 5.12); RASTRIGIN_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / RASTRIGIN_DIM as f64),
+    };
+    let pop = 50;
+    let gens = RASTRIGIN_BUDGET / pop;
+    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let mut opt = Nsga2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_de(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let pop = 50;
+    let gens = (RASTRIGIN_BUDGET - pop) / pop; // initial pop also evaluates
+    let config = DifferentialEvolutionConfig {
+        population_size: pop,
+        generations: gens,
+        differential_weight: 0.5,
+        crossover_probability: 0.9,
+        seed,
+    };
+    let mut opt = DifferentialEvolution::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Main
+// -----------------------------------------------------------------------------
+
+fn run_zdt1_comparison() {
+    println!(
+        "== ZDT1 (dim={ZDT1_DIM}, {ZDT1_BUDGET} evals/run × {SEEDS} seeds) =="
+    );
+    println!("metric arrows: hypervolume↑ (higher better), others↓ (lower better)");
+    println!();
+    println!(
+        "{:<14} {:>16} {:>14} {:>14} {:>10} {:>10}",
+        "algorithm", "hypervolume", "spacing", "mean L2", "front", "ms",
+    );
+    println!("{}", "-".repeat(82));
+
+    let zdt1 = Zdt1 { dim: ZDT1_DIM };
+    let zdt1_objs = zdt1.objectives();
+
+    type Runner = fn(u64) -> MoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", zdt1_random),
+        ("PAES", zdt1_paes),
+        ("NSGA-II", zdt1_nsga2),
+    ];
+
+    for (name, runner) in runners {
+        let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
+        let hv: Vec<f64> = runs
+            .iter()
+            .map(|r| hypervolume_2d(&r.front, &zdt1_objs, ZDT1_REFERENCE))
+            .collect();
+        let sp: Vec<f64> =
+            runs.iter().map(|r| spacing(&r.front, &zdt1_objs)).collect();
+        let l2: Vec<f64> =
+            runs.iter().map(|r| mean_l2_to_zdt1_front(&r.front)).collect();
+        let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+
+        let (hv_m, hv_s) = mean_std(&hv);
+        let (sp_m, sp_s) = mean_std(&sp);
+        let (l2_m, l2_s) = mean_std(&l2);
+        let (fs_m, _) = mean_std(&fs);
+        let (ms_m, _) = mean_std(&ms);
+
+        println!(
+            "{:<14} {:>16} {:>14} {:>14} {:>10} {:>10}",
+            name,
+            format!("{hv_m:.4}±{hv_s:.4}"),
+            format!("{sp_m:.4}±{sp_s:.4}"),
+            format!("{l2_m:.4}±{l2_s:.4}"),
+            format!("{fs_m:.0}"),
+            format!("{ms_m:.0}"),
+        );
+    }
+}
+
+fn run_rastrigin_comparison() {
+    println!();
+    println!(
+        "== Rastrigin (dim={RASTRIGIN_DIM}, {RASTRIGIN_BUDGET} evals/run × {SEEDS} seeds) =="
+    );
+    println!("global minimum: f = 0  (lower is better)");
+    println!();
+    println!("{:<14} {:>20} {:>10}", "algorithm", "best f", "ms");
+    println!("{}", "-".repeat(48));
+
+    type Runner = fn(u64) -> SoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", rastrigin_random),
+        ("PAES", rastrigin_paes),
+        ("NSGA-II", rastrigin_nsga2),
+        ("DE", rastrigin_de),
+    ];
+
+    for (name, runner) in runners {
+        let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
+        let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+
+        let (b_m, b_s) = mean_std(&best);
+        let (ms_m, _) = mean_std(&ms);
+
+        println!(
+            "{:<14} {:>20} {:>10}",
+            name,
+            format!("{b_m:.4e} ± {b_s:.2e}"),
+            format!("{ms_m:.0}"),
+        );
+    }
+}
+
+fn main() {
+    run_zdt1_comparison();
+    run_rastrigin_comparison();
+}

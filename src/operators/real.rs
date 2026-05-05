@@ -289,6 +289,111 @@ impl Variation<Vec<f64>> for BoundedGaussianMutation {
     }
 }
 
+/// Heavy-tailed Lévy-flight mutation for `Vec<f64>` decisions.
+///
+/// Adds a Lévy(α)-distributed step to every variable, optionally clamped to
+/// per-variable bounds. Compared with `GaussianMutation`, the Lévy
+/// distribution has a heavy tail — most steps are small and local but
+/// occasional steps are very large, giving a single mutation operator
+/// that does both refinement and exploration. This is the kernel that
+/// powers Cuckoo Search and other Lévy-flight metaheuristics.
+///
+/// Implementation: Mantegna's algorithm combines two Gaussians to
+/// produce a Lévy(α) sample. `alpha` is the tail exponent in `(0, 2]`;
+/// typical value is `1.5`. `1.0` gives the Cauchy distribution (very
+/// heavy); `2.0` collapses to the Normal.
+#[derive(Debug, Clone)]
+pub struct LevyMutation {
+    /// Tail exponent `α ∈ (0, 2]`. Smaller = heavier tail.
+    pub alpha: f64,
+    /// Step scale.
+    pub scale: f64,
+    /// Optional per-variable bounds. Empty `Vec` → no clamping.
+    pub bounds: Vec<(f64, f64)>,
+}
+
+impl LevyMutation {
+    /// Construct a `LevyMutation`.
+    ///
+    /// # Panics
+    /// If `alpha` is not in `(0, 2]`, `scale <= 0.0`, or any bound has
+    /// `lo > hi`.
+    pub fn new(alpha: f64, scale: f64, bounds: Vec<(f64, f64)>) -> Self {
+        assert!(
+            alpha > 0.0 && alpha <= 2.0,
+            "LevyMutation alpha must be in (0, 2]",
+        );
+        assert!(scale > 0.0, "LevyMutation scale must be > 0");
+        for (i, &(lo, hi)) in bounds.iter().enumerate() {
+            assert!(
+                lo <= hi,
+                "LevyMutation bound at index {i} has lo > hi: ({lo}, {hi})",
+            );
+        }
+        Self { alpha, scale, bounds }
+    }
+}
+
+impl Variation<Vec<f64>> for LevyMutation {
+    fn vary(&mut self, parents: &[Vec<f64>], rng: &mut Rng) -> Vec<Vec<f64>> {
+        assert!(!parents.is_empty(), "LevyMutation requires at least one parent");
+        let alpha = self.alpha;
+        // Mantegna's algorithm σ for the numerator Normal:
+        //   sigma_u = (Γ(1+α)·sin(π·α/2) / (Γ((1+α)/2)·α·2^((α-1)/2)))^(1/α)
+        // Denominator Normal has σ = 1.
+        let sigma_u = mantegna_sigma_u(alpha);
+        let normal_u = Normal::new(0.0, sigma_u).expect("Normal::new(0, sigma_u)");
+        let normal_v = Normal::new(0.0, 1.0).expect("Normal::new(0, 1)");
+        let mut child = parents[0].clone();
+        for (j, x) in child.iter_mut().enumerate() {
+            let u: f64 = normal_u.sample(rng);
+            let v: f64 = normal_v.sample(rng);
+            let step = u / v.abs().powf(1.0 / alpha);
+            *x += self.scale * step;
+            if let Some(&(lo, hi)) = self.bounds.get(j) {
+                *x = x.clamp(lo, hi);
+            }
+        }
+        vec![child]
+    }
+}
+
+fn mantegna_sigma_u(alpha: f64) -> f64 {
+    // Γ-related constants. We compute Γ(z) via libm if the std::f64::gamma
+    // isn't available; fall back to a small Lanczos approximation.
+    fn gamma(z: f64) -> f64 {
+        // Stirling-ish via the standard recursion + Lanczos coefficients.
+        // For the typical α ∈ [1, 2] range we hit, the expressions Γ(1+α)
+        // and Γ((1+α)/2) are well-behaved.
+        let g = 7.0;
+        let p = [
+            0.999_999_999_999_809_93,
+            676.520_368_121_885_1,
+            -1_259.139_216_722_4023,
+            771.323_428_777_653_13,
+            -176.615_029_162_140_59,
+            12.507_343_278_686_905,
+            -0.138_571_095_265_720_12,
+            9.984_369_578_019_571_6e-6,
+            1.505_632_735_149_311_6e-7,
+        ];
+        if z < 0.5 {
+            std::f64::consts::PI / ((std::f64::consts::PI * z).sin() * gamma(1.0 - z))
+        } else {
+            let z = z - 1.0;
+            let mut x = p[0];
+            for (i, &pi) in p.iter().enumerate().skip(1) {
+                x += pi / (z + i as f64);
+            }
+            let t = z + g + 0.5;
+            (2.0 * std::f64::consts::PI).sqrt() * t.powf(z + 0.5) * (-t).exp() * x
+        }
+    }
+    let num = gamma(1.0 + alpha) * (std::f64::consts::PI * alpha / 2.0).sin();
+    let den = gamma((1.0 + alpha) / 2.0) * alpha * 2.0_f64.powf((alpha - 1.0) / 2.0);
+    (num / den).powf(1.0 / alpha)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -424,6 +529,42 @@ mod tests {
     #[should_panic(expected = "eta must be >= 0.0")]
     fn sbx_negative_eta_panics() {
         let _ = SimulatedBinaryCrossover::new(vec![(0.0, 1.0)], -1.0, 0.5);
+    }
+
+    #[test]
+    fn levy_mutation_returns_one_child_in_bounds() {
+        let mut m = LevyMutation::new(1.5, 0.1, vec![(-1.0, 1.0); 4]);
+        let mut rng = rng_from_seed(42);
+        let parent = vec![0.0_f64; 4];
+        for _ in 0..50 {
+            let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].len(), 4);
+            for &x in &children[0] {
+                assert!((-1.0..=1.0).contains(&x), "out of bounds: {x}");
+            }
+        }
+    }
+
+    #[test]
+    fn levy_mutation_unbounded_works() {
+        let mut m = LevyMutation::new(1.5, 0.5, Vec::new());
+        let mut rng = rng_from_seed(0);
+        let parent = vec![0.0_f64; 3];
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+        assert_eq!(children[0].len(), 3);
+    }
+
+    #[test]
+    #[should_panic(expected = "alpha must be in (0, 2]")]
+    fn levy_alpha_out_of_range_panics() {
+        let _ = LevyMutation::new(0.0, 0.1, Vec::new());
+    }
+
+    #[test]
+    #[should_panic(expected = "scale must be > 0")]
+    fn levy_zero_scale_panics() {
+        let _ = LevyMutation::new(1.5, 0.0, Vec::new());
     }
 
     #[test]

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`heuropt-plot` companion crate (v0.1.0)** at `heuropt-plot/`,
+  published independently. Lightweight SVG-only plotter for Pareto
+  fronts (`pareto_front_svg`) and convergence traces
+  (`convergence_svg`) — hand-rolled SVG output, no `plotters` /
+  `tiny-skia` dep so the crate stays a tiny optional addition.
+- `examples/visualize.rs` — runs NSGA-II on Schaffer N.1 with a
+  closure observer that records hypervolume per generation, then
+  emits `pareto_front.svg` + `convergence.svg` via `heuropt-plot`.
+
 ## [0.7.0] — 2026-05-05
 
 Theme: async evaluation. heuropt now supports problems where each

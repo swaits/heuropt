@@ -3,6 +3,7 @@
 pub mod ant_colony_tsp;
 pub mod cma_es;
 pub mod differential_evolution;
+pub mod epsilon_moea;
 pub mod genetic_algorithm;
 pub mod hill_climber;
 pub mod hype;
@@ -26,6 +27,7 @@ pub mod umda;
 pub use ant_colony_tsp::*;
 pub use cma_es::*;
 pub use differential_evolution::*;
+pub use epsilon_moea::*;
 pub use genetic_algorithm::*;
 pub use hill_climber::*;
 pub use hype::*;

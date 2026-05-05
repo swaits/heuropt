@@ -9,7 +9,7 @@ pub use crate::core::{
     Population, Problem, Rng, rng_from_seed,
 };
 
-pub use crate::traits::{Initializer, Optimizer, Variation};
+pub use crate::traits::{Initializer, Optimizer, Repair, Variation};
 
 pub use crate::pareto::{
     Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis,
@@ -17,8 +17,9 @@ pub use crate::pareto::{
 };
 
 pub use crate::operators::{
-    BitFlipMutation, BoundedGaussianMutation, CompositeVariation, GaussianMutation,
-    LevyMutation, PolynomialMutation, RealBounds, SimulatedBinaryCrossover, SwapMutation,
+    BitFlipMutation, BoundedGaussianMutation, ClampToBounds, CompositeVariation,
+    GaussianMutation, LevyMutation, PolynomialMutation, ProjectToSimplex, RealBounds,
+    SimulatedBinaryCrossover, SwapMutation,
 };
 
 pub use crate::algorithms::{

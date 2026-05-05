@@ -187,17 +187,34 @@ fn environmental_selection<D: Clone>(
     //   proximity = ||translated||_p
     //   diversity = nearest-neighbor distance in the same L_p frame
     //               among already-selected + splitting members.
+    //
+    // Two caches make this much cheaper than the textbook formulation:
+    //   * `prox[i]` — `lp_norm(translated[i], p)` is constant across
+    //     iterations, so compute it once per splitting-front member.
+    //   * `nearest[i]` — the nearest-keep distance only ever decreases
+    //     when a new candidate is picked, so we maintain it
+    //     incrementally: seed it from `selected`, then on every pick
+    //     update each remaining `i`'s nearest by taking
+    //     `min(nearest[i], lp_distance(translated[i], translated[pick], p))`.
+    //
+    // That cuts the score loop from O(R · K · M) per iteration (where
+    // R = remaining count, K = current keep count) to O(R · M) per
+    // iteration, with the dominant `powf` calls in lp_distance counted
+    // once per (remaining, pick) pair instead of per (remaining, all-keep).
     let mut keep = selected.clone();
     let mut remaining: Vec<usize> = splitting.clone();
+    let prox: Vec<f64> = (0..combined.len())
+        .map(|i| lp_norm(&translated[i], p))
+        .collect();
+    let mut nearest: Vec<f64> = (0..combined.len())
+        .map(|i| nearest_neighbor_distance(i, &translated, &keep, p))
+        .collect();
     while keep.len() < n {
-        // Compute scores for every remaining candidate; pick the one with
-        // the largest combined score.
+        // Pick the remaining candidate with the largest score.
         let mut best_idx: Option<usize> = None;
         let mut best_score = f64::NEG_INFINITY;
         for &i in &remaining {
-            let prox = lp_norm(&translated[i], p);
-            let div = nearest_neighbor_distance(i, &translated, &keep, p);
-            let score = div / (prox.max(1e-12));
+            let score = nearest[i] / (prox[i].max(1e-12));
             if score > best_score {
                 best_score = score;
                 best_idx = Some(i);
@@ -208,6 +225,14 @@ fn environmental_selection<D: Clone>(
             Some(pick) => {
                 keep.push(pick);
                 remaining.retain(|&i| i != pick);
+                // Update each surviving remaining's nearest-keep using
+                // just the distance to the new pick.
+                for &i in &remaining {
+                    let d = lp_distance(&translated[i], &translated[pick], p);
+                    if d < nearest[i] {
+                        nearest[i] = d;
+                    }
+                }
             }
         }
     }

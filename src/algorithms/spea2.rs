@@ -9,7 +9,6 @@ use crate::core::population::Population;
 use crate::core::problem::Problem;
 use crate::core::result::OptimizationResult;
 use crate::core::rng::{Rng, rng_from_seed};
-use crate::pareto::dominance::{Dominance, pareto_compare};
 use crate::pareto::front::{best_candidate, pareto_front};
 use crate::traits::{Initializer, Optimizer, Variation};
 
@@ -151,19 +150,50 @@ fn compute_fitness<D>(pool: &[Candidate<D>], objectives: &ObjectiveSpace) -> Vec
         .iter()
         .map(|c| objectives.as_minimization(&c.evaluation.objectives))
         .collect();
+    let feasible: Vec<bool> = pool.iter().map(|c| c.evaluation.is_feasible()).collect();
+    let violation: Vec<f64> = pool
+        .iter()
+        .map(|c| c.evaluation.constraint_violation)
+        .collect();
+    let m = objectives.len();
 
-    // Strength S(i) = number of members i dominates.
+    // Strength S(i) = number of members i dominates. Inline `pareto_compare`
+    // against the cached oriented/feasibility arrays — the by-pair call into
+    // `pareto_compare` would otherwise allocate two fresh `Vec<f64>`s per
+    // pair via `as_minimization`, dominating per-generation cost on
+    // population sizes ≥ 80.
     let mut strength = vec![0_usize; n];
     let mut dominators_of: Vec<Vec<usize>> = vec![Vec::new(); n];
     for i in 0..n {
+        let ai_feasible = feasible[i];
+        let ai_violation = violation[i];
+        let ai = &oriented[i];
         for j in 0..n {
             if i == j {
                 continue;
             }
-            if matches!(
-                pareto_compare(&pool[i].evaluation, &pool[j].evaluation, objectives),
-                Dominance::Dominates
-            ) {
+            let bi_feasible = feasible[j];
+            let i_dominates_j = match (ai_feasible, bi_feasible) {
+                (true, false) => true,
+                (false, true) => false,
+                (false, false) => ai_violation < violation[j],
+                (true, true) => {
+                    let bj = &oriented[j];
+                    let mut a_better_anywhere = false;
+                    let mut b_better_anywhere = false;
+                    for k in 0..m {
+                        let av = ai[k];
+                        let bv = bj[k];
+                        if av < bv {
+                            a_better_anywhere = true;
+                        } else if av > bv {
+                            b_better_anywhere = true;
+                        }
+                    }
+                    a_better_anywhere && !b_better_anywhere
+                }
+            };
+            if i_dominates_j {
                 strength[i] += 1;
                 dominators_of[j].push(i);
             }
@@ -175,17 +205,25 @@ fn compute_fitness<D>(pool: &[Candidate<D>], objectives: &ObjectiveSpace) -> Vec
         .map(|i| dominators_of[i].iter().map(|&j| strength[j] as f64).sum())
         .collect();
 
-    // Density D(i) = 1 / (σ_k + 2). Use kth_nearest distances.
+    // Density D(i) = 1 / (σ_k + 2) where σ_k is the distance to the k-th
+    // nearest neighbor (k = floor(sqrt(N))). Build a symmetric distance
+    // matrix once instead of recomputing each row independently — that
+    // halves the euclidean calls (which dominate at higher M) and keeps
+    // the σ_k value bit-identical.
+    let mut dist: Vec<Vec<f64>> = vec![vec![0.0_f64; n]; n];
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let d = euclidean(&oriented[i], &oriented[j]);
+            dist[i][j] = d;
+            dist[j][i] = d;
+        }
+    }
     let k = (n as f64).sqrt() as usize;
     let density: Vec<f64> = (0..n)
         .map(|i| {
-            let mut dists: Vec<f64> = (0..n)
-                .filter(|&j| j != i)
-                .map(|j| euclidean(&oriented[i], &oriented[j]))
-                .collect();
+            let mut dists: Vec<f64> = (0..n).filter(|&j| j != i).map(|j| dist[i][j]).collect();
             dists.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            // SPEA2's σ_k is the distance to the k-th nearest neighbor (1-indexed).
-            // With k = floor(sqrt(N)), use index (k-1).clamp(0, len-1).
             let idx = if dists.is_empty() {
                 return 0.0;
             } else {
@@ -238,31 +276,44 @@ fn build_archive<D: Clone>(
     }
 
     // Truncation: while too large, drop the member with the smallest distance
-    // to its nearest neighbor in the current archive.
+    // to its nearest neighbor in the current archive (ties broken by next-
+    // nearest, etc. via lex order on each member's sorted neighbor vector).
+    //
+    // Implementation: compute the pairwise distance matrix once, plus each
+    // member's sorted neighbor-distance vector. Each iteration drops one
+    // dead victim's entry from every survivor's sorted vector via
+    // binary-search-remove, instead of resorting from scratch. That cuts
+    // truncation cost from O(K³ log K) to O(K² log K) overall while
+    // producing the identical victim choice every step (the sorted vector
+    // post-removal is bit-equal to a fresh sort over the smaller set).
+    let n = nondom.len();
     let oriented: Vec<Vec<f64>> = nondom
         .iter()
         .map(|&i| objectives.as_minimization(&pool[i].evaluation.objectives))
         .collect();
-    let mut alive: Vec<bool> = vec![true; nondom.len()];
-    let mut alive_count = nondom.len();
-    while alive_count > target_size {
-        // Compute per-member sorted distances to other alive members.
-        let mut neighbor_dists: Vec<Vec<f64>> = vec![Vec::new(); nondom.len()];
-        for i in 0..nondom.len() {
-            if !alive[i] {
-                continue;
-            }
-            for j in 0..nondom.len() {
-                if !alive[j] || i == j {
-                    continue;
-                }
-                neighbor_dists[i].push(euclidean(&oriented[i], &oriented[j]));
-            }
-            neighbor_dists[i].sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mut dist: Vec<Vec<f64>> = vec![vec![0.0_f64; n]; n];
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let d = euclidean(&oriented[i], &oriented[j]);
+            dist[i][j] = d;
+            dist[j][i] = d;
         }
-        // Find the alive member whose neighbor-distance vector is lex-smallest.
+    }
+    let mut sorted_dists: Vec<Vec<f64>> = (0..n)
+        .map(|i| {
+            let mut v: Vec<f64> = (0..n).filter(|&j| j != i).map(|j| dist[i][j]).collect();
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            v
+        })
+        .collect();
+    let mut alive: Vec<bool> = vec![true; n];
+    let mut alive_count = n;
+    while alive_count > target_size {
+        // Find the alive member whose sorted-neighbor-distance vector is
+        // lex-smallest (= the most crowded member).
         let mut victim = usize::MAX;
-        for i in 0..nondom.len() {
+        for i in 0..n {
             if !alive[i] {
                 continue;
             }
@@ -270,10 +321,9 @@ fn build_archive<D: Clone>(
                 victim = i;
                 continue;
             }
-            // Lex-compare neighbor distances.
-            let cmp = neighbor_dists[i]
+            let cmp = sorted_dists[i]
                 .iter()
-                .zip(neighbor_dists[victim].iter())
+                .zip(sorted_dists[victim].iter())
                 .find_map(|(a, b)| {
                     let c = a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal);
                     if c != std::cmp::Ordering::Equal {
@@ -289,6 +339,21 @@ fn build_archive<D: Clone>(
         }
         alive[victim] = false;
         alive_count -= 1;
+        // Update every still-alive member's sorted neighbor vector by
+        // removing the entry corresponding to the dead victim. Binary-
+        // search-remove on the (still-)sorted vector is O(log K + K) per
+        // survivor — we tolerate the linear shift because K is tiny.
+        for i in 0..n {
+            if !alive[i] {
+                continue;
+            }
+            let d = dist[i][victim];
+            if let Ok(pos) = sorted_dists[i]
+                .binary_search_by(|x| x.partial_cmp(&d).unwrap_or(std::cmp::Ordering::Equal))
+            {
+                sorted_dists[i].remove(pos);
+            }
+        }
     }
 
     nondom

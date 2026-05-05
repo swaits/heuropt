@@ -1,3 +1,4 @@
 //! Internal helpers used by built-in algorithms but not part of the public API.
 
+pub(crate) mod cholesky;
 pub(crate) mod eigen;

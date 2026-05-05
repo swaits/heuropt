@@ -16,4 +16,4 @@ pub use crate::pareto::{
     pareto_compare, pareto_front,
 };
 
-pub use crate::operators::{GaussianMutation, RealBounds};
+pub use crate::operators::{BitFlipMutation, GaussianMutation, RealBounds};

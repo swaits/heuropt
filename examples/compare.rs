@@ -234,6 +234,30 @@ fn zdt1_nsga2(seed: u64) -> MoRun {
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
 }
 
+fn zdt1_moead(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    // 99 divisions → 100 weights for 2 obj. Each generation evaluates one
+    // child per weight (so `n_weights` evals/gen).
+    let pop = 100;
+    let gens = (ZDT1_BUDGET - pop) / pop;
+    let config = MoeadConfig {
+        generations: gens,
+        reference_divisions: 99,
+        neighborhood_size: 20,
+        seed,
+    };
+    let mut opt = Moead::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
 fn zdt1_nsga3(seed: u64) -> MoRun {
     let problem = Zdt1 { dim: ZDT1_DIM };
     let bounds = vec![(0.0, 1.0); ZDT1_DIM];
@@ -314,6 +338,29 @@ fn dtlz2_spea2(seed: u64) -> MoRun {
         seed,
     };
     let mut opt = Spea2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_moead(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    // 12 divisions for 3 objectives = 91 weights — same density as NSGA-III.
+    let pop = 91;
+    let gens = (DTLZ2_BUDGET - pop) / pop;
+    let config = MoeadConfig {
+        generations: gens,
+        reference_divisions: 12,
+        neighborhood_size: 20,
+        seed,
+    };
+    let mut opt = Moead::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
@@ -466,6 +513,7 @@ fn run_zdt1_comparison() {
         ("SPEA2", zdt1_spea2),
         ("NSGA-II", zdt1_nsga2),
         ("NSGA-III", zdt1_nsga3),
+        ("MOEA/D", zdt1_moead),
     ];
 
     for (name, runner) in runners {
@@ -521,6 +569,7 @@ fn run_dtlz2_comparison() {
         ("NSGA-II", dtlz2_nsga2),
         ("SPEA2", dtlz2_spea2),
         ("NSGA-III", dtlz2_nsga3),
+        ("MOEA/D", dtlz2_moead),
     ];
 
     for (name, runner) in runners {

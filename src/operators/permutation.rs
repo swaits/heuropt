@@ -46,7 +46,7 @@ mod tests {
         let mut m = SwapMutation;
         let mut rng = rng_from_seed(11);
         let parent = vec![0_usize, 1, 2, 3, 4];
-        let children = m.vary(&[parent.clone()], &mut rng);
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         assert_eq!(children.len(), 1);
         assert_eq!(sorted(children[0].clone()), sorted(parent));
     }
@@ -56,7 +56,7 @@ mod tests {
         let mut m = SwapMutation;
         let mut rng = rng_from_seed(0);
         let parent = vec![42_usize];
-        let children = m.vary(&[parent.clone()], &mut rng);
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         assert_eq!(children[0], parent);
     }
 
@@ -65,7 +65,7 @@ mod tests {
         let mut m = SwapMutation;
         let mut rng = rng_from_seed(0);
         let parent = vec![1_usize, 2];
-        let children = m.vary(&[parent.clone()], &mut rng);
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         assert_eq!(children[0], vec![2, 1]);
     }
 }

@@ -45,7 +45,7 @@ mod tests {
         let mut m = BitFlipMutation { probability: 0.0 };
         let mut rng = rng_from_seed(0);
         let parent = vec![false, true, false, true, true];
-        let children = m.vary(&[parent.clone()], &mut rng);
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         assert_eq!(children.len(), 1);
         assert_eq!(children[0], parent);
     }
@@ -55,7 +55,7 @@ mod tests {
         let mut m = BitFlipMutation { probability: 1.0 };
         let mut rng = rng_from_seed(0);
         let parent = vec![false, true, false, true, true];
-        let children = m.vary(&[parent.clone()], &mut rng);
+        let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         let expected: Vec<bool> = parent.iter().map(|b| !b).collect();
         assert_eq!(children[0], expected);
     }

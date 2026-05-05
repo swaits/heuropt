@@ -33,6 +33,7 @@ pub fn crowding_distance<D>(
         .map(|&idx| objectives.as_minimization(&population[idx].evaluation.objectives))
         .collect();
 
+    #[allow(clippy::needless_range_loop)] // `k` indexes into nested vectors below.
     for k in 0..m {
         // Sort indices into `front` by objective k.
         let mut order: Vec<usize> = (0..n).collect();

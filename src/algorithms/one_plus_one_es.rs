@@ -97,14 +97,13 @@ where
 
         let mut sigma = self.config.initial_sigma;
         let mut window = std::collections::VecDeque::with_capacity(self.config.adaptation_period);
-        let n = parent.len();
 
         for _ in 0..self.config.iterations {
             let normal = Normal::new(0.0, sigma).expect("Normal::new(0, sigma)");
             let mut child = parent.clone();
-            for j in 0..n {
+            for (j, x) in child.iter_mut().enumerate() {
                 let (lo, hi) = self.bounds.bounds[j];
-                child[j] = (child[j] + normal.sample(&mut rng)).clamp(lo, hi);
+                *x = (*x + normal.sample(&mut rng)).clamp(lo, hi);
             }
             let child_eval = problem.evaluate(&child);
             evaluations += 1;

@@ -29,6 +29,10 @@ pub struct CmaEsConfig {
     /// to amortize cost. The full algorithm decomposes every generation
     /// (set this to 1); 1–10 is fine for small `N`.
     pub eigen_decomposition_period: usize,
+    /// Optional initial mean. If `None`, the mean defaults to the per-axis
+    /// midpoint of the bounds. Used by `IpopCmaEs` to inject restart
+    /// diversity without shrinking the search box.
+    pub initial_mean: Option<Vec<f64>>,
     /// Seed for the deterministic RNG.
     pub seed: u64,
 }
@@ -40,6 +44,7 @@ impl Default for CmaEsConfig {
             generations: 200,
             initial_sigma: 0.5,
             eigen_decomposition_period: 1,
+            initial_mean: None,
             seed: 42,
         }
     }
@@ -131,12 +136,22 @@ where
         // ---------------------------------------------------------------
         // Initial state.
         // ---------------------------------------------------------------
-        let mut mean: Vec<f64> = self
-            .bounds
-            .bounds
-            .iter()
-            .map(|&(lo, hi)| 0.5 * (lo + hi))
-            .collect();
+        let mut mean: Vec<f64> = if let Some(provided) = self.config.initial_mean.clone() {
+            assert_eq!(
+                provided.len(),
+                self.bounds.bounds.len(),
+                "CmaEs initial_mean.len() must equal the bounds dimension",
+            );
+            // Clamp the user-provided mean into the bounds so the algorithm
+            // doesn't start outside the search box.
+            provided
+                .into_iter()
+                .zip(self.bounds.bounds.iter())
+                .map(|(v, &(lo, hi))| v.clamp(lo, hi))
+                .collect()
+        } else {
+            self.bounds.bounds.iter().map(|&(lo, hi)| 0.5 * (lo + hi)).collect()
+        };
         let mut sigma = self.config.initial_sigma;
         // Covariance C, eigenvectors B, eigenvalues d (square roots of eigenvalues of C).
         let mut c_matrix: Vec<Vec<f64>> = (0..n)
@@ -383,6 +398,7 @@ mod tests {
                 generations: 100,
                 initial_sigma: 0.5,
                 eigen_decomposition_period: 1,
+                initial_mean: None,
                 seed: 1,
             },
             RealBounds::new(vec![(-5.0, 5.0)]),
@@ -404,6 +420,7 @@ mod tests {
                 generations: 400,
                 initial_sigma: 0.5,
                 eigen_decomposition_period: 1,
+                initial_mean: None,
                 seed: 1,
             },
             RealBounds::new(vec![(-5.0, 5.0); 5]),
@@ -426,6 +443,7 @@ mod tests {
             generations: 30,
             initial_sigma: 0.5,
             eigen_decomposition_period: 1,
+                initial_mean: None,
             seed: 99,
         };
         let mut a = CmaEs::new(cfg.clone(), RealBounds::new(vec![(-5.0, 5.0)]));
@@ -457,6 +475,7 @@ mod tests {
                 generations: 1,
                 initial_sigma: 0.5,
                 eigen_decomposition_period: 1,
+                initial_mean: None,
                 seed: 0,
             },
             RealBounds::new(vec![(-1.0, 1.0)]),

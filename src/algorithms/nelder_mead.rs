@@ -177,15 +177,16 @@ where
                         if idx == best_idx {
                             continue;
                         }
+                        #[allow(clippy::needless_range_loop)] // body indexes both vertices and best_pt.
                         for j in 0..n {
                             vertices[idx][j] = best_pt[j]
                                 + self.config.shrinkage
                                     * (vertices[idx][j] - best_pt[j]);
                         }
                         // Clamp to bounds.
-                        for j in 0..n {
+                        for (j, x) in vertices[idx].iter_mut().enumerate() {
                             let (lo, hi) = self.bounds.bounds[j];
-                            vertices[idx][j] = vertices[idx][j].clamp(lo, hi);
+                            *x = x.clamp(lo, hi);
                         }
                         evals[idx] = problem.evaluate(&vertices[idx]);
                         evaluations += 1;

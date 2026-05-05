@@ -1003,6 +1003,7 @@ fn rastrigin_cma_es(seed: u64) -> SoRun {
         generations: gens,
         initial_sigma: 1.0,
         eigen_decomposition_period: 1,
+        initial_mean: None,
         seed,
     };
     let mut opt = CmaEs::new(config, bounds);
@@ -1058,6 +1059,7 @@ macro_rules! so_run_cma {
             generations: $budget / pop,
             initial_sigma: 1.0,
             eigen_decomposition_period: 1,
+        initial_mean: None,
             seed: $seed,
         };
         let mut opt = CmaEs::new(config, bounds);

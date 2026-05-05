@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-05
+
+Theme: production lifecycle. heuropt becomes deployable for long-
+running, real-world optimization workloads — callbacks, stop
+conditions, tracing, and two new performance indicators.
+
+No breaking changes to the public API. Existing `Optimizer<P>` impls
+keep compiling — `run_with` is added as a default-impl method that
+falls back to `run` plus a single final notification.
+
+### Added
+
+#### Observer + stop-conditions API
+
+A new module `heuropt::observer` introduces:
+
+- `Snapshot<'a, D>` — per-generation observation payload with
+  `iteration`, `evaluations`, `elapsed`, `population`,
+  `pareto_front`, `best`, and `objectives`.
+- `Observer<D>` trait — single method `observe(&Snapshot) ->
+  ControlFlow<()>`. Closures of the right shape implement it
+  automatically. `()` is the no-op observer.
+- `Optimizer::run_with(problem, observer)` — new method on the
+  `Optimizer` trait with a default impl that falls back to `run`.
+  Algorithms that override `run_with` (so far: `Nsga2`,
+  `RandomSearch`, `DifferentialEvolution`) call the observer once
+  per generation; others call it once at the end. Returning
+  `ControlFlow::Break` halts the optimizer and returns the partial
+  result.
+
+#### Built-in observers (`observer::builtin`)
+
+- `MaxTime(Duration)` — wall-clock cap.
+- `MaxIterations(usize)` — generation cap.
+- `TargetFitness(f64)` — direction-aware single-objective target.
+- `Stagnation { window, tolerance }` — halt when the best fitness
+  hasn't improved by `tolerance` over `window` generations.
+- `Periodic::new(every, |snap| { … })` — call a user closure every
+  `every` generations.
+- `AnyOf` / `AllOf` plus `Observer::or` / `Observer::and` for
+  composition.
+- `TracingObserver` (behind the new `tracing` feature) — emits
+  structured `debug!` events per generation.
+
+#### Tracing feature
+
+New optional feature `tracing`, gated on the
+[`tracing`](https://crates.io/crates/tracing) crate. Adds
+`TracingObserver` to the prelude when enabled.
+
+#### Performance indicators
+
+- `metrics::igd::igd` — Inverted Generational Distance against a
+  reference set (typically the true Pareto front).
+- `metrics::igd::igd_plus` — Pareto-compliant IGD+ variant; adding
+  a dominated point never improves the score.
+- `metrics::r2::r2` — R2 indicator using the weighted Tchebycheff
+  utility. Pair with `pareto::das_dennis` for the canonical weight
+  set.
+
+#### Constrained example
+
+`examples/constrained.rs` — solves the BNH constrained 2-objective
+problem (Binh & Korn 1996) with NSGA-II + the new observer API,
+demonstrating `Periodic` progress logging and `MaxTime` /
+composition.
+
+### Changed
+
+- `Population::as_slice()` — new convenience accessor.
+
+[0.6.0]: https://github.com/swaits/heuropt/releases/tag/v0.6.0
+
 ## [0.5.0] — 2026-05-05
 
 Theme: comprehensive documentation and project polish. No public-API
@@ -469,5 +542,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.6.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

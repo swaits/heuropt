@@ -3,7 +3,6 @@
 use rand::Rng as _;
 
 use crate::algorithms::parallel_eval::evaluate_batch;
-use crate::core::candidate::Candidate;
 use crate::core::objective::Direction;
 use crate::core::population::Population;
 use crate::core::problem::Problem;
@@ -95,6 +94,16 @@ where
     P: Problem<Decision = Vec<f64>> + Sync,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
+        self.run_with(problem, &mut ())
+    }
+
+    fn run_with<O>(&mut self, problem: &P, observer: &mut O) -> OptimizationResult<P::Decision>
+    where
+        O: crate::observer::Observer<P::Decision>,
+    {
+        use crate::observer::Snapshot;
+        use std::ops::ControlFlow;
+
         assert!(
             self.config.population_size >= 4,
             "DifferentialEvolution requires population_size >= 4 (DE/rand/1 needs three distinct donors plus the target)",
@@ -110,6 +119,7 @@ where
             "DifferentialEvolution only supports single-objective problems",
         );
         let direction = objectives.objectives[0].direction;
+        let started = std::time::Instant::now();
 
         let dim = self.bounds.bounds.len();
         let n = self.config.population_size;
@@ -122,12 +132,39 @@ where
         };
         let initial_pop = evaluate_batch(problem, decisions.clone());
         let mut evaluations = initial_pop.len();
-        let mut evals: Vec<f64> = initial_pop
+        let mut current_pop = initial_pop;
+        let mut evals: Vec<f64> = current_pop
             .iter()
             .map(|c| c.evaluation.objectives[0])
             .collect();
+        let mut completed_generations: usize = 0;
 
-        for _gen in 0..self.config.generations {
+        // Initial snapshot.
+        {
+            let best = best_candidate(&current_pop, &objectives);
+            let snap = Snapshot {
+                iteration: 0,
+                evaluations,
+                elapsed: started.elapsed(),
+                population: &current_pop,
+                pareto_front: None,
+                best: best.as_ref(),
+                objectives: &objectives,
+            };
+            if let ControlFlow::Break(()) = observer.observe(&snap) {
+                let front = pareto_front(&current_pop, &objectives);
+                let best = best_candidate(&current_pop, &objectives);
+                return OptimizationResult::new(
+                    Population::new(current_pop),
+                    front,
+                    best,
+                    evaluations,
+                    completed_generations,
+                );
+            }
+        }
+
+        for generation in 1..=self.config.generations {
             // Phase 1 (serial): construct one trial per target. RNG state is
             // consumed in deterministic order so seeded runs reproduce
             // exactly regardless of the `parallel` feature.
@@ -164,22 +201,38 @@ where
                     Direction::Maximize => trial_obj >= target_obj,
                 };
                 if trial_better {
-                    decisions[i] = trial_cand.decision;
+                    decisions[i] = trial_cand.decision.clone();
                     evals[i] = trial_obj;
+                    current_pop[i] = trial_cand;
                 }
+            }
+            completed_generations = generation;
+
+            // Per-generation snapshot.
+            let best = best_candidate(&current_pop, &objectives);
+            let snap = Snapshot {
+                iteration: generation,
+                evaluations,
+                elapsed: started.elapsed(),
+                population: &current_pop,
+                pareto_front: None,
+                best: best.as_ref(),
+                objectives: &objectives,
+            };
+            if let ControlFlow::Break(()) = observer.observe(&snap) {
+                break;
             }
         }
 
-        let final_pop: Vec<Candidate<Vec<f64>>> = evaluate_batch(problem, decisions);
-        evaluations += final_pop.len();
-        let front = pareto_front(&final_pop, &objectives);
-        let best = best_candidate(&final_pop, &objectives);
+        // Re-evaluate to make sure final population is consistent (current_pop is already current).
+        let front = pareto_front(&current_pop, &objectives);
+        let best = best_candidate(&current_pop, &objectives);
         OptimizationResult::new(
-            Population::new(final_pop),
+            Population::new(current_pop),
             front,
             best,
             evaluations,
-            self.config.generations,
+            completed_generations,
         )
     }
 }

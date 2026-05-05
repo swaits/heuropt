@@ -68,6 +68,7 @@ pub mod algorithms;
 pub mod core;
 pub(crate) mod internal;
 pub mod metrics;
+pub mod observer;
 pub mod operators;
 pub mod pareto;
 pub mod prelude;

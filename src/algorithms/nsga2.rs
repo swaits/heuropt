@@ -108,6 +108,16 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
+        self.run_with(problem, &mut ())
+    }
+
+    fn run_with<O>(&mut self, problem: &P, observer: &mut O) -> OptimizationResult<P::Decision>
+    where
+        O: crate::observer::Observer<P::Decision>,
+    {
+        use crate::observer::Snapshot;
+        use std::ops::ControlFlow;
+
         assert!(
             self.config.population_size > 0,
             "Nsga2 population_size must be greater than 0",
@@ -115,6 +125,7 @@ where
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
+        let started = std::time::Instant::now();
 
         // Initial population.
         let initial_decisions = self.initializer.initialize(n, &mut rng);
@@ -130,7 +141,27 @@ where
         // round of tournament selection has data to compare on.
         let mut annotated = annotate(population, &objectives);
 
-        for _ in 0..self.config.generations {
+        // Observer: notify after the initial population.
+        let mut completed_generations: usize = 0;
+        let pop_view: Vec<Candidate<P::Decision>> =
+            annotated.iter().map(|e| e.candidate.clone()).collect();
+        let front_view = pareto_front(&pop_view, &objectives);
+        let snap = Snapshot {
+            iteration: 0,
+            evaluations,
+            elapsed: started.elapsed(),
+            population: &pop_view,
+            pareto_front: Some(&front_view),
+            best: None,
+            objectives: &objectives,
+        };
+        if let ControlFlow::Break(()) = observer.observe(&snap) {
+            return finalize_nsga2(annotated, &objectives, evaluations, completed_generations);
+        }
+        drop(pop_view);
+        drop(front_view);
+
+        for generation in 1..=self.config.generations {
             // --- Phase 1: serial parent selection + variation ---
             let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
             while offspring_decisions.len() < n {
@@ -189,21 +220,46 @@ where
                 }
             }
             annotated = annotate(next, &objectives);
+            completed_generations = generation;
+
+            // Per-generation observation.
+            let pop_view: Vec<Candidate<P::Decision>> =
+                annotated.iter().map(|e| e.candidate.clone()).collect();
+            let front_view = pareto_front(&pop_view, &objectives);
+            let snap = Snapshot {
+                iteration: generation,
+                evaluations,
+                elapsed: started.elapsed(),
+                population: &pop_view,
+                pareto_front: Some(&front_view),
+                best: None,
+                objectives: &objectives,
+            };
+            if let ControlFlow::Break(()) = observer.observe(&snap) {
+                return finalize_nsga2(annotated, &objectives, evaluations, completed_generations);
+            }
         }
 
-        // Return final state.
-        let final_pop: Vec<Candidate<P::Decision>> =
-            annotated.into_iter().map(|e| e.candidate).collect();
-        let front = pareto_front(&final_pop, &objectives);
-        let best = best_candidate(&final_pop, &objectives);
-        OptimizationResult::new(
-            Population::new(final_pop),
-            front,
-            best,
-            evaluations,
-            self.config.generations,
-        )
+        finalize_nsga2(annotated, &objectives, evaluations, self.config.generations)
     }
+}
+
+fn finalize_nsga2<D: Clone>(
+    annotated: Vec<Nsga2Entry<D>>,
+    objectives: &crate::core::objective::ObjectiveSpace,
+    evaluations: usize,
+    generations: usize,
+) -> OptimizationResult<D> {
+    let final_pop: Vec<Candidate<D>> = annotated.into_iter().map(|e| e.candidate).collect();
+    let front = pareto_front(&final_pop, objectives);
+    let best = best_candidate(&final_pop, objectives);
+    OptimizationResult::new(
+        Population::new(final_pop),
+        front,
+        best,
+        evaluations,
+        generations,
+    )
 }
 
 fn annotate<D: Clone>(

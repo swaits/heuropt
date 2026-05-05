@@ -11,6 +11,14 @@ pub use crate::core::{
 
 pub use crate::traits::{Initializer, Optimizer, Repair, Variation};
 
+#[cfg(feature = "tracing")]
+pub use crate::observer::builtin::TracingObserver;
+pub use crate::observer::{
+    Observer, Snapshot,
+    builtin::{AllOf, AnyOf, MaxIterations, MaxTime, Periodic, Stagnation, TargetFitness},
+};
+pub use std::ops::ControlFlow;
+
 pub use crate::pareto::{
     Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis, non_dominated_sort,
     pareto_compare, pareto_front,

@@ -88,28 +88,49 @@ where
     I: Initializer<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
+        self.run_with(problem, &mut ())
+    }
+
+    fn run_with<O>(&mut self, problem: &P, observer: &mut O) -> OptimizationResult<P::Decision>
+    where
+        O: crate::observer::Observer<P::Decision>,
+    {
+        use crate::observer::Snapshot;
+        use std::ops::ControlFlow;
+
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
         let mut all: Vec<Candidate<P::Decision>> = Vec::new();
         let mut evaluations = 0usize;
+        let started = std::time::Instant::now();
+        let mut completed: usize = 0;
 
-        for _ in 0..self.config.iterations {
+        for iteration in 1..=self.config.iterations {
             let decisions = self
                 .initializer
                 .initialize(self.config.batch_size, &mut rng);
             evaluations += decisions.len();
             all.extend(evaluate_batch(problem, decisions));
+            completed = iteration;
+
+            let best = best_candidate(&all, &objectives);
+            let snap = Snapshot {
+                iteration,
+                evaluations,
+                elapsed: started.elapsed(),
+                population: &all,
+                pareto_front: None,
+                best: best.as_ref(),
+                objectives: &objectives,
+            };
+            if let ControlFlow::Break(()) = observer.observe(&snap) {
+                break;
+            }
         }
 
         let front = pareto_front(&all, &objectives);
         let best = best_candidate(&all, &objectives);
-        OptimizationResult::new(
-            Population::new(all),
-            front,
-            best,
-            evaluations,
-            self.config.iterations,
-        )
+        OptimizationResult::new(Population::new(all), front, best, evaluations, completed)
     }
 }
 

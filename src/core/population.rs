@@ -34,6 +34,11 @@ impl<D> Population<D> {
         self.candidates.iter()
     }
 
+    /// View the candidates as a slice.
+    pub fn as_slice(&self) -> &[Candidate<D>] {
+        &self.candidates
+    }
+
     /// Unwrap into the inner `Vec<Candidate<D>>`.
     pub fn into_vec(self) -> Vec<Candidate<D>> {
         self.candidates

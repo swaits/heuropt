@@ -22,7 +22,8 @@ pub use crate::operators::{
 };
 
 pub use crate::algorithms::{
-    CmaEs, CmaEsConfig, DifferentialEvolution, DifferentialEvolutionConfig,
+    AntColonyTsp, AntColonyTspConfig, CmaEs, CmaEsConfig, DifferentialEvolution,
+    DifferentialEvolutionConfig,
     GeneticAlgorithm, GeneticAlgorithmConfig, HillClimber, HillClimberConfig, Ibea,
     IbeaConfig, Moead, MoeadConfig, Mopso, MopsoConfig, Nsga2, Nsga2Config, Nsga3, Nsga3Config, Paes, PaesConfig, ParticleSwarm,
     ParticleSwarmConfig, RandomSearch, RandomSearchConfig, SimulatedAnnealing,

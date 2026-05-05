@@ -1,5 +1,6 @@
 //! Built-in reference optimizers.
 
+pub mod ant_colony_tsp;
 pub mod cma_es;
 pub mod differential_evolution;
 pub mod genetic_algorithm;
@@ -17,6 +18,7 @@ pub mod simulated_annealing;
 pub mod spea2;
 pub mod tabu_search;
 
+pub use ant_colony_tsp::*;
 pub use cma_es::*;
 pub use differential_evolution::*;
 pub use genetic_algorithm::*;

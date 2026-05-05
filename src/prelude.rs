@@ -16,7 +16,9 @@ pub use crate::pareto::{
     pareto_compare, pareto_front,
 };
 
-pub use crate::operators::{BitFlipMutation, GaussianMutation, RealBounds, SwapMutation};
+pub use crate::operators::{
+    BitFlipMutation, BoundedGaussianMutation, GaussianMutation, RealBounds, SwapMutation,
+};
 
 pub use crate::algorithms::{
     DifferentialEvolution, DifferentialEvolutionConfig, Nsga2, Nsga2Config, Paes, PaesConfig,

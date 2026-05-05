@@ -73,6 +73,59 @@ impl Variation<Vec<f64>> for GaussianMutation {
     }
 }
 
+/// Bounded variant of [`GaussianMutation`]: add `Normal(0, sigma)` noise to
+/// every variable of the first parent, then clamp each variable to its
+/// per-dimension inclusive bound.
+///
+/// Always returns exactly one child. Use this when you want feasibility
+/// maintained across generations without leaning on
+/// clamp-inside-`Problem::evaluate`.
+#[derive(Debug, Clone)]
+pub struct BoundedGaussianMutation {
+    /// Standard deviation of the Gaussian noise. Must be positive.
+    pub sigma: f64,
+    /// Per-variable inclusive bounds. Length must match the parent decision.
+    pub bounds: Vec<(f64, f64)>,
+}
+
+impl BoundedGaussianMutation {
+    /// Construct a `BoundedGaussianMutation`.
+    ///
+    /// # Panics
+    /// If `sigma <= 0.0` or any bound has `lo > hi`.
+    pub fn new(sigma: f64, bounds: Vec<(f64, f64)>) -> Self {
+        assert!(sigma > 0.0, "BoundedGaussianMutation sigma must be positive");
+        for (i, &(lo, hi)) in bounds.iter().enumerate() {
+            assert!(
+                lo <= hi,
+                "BoundedGaussianMutation bound at index {i} has lo > hi: ({lo}, {hi})",
+            );
+        }
+        Self { sigma, bounds }
+    }
+}
+
+impl Variation<Vec<f64>> for BoundedGaussianMutation {
+    fn vary(&mut self, parents: &[Vec<f64>], rng: &mut Rng) -> Vec<Vec<f64>> {
+        assert!(
+            !parents.is_empty(),
+            "BoundedGaussianMutation requires at least one parent",
+        );
+        assert_eq!(
+            parents[0].len(),
+            self.bounds.len(),
+            "BoundedGaussianMutation parent length must match bounds length",
+        );
+        let normal =
+            Normal::new(0.0, self.sigma).expect("Normal distribution rejected sigma");
+        let mut child = parents[0].clone();
+        for (x, &(lo, hi)) in child.iter_mut().zip(self.bounds.iter()) {
+            *x = (*x + normal.sample(rng)).clamp(lo, hi);
+        }
+        vec![child]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +182,41 @@ mod tests {
         let mut m = GaussianMutation { sigma: 0.1 };
         let mut rng = rng_from_seed(1);
         m.vary(&[] as &[Vec<f64>], &mut rng);
+    }
+
+    #[test]
+    fn bounded_gaussian_keeps_child_in_bounds() {
+        let mut m = BoundedGaussianMutation::new(5.0, vec![(-1.0, 1.0); 4]);
+        let mut rng = rng_from_seed(0);
+        let parent = vec![0.0_f64; 4];
+        // sigma=5 against bounds [-1, 1] guarantees clamping fires.
+        for _ in 0..100 {
+            let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+            assert_eq!(children.len(), 1);
+            assert_eq!(children[0].len(), 4);
+            for &x in &children[0] {
+                assert!(x >= -1.0 && x <= 1.0, "out of bounds: {x}");
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "sigma must be positive")]
+    fn bounded_gaussian_zero_sigma_panics() {
+        let _ = BoundedGaussianMutation::new(0.0, vec![(0.0, 1.0)]);
+    }
+
+    #[test]
+    #[should_panic(expected = "lo > hi")]
+    fn bounded_gaussian_invalid_bounds_panics() {
+        let _ = BoundedGaussianMutation::new(0.1, vec![(1.0, 0.0)]);
+    }
+
+    #[test]
+    #[should_panic(expected = "must match bounds length")]
+    fn bounded_gaussian_mismatched_length_panics() {
+        let mut m = BoundedGaussianMutation::new(0.1, vec![(0.0, 1.0); 3]);
+        let mut rng = rng_from_seed(0);
+        m.vary(&[vec![0.0; 2]], &mut rng);
     }
 }

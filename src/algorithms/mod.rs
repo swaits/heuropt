@@ -31,6 +31,7 @@ pub mod snes;
 pub mod spea2;
 pub mod tabu_search;
 pub mod tlbo;
+pub mod tpe;
 pub mod umda;
 
 pub use age_moea::*;
@@ -63,4 +64,5 @@ pub use snes::*;
 pub use spea2::*;
 pub use tabu_search::*;
 pub use tlbo::*;
+pub use tpe::*;
 pub use umda::*;

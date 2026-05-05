@@ -1,0 +1,33 @@
+# cargo-mutants configuration for heuropt.
+#
+# Run with:
+#   cargo install cargo-mutants
+#   cargo mutants                          # full sweep (slow)
+#   cargo mutants --in-diff HEAD~1         # only mutate recently-changed lines
+#
+# A *surviving* mutation = the test suite passed despite a code change,
+# which usually means a missing test or a missing invariant.
+#
+# This isn't gated CI; it's an advisory tool. The property tests in
+# tests/properties.rs are the natural place to land new invariants
+# discovered via mutation runs.
+
+# Files to skip mutating. We skip:
+#   - examples (illustrative, not core algorithm correctness)
+#   - benches (microbench harness, not behavior)
+#   - the docs/* spec markdown
+#   - tests_support (test helpers; mutating them changes test inputs,
+#     not behavior under test)
+exclude_globs = [
+    "examples/**/*.rs",
+    "benches/**/*.rs",
+    "src/tests_support/**/*.rs",
+]
+
+# `cargo-mutants` defaults to `cargo test` for the suite. Keep that.
+# `--no-shuffle` makes failure attribution deterministic.
+additional_cargo_test_args = ["--", "--test-threads=1"]
+
+# Time-out per mutated build+test cycle. Big enough for a slow test
+# (proptest can take ~10s) but short enough to detect infinite loops.
+timeout_multiplier = 5.0

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Decision tree update** in README to cover all v0.3.0 algorithms,
+  with a new top-level branch on "is each evaluation expensive?" so
+  `BayesianOpt` / `Tpe` / `Hyperband` have a clear home.
+- **Comparison results snapshot** at `examples/compare-results.md` —
+  reference output of the harness across 7 benchmark problems and ~20
+  algorithms, captured after v0.3.0 landed.
+- **Instruction-count benchmarks** via `gungraun` (the Rust 2026
+  rename of `iai-callgrind`) at `benches/hot_paths.rs`. Covers
+  `non_dominated_sort`, `crowding_distance`, `hypervolume_2d`,
+  `hypervolume_nd` (HSO), and one-generation costs of NSGA-II and
+  CMA-ES. Stable across machines via callgrind.
+- **Property-based test suite** at `tests/properties.rs` using
+  `proptest`. Covers Pareto-comparison antisymmetry/reflexivity,
+  `pareto_front`/`non_dominated_sort` partitioning, operator bounds-
+  preservation (SBX, PolyMut, BoundedGaussianMutation), repair
+  correctness (ClampToBounds, ProjectToSimplex), and seeded-
+  determinism on DE and CMA-ES.
+- **cargo-mutants config** at `.cargo/mutants.toml` for advisory
+  mutation testing. Not gated in CI; run with `cargo mutants` to
+  surface tests that don't actually check the behavior they look like
+  they do.
+
 ## [0.3.0] — 2026-05-05
 
 Theme: filling heuropt's expensive-evaluation, gradient-free, and

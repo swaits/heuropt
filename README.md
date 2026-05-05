@@ -466,6 +466,28 @@ and the metrics `spacing` and `hypervolume_2d`.
 
 See `docs/heuropt_tech_design_spec.md` for the full design rationale.
 
+## Testing
+
+heuropt is exhaustively tested across several layers:
+
+- **Unit + integration tests** (`cargo test`) — 313 tests covering
+  every algorithm, operator, metric, Pareto utility, and edge case
+  (empty/singleton/duplicate populations, flat fitness, zero-width
+  bounds, infeasible-only populations).
+- **Property-based tests** (`proptest`) — bounds preservation,
+  Pareto antisymmetry/reflexivity, partition correctness,
+  determinism, and seed-stability checks for every algorithm.
+- **Coverage-guided fuzzing** (`cargo +nightly fuzz run <target>`) —
+  eight targets at `fuzz/fuzz_targets/`, soaked for 60 s per target
+  in CI on every PR.
+- **Instruction-count benchmarks** (`cargo bench`) — `gungraun`
+  (callgrind) hot-path benchmarks for every algorithm and Pareto
+  utility, machine-stable so PR-level regressions show up.
+- **Mutation testing** (`cargo mutants`) — advisory; config at
+  `.cargo/mutants.toml`.
+- **CI** (`.github/workflows/ci.yml`) — fmt, clippy
+  (`-D warnings`), test (4-feature matrix), doc, MSRV (1.85), fuzz.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

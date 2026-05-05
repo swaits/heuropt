@@ -19,17 +19,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rename of `iai-callgrind`) at `benches/hot_paths.rs`. Covers
   `non_dominated_sort`, `crowding_distance`, `hypervolume_2d`,
   `hypervolume_nd` (HSO), and one-generation costs of NSGA-II and
-  CMA-ES. Stable across machines via callgrind.
-- **Property-based test suite** at `tests/properties.rs` using
-  `proptest`. Covers Pareto-comparison antisymmetry/reflexivity,
-  `pareto_front`/`non_dominated_sort` partitioning, operator bounds-
-  preservation (SBX, PolyMut, BoundedGaussianMutation), repair
-  correctness (ClampToBounds, ProjectToSimplex), and seeded-
-  determinism on DE and CMA-ES.
+  CMA-ES, plus a short-run bench for every algorithm. Stable across
+  machines via callgrind.
+- **Property-based test suite expansion**: `tests/properties.rs`
+  (Pareto-comparison antisymmetry, partitioning, operator bounds),
+  `tests/algorithm_properties.rs` (per-algorithm determinism +
+  population-size invariants — 32 tests, one per algorithm),
+  `tests/operator_properties.rs` (every `Variation` / `Initializer` /
+  `Repair` impl), `tests/metric_properties.rs` (HV / spacing
+  invariants), and `tests/numerical_stability.rs` (empty / singleton /
+  duplicate / flat-fitness / zero-width-bounds populations).
+- **Coverage-guided fuzz harness** at `fuzz/` (cargo-fuzz +
+  libFuzzer). Eight targets covering `pareto_compare`,
+  `non_dominated_sort`, `hypervolume_2d`, `ParetoArchive`,
+  `crowding_distance`, `spacing`, SBX/PolyMut, and the `Repair`
+  operators. Runs in CI for a short soak per PR; longer runs locally
+  via `cargo +nightly fuzz run <target>`.
 - **cargo-mutants config** at `.cargo/mutants.toml` for advisory
   mutation testing. Not gated in CI; run with `cargo mutants` to
   surface tests that don't actually check the behavior they look like
   they do.
+- **GitHub Actions CI** at `.github/workflows/ci.yml` with fmt /
+  clippy / test (4-feature matrix) / doc / MSRV / fuzz-smoke jobs,
+  all gated on `-D warnings`.
+
+### Fixed
+
+- `pareto::sort::non_dominated_sort` previously dropped indices when
+  the dominance graph contained a cycle (which arises when objectives
+  contain NaN — `pareto_compare` becomes intransitive). Fuzzing the
+  partition invariant surfaced the bug; orphans now go into a final
+  residual front.
+- `operators::repair::ProjectToSimplex` could silently return the
+  all-zero vector when the input vector's magnitude dwarfed `total`
+  (the standard Duchi/Held-Wolfe τ computation lost precision and
+  τ ≈ max(x), so `max(x_i - τ, 0)` rounded to zero everywhere).
+  Detected by the `clamp_to_bounds` fuzzer; now falls through to a
+  degenerate "all mass on argmax" projection above a 1e15 magnitude
+  ratio, and is robust to floating-point precision loss in the
+  algorithm's inner loop.
 
 ## [0.3.0] — 2026-05-05
 

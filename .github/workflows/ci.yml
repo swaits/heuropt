@@ -104,6 +104,10 @@ jobs:
         with:
           workspaces: fuzz -> target
       - name: Install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        # No `--locked`: cargo-fuzz's bundled Cargo.lock pins
+        # rustix=0.36.5, which uses the now-removed `rustc_attrs` cfg
+        # name and fails to build on current nightly. Letting cargo
+        # resolve fresh picks a recent rustix that builds cleanly.
+        run: cargo install cargo-fuzz
       - name: 60-second soak
         run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=60

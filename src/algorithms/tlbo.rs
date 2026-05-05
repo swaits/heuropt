@@ -142,7 +142,7 @@ where
 
         let final_pop: Vec<Candidate<Vec<f64>>> = decisions
             .into_iter()
-            .zip(evals.into_iter())
+            .zip(evals)
             .map(|(d, e)| Candidate::new(d, e))
             .collect();
         let best = best_candidate(&final_pop, &objectives);

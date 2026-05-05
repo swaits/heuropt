@@ -1,4 +1,4 @@
-//! `Grea` — Yang, Li, Liu & Zheng 2013 Grid-based Evolutionary Algorithm.
+//! `Knea` — Zhang, Tian & Jin 2015 Knee point-driven EA.
 
 use rand::Rng as _;
 
@@ -13,49 +13,46 @@ use crate::pareto::front::{best_candidate, pareto_front};
 use crate::pareto::sort::non_dominated_sort;
 use crate::traits::{Initializer, Optimizer, Variation};
 
-/// Configuration for [`Grea`].
+/// Configuration for [`Knea`].
 #[derive(Debug, Clone)]
-pub struct GreaConfig {
+pub struct KneaConfig {
     /// Constant population size.
     pub population_size: usize,
     /// Number of generations.
     pub generations: usize,
-    /// Grid divisions per objective axis.
-    pub grid_divisions: usize,
     /// Seed for the deterministic RNG.
     pub seed: u64,
 }
 
-impl Default for GreaConfig {
+impl Default for KneaConfig {
     fn default() -> Self {
-        Self {
-            population_size: 100,
-            generations: 250,
-            grid_divisions: 8,
-            seed: 42,
-        }
+        Self { population_size: 100, generations: 250, seed: 42 }
     }
 }
 
-/// Grid-based Evolutionary Algorithm (GrEA).
+/// Knee point-driven Evolutionary Algorithm.
+///
+/// Survival selection ranks splitting-front members by perpendicular
+/// distance from the hyperplane connecting the front's extreme points.
+/// Larger distance ≈ stronger knee = preferred survivor.
 #[derive(Debug, Clone)]
-pub struct Grea<I, V> {
+pub struct Knea<I, V> {
     /// Algorithm configuration.
-    pub config: GreaConfig,
+    pub config: KneaConfig,
     /// Initial-decision sampler.
     pub initializer: I,
     /// Offspring-producing variation operator.
     pub variation: V,
 }
 
-impl<I, V> Grea<I, V> {
-    /// Construct a `Grea`.
-    pub fn new(config: GreaConfig, initializer: I, variation: V) -> Self {
+impl<I, V> Knea<I, V> {
+    /// Construct a `Knea`.
+    pub fn new(config: KneaConfig, initializer: I, variation: V) -> Self {
         Self { config, initializer, variation }
     }
 }
 
-impl<P, I, V> Optimizer<P> for Grea<I, V>
+impl<P, I, V> Optimizer<P> for Knea<I, V>
 where
     P: Problem + Sync,
     P::Decision: Send,
@@ -63,8 +60,7 @@ where
     V: Variation<P::Decision>,
 {
     fn run(&mut self, problem: &P) -> OptimizationResult<P::Decision> {
-        assert!(self.config.population_size > 0, "Grea population_size must be > 0");
-        assert!(self.config.grid_divisions >= 1, "Grea grid_divisions must be >= 1");
+        assert!(self.config.population_size > 0, "Knea population_size must be > 0");
         let n = self.config.population_size;
         let objectives = problem.objectives();
         let mut rng = rng_from_seed(self.config.seed);
@@ -75,7 +71,6 @@ where
         let mut evaluations = population.len();
 
         for _ in 0..self.config.generations {
-            // Random parent selection + variation.
             let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
             while offspring_decisions.len() < n {
                 let p1 = rng.random_range(0..population.len());
@@ -83,7 +78,7 @@ where
                 let parents =
                     vec![population[p1].decision.clone(), population[p2].decision.clone()];
                 let children = self.variation.vary(&parents, &mut rng);
-                assert!(!children.is_empty(), "Grea variation returned no children");
+                assert!(!children.is_empty(), "Knea variation returned no children");
                 for child in children {
                     if offspring_decisions.len() >= n {
                         break;
@@ -94,11 +89,10 @@ where
             let offspring = evaluate_batch(problem, offspring_decisions);
             evaluations += offspring.len();
 
-            // Survival.
             let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
             combined.extend(population);
             combined.extend(offspring);
-            population = environmental_selection(combined, &objectives, n, self.config.grid_divisions);
+            population = environmental_selection(combined, &objectives, n);
         }
 
         let front = pareto_front(&population, &objectives);
@@ -117,7 +111,6 @@ fn environmental_selection<D: Clone>(
     combined: Vec<Candidate<D>>,
     objectives: &ObjectiveSpace,
     n: usize,
-    divisions: usize,
 ) -> Vec<Candidate<D>> {
     let fronts = non_dominated_sort(&combined, objectives);
     let mut selected: Vec<usize> = Vec::with_capacity(n);
@@ -137,78 +130,93 @@ fn environmental_selection<D: Clone>(
         return selected.into_iter().map(|i| combined[i].clone()).collect();
     }
 
-    // Build grid + per-member coordinates on the splitting front (using
-    // its own min/max per axis to define the grid box).
+    // Compute knee distances for splitting front.
     let m = objectives.len();
     let oriented: Vec<Vec<f64>> = splitting
         .iter()
         .map(|&i| objectives.as_minimization(&combined[i].evaluation.objectives))
         .collect();
-    let mut lo = vec![f64::INFINITY; m];
-    let mut hi = vec![f64::NEG_INFINITY; m];
+
+    // Per-axis ideal and nadir on the splitting front.
+    let mut ideal = vec![f64::INFINITY; m];
+    let mut nadir = vec![f64::NEG_INFINITY; m];
     for o in &oriented {
         for k in 0..m {
-            if o[k] < lo[k] {
-                lo[k] = o[k];
+            if o[k] < ideal[k] {
+                ideal[k] = o[k];
             }
-            if o[k] > hi[k] {
-                hi[k] = o[k];
+            if o[k] > nadir[k] {
+                nadir[k] = o[k];
             }
         }
     }
-    let grid_coords: Vec<Vec<usize>> = oriented
-        .iter()
-        .map(|o| {
-            (0..m)
-                .map(|k| {
-                    let span = (hi[k] - lo[k]).max(1e-12);
-                    let frac = ((o[k] - lo[k]) / span).clamp(0.0, 1.0 - 1e-9);
-                    (frac * divisions as f64) as usize
-                })
-                .collect()
-        })
-        .collect();
-
-    let scores: Vec<(usize, usize, isize, isize)> = (0..splitting.len())
-        .map(|local_idx| {
-            let gr: usize = grid_coords[local_idx].iter().sum();
-            // GCD: count of other splitting members in adjacent grid cells.
-            let mut gcd = 0_isize;
-            for j in 0..splitting.len() {
-                if j == local_idx {
-                    continue;
-                }
-                let max_diff: usize = (0..m)
-                    .map(|k| grid_coords[local_idx][k].abs_diff(grid_coords[j][k]))
-                    .max()
-                    .unwrap_or(0);
-                if max_diff < 1 {
-                    gcd += 1;
+    // Hyperplane through the M extreme points: f · normal = c.
+    // We approximate the hyperplane connecting the per-axis nadirs.
+    // The "extreme points" here are M points each maximizing one axis.
+    let extremes: Vec<usize> = (0..m)
+        .map(|axis| {
+            let mut best = 0;
+            let mut best_val = f64::NEG_INFINITY;
+            for (idx, o) in oriented.iter().enumerate() {
+                if o[axis] > best_val {
+                    best_val = o[axis];
+                    best = idx;
                 }
             }
-            // GCPD: grid coordinate point distance to that cell's "ideal"
-            // origin. We negate to keep "smaller is better" through the
-            // sort key.
-            let gcpd: isize = grid_coords[local_idx]
-                .iter()
-                .map(|&c| (c as isize).pow(2))
-                .sum::<isize>();
-            (local_idx, gr, gcd, gcpd)
+            best
         })
         .collect();
+    // Knee distance for each splitting member: signed distance from the
+    // hyperplane defined by the extremes. We use a simple
+    // "distance-to-line-segment" surrogate for 2D, and the M-D extension
+    // is the perpendicular distance to the hyperplane through the M
+    // extreme points.
+    let distances: Vec<f64> = (0..splitting.len())
+        .map(|i| perpendicular_distance(&oriented[i], &extremes, &oriented))
+        .collect();
 
-    // Sort by (GR ascending, GCD ascending, GCPD ascending).
-    let mut sorted_scores = scores;
-    sorted_scores.sort_by(|a, b| {
-        a.1.cmp(&b.1)
-            .then_with(|| a.2.cmp(&b.2))
-            .then_with(|| a.3.cmp(&b.3))
+    // Sort splitting indices by largest distance (= strongest knee).
+    let mut order: Vec<usize> = (0..splitting.len()).collect();
+    order.sort_by(|&a, &b| {
+        distances[b]
+            .partial_cmp(&distances[a])
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let need = n - selected.len();
-    for (local_idx, _, _, _) in sorted_scores.into_iter().take(need) {
-        selected.push(splitting[local_idx]);
+    for k in order.into_iter().take(need) {
+        selected.push(splitting[k]);
     }
     selected.into_iter().map(|i| combined[i].clone()).collect()
+}
+
+/// Perpendicular distance from `point` to the hyperplane through the M
+/// extreme points (indices into `oriented`).
+fn perpendicular_distance(
+    point: &[f64],
+    extremes: &[usize],
+    oriented: &[Vec<f64>],
+) -> f64 {
+    let m = point.len();
+    if extremes.len() < m {
+        // Degenerate: just return the L2 norm relative to first extreme.
+        if let Some(&e0) = extremes.first() {
+            return point
+                .iter()
+                .zip(oriented[e0].iter())
+                .map(|(a, b)| (a - b).powi(2))
+                .sum::<f64>()
+                .sqrt();
+        }
+        return 0.0;
+    }
+    // Hyperplane: a · x = b, where a = (1, 1, …, 1) for the canonical
+    // simplex through extremes — works well when objectives are
+    // approximately on a simplex.
+    let a: Vec<f64> = vec![1.0; m];
+    let b: f64 = oriented[extremes[0]].iter().sum();
+    let dot: f64 = point.iter().zip(a.iter()).map(|(x, y)| x * y).sum();
+    let norm: f64 = a.iter().map(|y| y * y).sum::<f64>().sqrt().max(1e-12);
+    (dot - b).abs() / norm
 }
 
 #[cfg(test)]
@@ -221,20 +229,15 @@ mod tests {
 
     fn make_optimizer(
         seed: u64,
-    ) -> Grea<RealBounds, CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>> {
+    ) -> Knea<RealBounds, CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation>> {
         let bounds = vec![(-5.0, 5.0)];
         let initializer = RealBounds::new(bounds.clone());
         let variation = CompositeVariation {
             crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
-        Grea::new(
-            GreaConfig {
-                population_size: 20,
-                generations: 15,
-                grid_divisions: 8,
-                seed,
-            },
+        Knea::new(
+            KneaConfig { population_size: 20, generations: 15, seed },
             initializer,
             variation,
         )

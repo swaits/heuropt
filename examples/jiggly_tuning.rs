@@ -63,6 +63,24 @@ const SWEET_HI: u32 = 45;
 const N_DAYS: usize = 1000;
 
 // -----------------------------------------------------------------------------
+// A-posteriori decision weights (must sum to 1.0).
+// -----------------------------------------------------------------------------
+const W_LUNCH: f64 = 0.30; // top — design goal
+const W_AFTER: f64 = 0.25; // top — minimize after-hours waste
+const W_WORK: f64 = 0.20; // medium — failures bad but recoverable
+const W_PRESS: f64 = 0.15; // matters with a hinge below
+const W_BALANCE: f64 = 0.10; // bonus for longer yellow + red phases
+
+// Press hinge: full reward at or below LOW, linearly drops to 0 at COMFORT_CAP,
+// and any candidate with mean_presses > COMFORT_CAP is rejected outright.
+const PRESS_HINGE_LOW: f64 = 2.0;
+const PRESS_COMFORT_CAP: f64 = 3.0;
+
+// Balance bonus saturates: a min(yellow_width, red_width) of >= this many
+// minutes scores the full balance term.
+const BALANCE_SATURATION_MIN: f64 = 10.0;
+
+// -----------------------------------------------------------------------------
 // Day model + Monte Carlo (same model as scripts/tune_runtime.py)
 // -----------------------------------------------------------------------------
 
@@ -443,16 +461,18 @@ fn main() {
     //
     // Every point on the front is incomparable in the strict Pareto sense —
     // none dominates another. To surface ONE recommendation we apply explicit
-    // weights to the four normalized objectives. Anyone with different
-    // priorities can read the front above and pick a different row.
+    // weights to four normalized outcome axes plus two structural terms:
     //
-    // We add the firmware's shipping defaults to the candidate set so they
-    // compete on equal footing with the front the optimizer found.
-
-    const W_WORK: f64 = 0.45; // work failures hurt most
-    const W_LUNCH: f64 = 0.30; // the design goal
-    const W_PRESS: f64 = 0.15; // UX friction
-    const W_AFTER: f64 = 0.10; // minor screen-burn cost
+    //   * `lunch_sleep` (max), `after_hours` (min), `work_fail` (min) —
+    //     normalized to [0, 1] across the candidate set.
+    //   * `presses` — hinge: full reward when <= PRESS_HINGE_LOW, ramps to
+    //     zero at PRESS_COMFORT_CAP, candidates above the cap are rejected.
+    //   * `balance` — bonus for longer warning phases:
+    //     `min(YA - RA, RA - FRA)` saturated at BALANCE_SATURATION_MIN.
+    //
+    // Anyone with different priorities can read the front above and pick a
+    // different row. We add the firmware's shipping defaults to the
+    // candidate set so they compete on equal footing with the front.
 
     let mut candidates: Vec<(String, Row)> = rows
         .iter()
@@ -468,11 +488,20 @@ fn main() {
 
     println!("=== ranked by weighted preferences ===");
     println!(
-        "  weights: work_fail {}% · lunch_sleep {}% · presses {}% · after_hours {}%",
-        (W_WORK * 100.0) as i32,
+        "  weights: lunch_sleep {}% · after_hours {}% · work_fail {}% · presses {}% · balance {}%",
         (W_LUNCH * 100.0) as i32,
-        (W_PRESS * 100.0) as i32,
         (W_AFTER * 100.0) as i32,
+        (W_WORK * 100.0) as i32,
+        (W_PRESS * 100.0) as i32,
+        (W_BALANCE * 100.0) as i32,
+    );
+    println!(
+        "  press hinge: full reward ≤ {:.0}/d, ramps to 0 at {:.0}/d, REJECTED above",
+        PRESS_HINGE_LOW, PRESS_COMFORT_CAP,
+    );
+    println!(
+        "  balance bonus: min(yellow_width, red_width), saturates at {:.0} min",
+        BALANCE_SATURATION_MIN,
     );
     println!("  candidate set: {} Pareto-front rows + 1 shipping default", rows.len());
     println!();
@@ -494,7 +523,6 @@ fn main() {
         .unwrap_or(0);
 
     let max_work = candidates.iter().map(|(_, r)| r.work_fail).fold(0.0, f64::max);
-    let max_press = candidates.iter().map(|(_, r)| r.presses).fold(0.0, f64::max);
 
     println!("=== RECOMMENDED PICK ({top_label}) ===");
     println!(
@@ -506,23 +534,42 @@ fn main() {
     );
     println!("  weighted score = {top_score:.3}");
     println!();
+    let yellow_w = top.ya - top.ra;
+    let red_w = top.ra - top.fra;
     println!("Why:");
-    println!(
-        "  • {} mean work-time failure ({} better than the worst candidate)",
-        fmt_minutes(top.work_fail),
-        ratio_str(max_work, top.work_fail.max(1e-9)),
-    );
     println!(
         "  • {} mean lunch sleep ({:.1}% land in the 12:15–12:45 sweet spot)",
         fmt_minutes(top.lunch),
         top.p_sweet * 100.0,
     );
     println!(
-        "  • {:.2} button presses/day ({} fewer than the worst candidate)",
-        top.presses,
-        ratio_str(max_press, top.presses.max(1e-9)),
+        "  • {} mean after-hours awake (kept tight, your second priority)",
+        fmt_minutes(top.after),
     );
-    println!("  • {} mean after-hours awake (negligible)", fmt_minutes(top.after));
+    println!(
+        "  • {} mean work-time failure ({} better than the worst candidate)",
+        fmt_minutes(top.work_fail),
+        ratio_str(max_work, top.work_fail.max(1e-9)),
+    );
+    let press_note = if top.presses <= PRESS_HINGE_LOW {
+        format!("inside your no-penalty zone ≤{:.0}/d", PRESS_HINGE_LOW)
+    } else {
+        format!("{:.2}/d above the {:.0}-press hinge", top.presses - PRESS_HINGE_LOW, PRESS_HINGE_LOW)
+    };
+    println!(
+        "  • {:.2} button presses/day ({}, {} below your {:.0}/d comfort cap)",
+        top.presses,
+        press_note,
+        ratio_str(PRESS_COMFORT_CAP, top.presses.max(1e-9)),
+        PRESS_COMFORT_CAP,
+    );
+    println!(
+        "  • warning phases: yellow {} min, red {} min, fast-red {} min (balance score {:.2})",
+        yellow_w,
+        red_w,
+        top.fra,
+        balance_score_for(top),
+    );
 
     if top_label != "shipping default" {
         println!();
@@ -540,35 +587,60 @@ fn main() {
     }
 }
 
-/// Score every row in `rows` by a fixed weighted sum of normalized objectives.
+/// Score every row in `rows` by a weighted sum that combines normalized
+/// outcome axes with a press hinge and a phase-balance bonus.
 ///
-/// Each objective is normalized to `[0, 1]` across `rows` with `1` meaning
-/// "best on the front" and `0` meaning "worst on the front", direction-aware
-/// (lunch is maximize, the rest are minimize).
+/// `work_fail`, `lunch`, and `after` are normalized to `[0, 1]` across `rows`
+/// (best→1, worst→0; direction-aware). `presses` uses a hinge that rewards
+/// values at or below `PRESS_HINGE_LOW`, ramps linearly to zero at
+/// `PRESS_COMFORT_CAP`, and rejects candidates above the cap by returning
+/// `f64::NEG_INFINITY`. `balance` is a bonus for longer yellow + red
+/// phases, computed as `min(YA - RA, RA - FRA)` saturated at
+/// `BALANCE_SATURATION_MIN`.
 fn compute_weighted_scores(rows: &[Row]) -> Vec<f64> {
-    const W_WORK: f64 = 0.45;
-    const W_LUNCH: f64 = 0.30;
-    const W_PRESS: f64 = 0.15;
-    const W_AFTER: f64 = 0.10;
-
     let work_min = rows.iter().map(|r| r.work_fail).fold(f64::INFINITY, f64::min);
     let work_max = rows.iter().map(|r| r.work_fail).fold(f64::NEG_INFINITY, f64::max);
     let lunch_min = rows.iter().map(|r| r.lunch).fold(f64::INFINITY, f64::min);
     let lunch_max = rows.iter().map(|r| r.lunch).fold(f64::NEG_INFINITY, f64::max);
-    let press_min = rows.iter().map(|r| r.presses).fold(f64::INFINITY, f64::min);
-    let press_max = rows.iter().map(|r| r.presses).fold(f64::NEG_INFINITY, f64::max);
     let after_min = rows.iter().map(|r| r.after).fold(f64::INFINITY, f64::min);
     let after_max = rows.iter().map(|r| r.after).fold(f64::NEG_INFINITY, f64::max);
 
     rows.iter()
         .map(|r| {
+            // Hard comfort cap on presses.
+            if r.presses > PRESS_COMFORT_CAP {
+                return f64::NEG_INFINITY;
+            }
             let work = norm_min(r.work_fail, work_min, work_max);
             let lunch = norm_max(r.lunch, lunch_min, lunch_max);
-            let press = norm_min(r.presses, press_min, press_max);
             let after = norm_min(r.after, after_min, after_max);
-            W_WORK * work + W_LUNCH * lunch + W_PRESS * press + W_AFTER * after
+            // Hinge: 1.0 at or below LOW, linear ramp to 0.0 at the cap.
+            let press_score = if r.presses <= PRESS_HINGE_LOW {
+                1.0
+            } else {
+                ((PRESS_COMFORT_CAP - r.presses) / (PRESS_COMFORT_CAP - PRESS_HINGE_LOW))
+                    .clamp(0.0, 1.0)
+            };
+            // Balance bonus: longer yellow + red is better, saturated.
+            let balance_score = balance_score_for(r);
+
+            W_LUNCH * lunch
+                + W_AFTER * after
+                + W_WORK * work
+                + W_PRESS * press_score
+                + W_BALANCE * balance_score
         })
         .collect()
+}
+
+/// Balance bonus for a row: `min(YA - RA, RA - FRA)` clamped to
+/// `[0, BALANCE_SATURATION_MIN]` and divided by saturation so the result is
+/// in `[0, 1]`.
+fn balance_score_for(r: &Row) -> f64 {
+    let yellow_w = (r.ya - r.ra) as f64;
+    let red_w = (r.ra - r.fra) as f64;
+    let raw = yellow_w.min(red_w).max(0.0);
+    (raw / BALANCE_SATURATION_MIN).clamp(0.0, 1.0)
 }
 
 /// Normalize a minimize-direction value to `[0, 1]` (best→1, worst→0).

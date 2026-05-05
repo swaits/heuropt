@@ -73,6 +73,105 @@ fn challenger_wins<D>(c: &Candidate<D>, b: &Candidate<D>, dir: Direction) -> boo
     }
 }
 
+/// Stochastic-ranking selection (Runarsson & Yao 2000) for single-objective
+/// constrained problems.
+///
+/// Performs a probabilistic bubble-sort pass on the population — each
+/// pairwise comparison uses the *objective* value with probability `pf`,
+/// otherwise it uses the standard feasibility-then-violation-then-objective
+/// rule. The classic value is `pf = 0.45`; values close to `0.5` weight
+/// objective improvement against constraint satisfaction.
+///
+/// Returns `count` decisions cloned from the top of the ranked
+/// population. Useful when constraint satisfaction is hard and strict
+/// feasibility-first selection traps the search outside the feasible
+/// region.
+///
+/// # Panics
+/// If `objectives` does not contain exactly one objective, if `pf` is
+/// outside `[0.0, 1.0]`, or if the population is empty when `count > 0`.
+pub fn stochastic_ranking_select<D: Clone>(
+    population: &[Candidate<D>],
+    objectives: &ObjectiveSpace,
+    pf: f64,
+    count: usize,
+    rng: &mut Rng,
+) -> Vec<D> {
+    assert!(
+        objectives.is_single_objective(),
+        "stochastic_ranking_select requires exactly one objective",
+    );
+    assert!(
+        (0.0..=1.0).contains(&pf),
+        "stochastic_ranking_select pf must be in [0.0, 1.0]",
+    );
+    if count == 0 {
+        return Vec::new();
+    }
+    assert!(
+        !population.is_empty(),
+        "stochastic_ranking_select called on empty population with count > 0",
+    );
+
+    let direction = objectives.objectives[0].direction;
+    let n = population.len();
+    let mut order: Vec<usize> = (0..n).collect();
+
+    // Bubble-sort with at most n full sweeps (Runarsson & Yao §3).
+    for _ in 0..n {
+        let mut swapped = false;
+        for i in 0..n - 1 {
+            let a = &population[order[i]].evaluation;
+            let b = &population[order[i + 1]].evaluation;
+            let use_objective = rng.random::<f64>() < pf;
+            let a_first = if use_objective || (a.is_feasible() && b.is_feasible()) {
+                better_by_objective(a, b, direction)
+            } else {
+                better_by_feasibility(a, b, direction)
+            };
+            if !a_first {
+                order.swap(i, i + 1);
+                swapped = true;
+            }
+        }
+        if !swapped {
+            break;
+        }
+    }
+
+    let mut out = Vec::with_capacity(count);
+    for k in 0..count {
+        out.push(population[order[k % n]].decision.clone());
+    }
+    out
+}
+
+fn better_by_objective(
+    a: &crate::core::evaluation::Evaluation,
+    b: &crate::core::evaluation::Evaluation,
+    direction: Direction,
+) -> bool {
+    let av = a.objectives.first().copied().unwrap_or(f64::INFINITY);
+    let bv = b.objectives.first().copied().unwrap_or(f64::INFINITY);
+    match direction {
+        Direction::Minimize => av < bv,
+        Direction::Maximize => av > bv,
+    }
+}
+
+fn better_by_feasibility(
+    a: &crate::core::evaluation::Evaluation,
+    b: &crate::core::evaluation::Evaluation,
+    direction: Direction,
+) -> bool {
+    match (a.is_feasible(), b.is_feasible()) {
+        (true, false) => true,
+        (false, true) => false,
+        (false, false) => a.constraint_violation < b.constraint_violation,
+        (true, true) => better_by_objective(a, b, direction),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +225,41 @@ mod tests {
         let pop = [cand_min(1, 1.0)];
         let mut rng = rng_from_seed(0);
         let _ = tournament_select_single_objective(&pop, &s, 2, 1, &mut rng);
+    }
+
+    #[test]
+    fn stochastic_ranking_returns_count_decisions() {
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [cand_min(1, 5.0), cand_min(2, 1.0), cand_min(3, 9.0)];
+        let mut rng = rng_from_seed(7);
+        let picks = stochastic_ranking_select(&pop, &s, 0.45, 4, &mut rng);
+        assert_eq!(picks.len(), 4);
+        for p in &picks {
+            assert!([1, 2, 3].contains(p));
+        }
+    }
+
+    #[test]
+    fn stochastic_ranking_pf_zero_is_feasibility_first() {
+        // With pf = 0, the algorithm reduces to strict feasibility-first
+        // ordering, so the best feasible candidate should top the rank.
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [
+            Candidate::new(1u32, Evaluation::constrained(vec![0.0], 5.0)), // infeasible
+            Candidate::new(2u32, Evaluation::new(vec![10.0])),              // feasible, big f
+            Candidate::new(3u32, Evaluation::new(vec![3.0])),               // feasible, small f
+        ];
+        let mut rng = rng_from_seed(0);
+        let picks = stochastic_ranking_select(&pop, &s, 0.0, 3, &mut rng);
+        assert_eq!(picks[0], 3); // best feasible first
+    }
+
+    #[test]
+    #[should_panic(expected = "pf must be in [0.0, 1.0]")]
+    fn stochastic_ranking_pf_out_of_range_panics() {
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [cand_min(1, 1.0)];
+        let mut rng = rng_from_seed(0);
+        let _ = stochastic_ranking_select(&pop, &s, 1.5, 1, &mut rng);
     }
 }

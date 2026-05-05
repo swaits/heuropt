@@ -6,4 +6,5 @@ pub mod core;
 pub mod operators;
 pub mod pareto;
 pub mod prelude;
+pub mod selection;
 pub mod traits;

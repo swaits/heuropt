@@ -219,10 +219,10 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
     //     corresponding sub-reference), multiplied by band thickness, is
     //     the band's HV contribution.
     //
-    // Because boxes extend from `p[last]` UP TO `reference[last]`, every
-    // point is active in the band immediately below the reference. We
-    // therefore start with `active = all points` and REMOVE the largest
-    // remaining last-axis point each iteration.
+    // We sort points ascending by the last axis once, then iterate from
+    // the largest last-axis value downward. The active set at iteration
+    // `k` is exactly the prefix `sorted[..=k]` — no allocations or
+    // linear-scan removals needed.
     let last = m - 1;
     let mut sorted: Vec<Vec<f64>> = points.to_vec();
     sorted.sort_by(|a, b| {
@@ -231,24 +231,32 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    let sub_reference: Vec<f64> = reference[..last].to_vec();
+    // Pre-project all points onto the first M-1 axes once. The active
+    // set at each band is the prefix `projected_all[..=k]`; we slice
+    // that prefix instead of rebuilding it per band.
+    let projected_all: Vec<Vec<f64>> = sorted.iter().map(|q| q[..last].to_vec()).collect();
+    let sub_reference: &[f64] = &reference[..last];
     let mut total = 0.0;
-    let mut active: Vec<Vec<f64>> = sorted.clone();
     let mut prev = reference[last];
-    for p in sorted.into_iter().rev() {
+    for k in (0..sorted.len()).rev() {
+        let p = &sorted[k];
         let depth = prev - p[last];
-        if depth > 0.0 && !active.is_empty() {
-            let projected: Vec<Vec<f64>> = active.iter().map(|q| q[..last].to_vec()).collect();
-            let nd = non_dominated_projection(&projected);
-            total += depth * hso_recursive(&nd, &sub_reference);
-        }
-        // Remove the just-processed point (the one with the largest
-        // remaining last-axis value).
-        let idx = active
-            .iter()
-            .position(|q| (q[last] - p[last]).abs() < 1e-15 && q[..last] == p[..last]);
-        if let Some(i) = idx {
-            active.swap_remove(i);
+        if depth > 0.0 {
+            let active = &projected_all[..=k];
+            // The 2-D base case sweeps in sorted-x order and skips any
+            // point with `y >= last_y`, which is exactly the dominance
+            // filter — so for M=3 (sub_reference len 2) we can hand
+            // `active` straight to `hso_recursive` without paying for
+            // an O(K²) `non_dominated_projection` first. For M≥4 we
+            // still need the explicit filter to keep the recursion's
+            // upper levels honest.
+            let inner = if sub_reference.len() == 2 {
+                hso_recursive(active, sub_reference)
+            } else {
+                let nd = non_dominated_projection(active);
+                hso_recursive(&nd, sub_reference)
+            };
+            total += depth * inner;
         }
         prev = p[last];
     }

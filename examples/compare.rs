@@ -234,6 +234,43 @@ fn zdt1_nsga2(seed: u64) -> MoRun {
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
 }
 
+fn zdt1_mopso(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = RealBounds::new(vec![(0.0, 1.0); ZDT1_DIM]);
+    let swarm = 100;
+    let gens = (ZDT1_BUDGET - 2 * swarm) / swarm;
+    let config = MopsoConfig {
+        swarm_size: swarm,
+        generations: gens,
+        archive_size: 100,
+        inertia: 0.7,
+        cognitive: 1.5,
+        social: 1.5,
+        seed,
+    };
+    let mut opt = Mopso::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn zdt1_ibea(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 100;
+    let gens = ZDT1_BUDGET / pop;
+    let config = IbeaConfig { population_size: pop, generations: gens, kappa: 0.05, seed };
+    let mut opt = Ibea::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
 fn zdt1_moead(seed: u64) -> MoRun {
     let problem = Zdt1 { dim: ZDT1_DIM };
     let bounds = vec![(0.0, 1.0); ZDT1_DIM];
@@ -338,6 +375,43 @@ fn dtlz2_spea2(seed: u64) -> MoRun {
         seed,
     };
     let mut opt = Spea2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_mopso(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = RealBounds::new(vec![(0.0, 1.0); DTLZ2_DIM]);
+    let swarm = 92;
+    let gens = (DTLZ2_BUDGET - 2 * swarm) / swarm;
+    let config = MopsoConfig {
+        swarm_size: swarm,
+        generations: gens,
+        archive_size: 100,
+        inertia: 0.7,
+        cognitive: 1.5,
+        social: 1.5,
+        seed,
+    };
+    let mut opt = Mopso::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_ibea(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 92;
+    let gens = DTLZ2_BUDGET / pop;
+    let config = IbeaConfig { population_size: pop, generations: gens, kappa: 0.05, seed };
+    let mut opt = Ibea::new(config, initializer, variation);
     let t0 = Instant::now();
     let result = opt.run(&problem);
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
@@ -487,6 +561,109 @@ fn rastrigin_de(seed: u64) -> SoRun {
     }
 }
 
+fn rastrigin_hill_climber(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let initializer = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let variation = BoundedGaussianMutation::new(0.3, vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let config = HillClimberConfig { iterations: RASTRIGIN_BUDGET, seed };
+    let mut opt = HillClimber::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_simulated_annealing(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let initializer = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let variation = BoundedGaussianMutation::new(0.5, vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let config = SimulatedAnnealingConfig {
+        iterations: RASTRIGIN_BUDGET,
+        initial_temperature: 5.0,
+        final_temperature: 1e-3,
+        seed,
+    };
+    let mut opt = SimulatedAnnealing::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_genetic_algorithm(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = vec![(-5.12, 5.12); RASTRIGIN_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / RASTRIGIN_DIM as f64),
+    };
+    let pop = 50;
+    let gens = (RASTRIGIN_BUDGET - pop) / pop;
+    let config = GeneticAlgorithmConfig {
+        population_size: pop,
+        generations: gens,
+        tournament_size: 2,
+        elitism: 2,
+        seed,
+    };
+    let mut opt = GeneticAlgorithm::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_particle_swarm(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let swarm = 40;
+    // PSO does swarm + swarm·gens + final evaluations. Approximate budget.
+    let gens = (RASTRIGIN_BUDGET - 2 * swarm) / swarm;
+    let config = ParticleSwarmConfig {
+        swarm_size: swarm,
+        generations: gens,
+        inertia: 0.7,
+        cognitive: 1.5,
+        social: 1.5,
+        seed,
+    };
+    let mut opt = ParticleSwarm::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn rastrigin_cma_es(seed: u64) -> SoRun {
+    let problem = Rastrigin { dim: RASTRIGIN_DIM };
+    let bounds = RealBounds::new(vec![(-5.12, 5.12); RASTRIGIN_DIM]);
+    let pop = 16;
+    let gens = RASTRIGIN_BUDGET / pop;
+    let config = CmaEsConfig {
+        population_size: pop,
+        generations: gens,
+        initial_sigma: 1.0,
+        eigen_decomposition_period: 1,
+        seed,
+    };
+    let mut opt = CmaEs::new(config, bounds);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Main
 // -----------------------------------------------------------------------------
@@ -510,7 +687,9 @@ fn run_zdt1_comparison() {
     let runners: &[(&str, Runner)] = &[
         ("RandomSearch", zdt1_random),
         ("PAES", zdt1_paes),
+        ("MOPSO", zdt1_mopso),
         ("SPEA2", zdt1_spea2),
+        ("IBEA", zdt1_ibea),
         ("NSGA-II", zdt1_nsga2),
         ("NSGA-III", zdt1_nsga3),
         ("MOEA/D", zdt1_moead),
@@ -566,8 +745,10 @@ fn run_dtlz2_comparison() {
     type Runner = fn(u64) -> MoRun;
     let runners: &[(&str, Runner)] = &[
         ("RandomSearch", dtlz2_random),
+        ("MOPSO", dtlz2_mopso),
         ("NSGA-II", dtlz2_nsga2),
         ("SPEA2", dtlz2_spea2),
+        ("IBEA", dtlz2_ibea),
         ("NSGA-III", dtlz2_nsga3),
         ("MOEA/D", dtlz2_moead),
     ];
@@ -610,9 +791,14 @@ fn run_rastrigin_comparison() {
     type Runner = fn(u64) -> SoRun;
     let runners: &[(&str, Runner)] = &[
         ("RandomSearch", rastrigin_random),
+        ("HillClimber", rastrigin_hill_climber),
+        ("SimulatedAnneal", rastrigin_simulated_annealing),
         ("PAES", rastrigin_paes),
+        ("GA", rastrigin_genetic_algorithm),
+        ("PSO", rastrigin_particle_swarm),
         ("NSGA-II", rastrigin_nsga2),
         ("DE", rastrigin_de),
+        ("CMA-ES", rastrigin_cma_es),
     ];
 
     for (name, runner) in runners {

@@ -30,6 +30,6 @@ pub use crate::algorithms::{
     ParticleSwarmConfig, RandomSearch, RandomSearchConfig, Rvea, RveaConfig,
     SimulatedAnnealing,
     SimulatedAnnealingConfig, SmsEmoa, SmsEmoaConfig, Spea2, Spea2Config, TabuSearch,
-    TabuSearchConfig, Umda,
+    TabuSearchConfig, Tlbo, TlboConfig, Umda,
     UmdaConfig,
 };

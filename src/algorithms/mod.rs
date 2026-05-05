@@ -22,6 +22,7 @@ pub mod simulated_annealing;
 pub mod sms_emoa;
 pub mod spea2;
 pub mod tabu_search;
+pub mod tlbo;
 pub mod umda;
 
 pub use ant_colony_tsp::*;
@@ -45,4 +46,5 @@ pub use simulated_annealing::*;
 pub use sms_emoa::*;
 pub use spea2::*;
 pub use tabu_search::*;
+pub use tlbo::*;
 pub use umda::*;

@@ -1,7 +1,9 @@
-//! Exact 2D hypervolume against a fixed reference point.
+//! Exact 2D and N-D hypervolume against a fixed reference point.
 
 use crate::core::candidate::Candidate;
 use crate::core::objective::ObjectiveSpace;
+use crate::pareto::dominance::{Dominance, pareto_compare};
+use crate::core::evaluation::Evaluation;
 
 /// Compute the dominated hypervolume of a 2D front against `reference_point`.
 ///
@@ -124,5 +126,322 @@ mod tests {
         let s = ObjectiveSpace::new(vec![Objective::minimize("only")]);
         let front = [cand(vec![1.0])];
         let _ = hypervolume_2d(&front, &s, [10.0, 10.0]);
+    }
+}
+
+/// Compute the dominated hypervolume in arbitrary dimensions using the
+/// **Hypervolume-by-Slicing-Objectives (HSO)** algorithm of While et al. 2006.
+///
+/// `objectives.len()` must equal `reference_point.len()`. Like
+/// [`hypervolume_2d`], the reference point is interpreted in the same
+/// minimization-oriented frame as `ObjectiveSpace::as_minimization`, and
+/// points that don't strictly dominate the reference are silently skipped.
+///
+/// For 2-D problems prefer [`hypervolume_2d`] (it has the same exact result
+/// but a tighter sweep loop). This function calls [`hypervolume_2d`]
+/// internally as the recursion base case.
+///
+/// Worst-case complexity is O((N · M)!) which sounds awful but in practice
+/// HSO is competitive with WFG up through ~5 objectives at population sizes
+/// of 100–200 — i.e. exactly the regime heuropt targets.
+///
+/// # Panics
+/// If `objectives.len() != reference_point.len()`, or if either is zero.
+pub fn hypervolume_nd<D>(
+    front: &[Candidate<D>],
+    objectives: &ObjectiveSpace,
+    reference_point: &[f64],
+) -> f64 {
+    assert_eq!(
+        objectives.len(),
+        reference_point.len(),
+        "hypervolume_nd: ObjectiveSpace and reference_point must agree on dimension",
+    );
+    assert!(!reference_point.is_empty(), "hypervolume_nd: dimension must be >= 1");
+
+    if front.is_empty() {
+        return 0.0;
+    }
+
+    // Project each point into minimization-oriented space, then keep only
+    // points that strictly dominate the reference along every axis.
+    let oriented: Vec<Vec<f64>> = front
+        .iter()
+        .filter_map(|c| {
+            let m = objectives.as_minimization(&c.evaluation.objectives);
+            if m.iter().zip(reference_point.iter()).all(|(p, r)| p < r) {
+                Some(m)
+            } else {
+                None
+            }
+        })
+        .collect();
+    if oriented.is_empty() {
+        return 0.0;
+    }
+
+    hso_recursive(&oriented, reference_point)
+}
+
+fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
+    let m = reference.len();
+    if m == 1 {
+        // 1-D HV: distance from the best (minimum) point to the reference.
+        let best = points.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
+        return (reference[0] - best).max(0.0);
+    }
+    if m == 2 {
+        // 2-D HV via the same sweep used by hypervolume_2d. Inlined here
+        // because we already have the points in oriented form.
+        let mut sorted: Vec<&Vec<f64>> = points.iter().collect();
+        sorted.sort_by(|a, b| {
+            a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut area = 0.0;
+        let mut last_y = reference[1];
+        for p in sorted {
+            if p[1] >= last_y {
+                continue;
+            }
+            let width = reference[0] - p[0];
+            let height = last_y - p[1];
+            area += width * height;
+            last_y = p[1];
+        }
+        return area;
+    }
+
+    // M ≥ 3: sweep along the last axis from the reference downward,
+    // peeling off bands. At each band:
+    //   - the active set is "all points whose last-axis value ≤ band_top";
+    //   - its (M-1)-dim HV (on the first M-1 axes against the
+    //     corresponding sub-reference), multiplied by band thickness, is
+    //     the band's HV contribution.
+    //
+    // Because boxes extend from `p[last]` UP TO `reference[last]`, every
+    // point is active in the band immediately below the reference. We
+    // therefore start with `active = all points` and REMOVE the largest
+    // remaining last-axis point each iteration.
+    let last = m - 1;
+    let mut sorted: Vec<Vec<f64>> = points.to_vec();
+    sorted.sort_by(|a, b| {
+        a[last]
+            .partial_cmp(&b[last])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let sub_reference: Vec<f64> = reference[..last].to_vec();
+    let mut total = 0.0;
+    let mut active: Vec<Vec<f64>> = sorted.clone();
+    let mut prev = reference[last];
+    for p in sorted.into_iter().rev() {
+        let depth = prev - p[last];
+        if depth > 0.0 && !active.is_empty() {
+            let projected: Vec<Vec<f64>> = active
+                .iter()
+                .map(|q| q[..last].to_vec())
+                .collect();
+            let nd = non_dominated_projection(&projected);
+            total += depth * hso_recursive(&nd, &sub_reference);
+        }
+        // Remove the just-processed point (the one with the largest
+        // remaining last-axis value).
+        let idx = active
+            .iter()
+            .position(|q| (q[last] - p[last]).abs() < 1e-15 && q[..last] == p[..last]);
+        if let Some(i) = idx {
+            active.swap_remove(i);
+        }
+        prev = p[last];
+    }
+
+    total
+}
+
+/// Drop dominated members of a projected point set.
+fn non_dominated_projection(points: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let m = if let Some(first) = points.first() { first.len() } else { return Vec::new(); };
+    let mut out: Vec<Vec<f64>> = Vec::new();
+    'outer: for p in points {
+        // Skip if dominated by any kept point.
+        for q in &out {
+            if dominates(q, p, m) {
+                continue 'outer;
+            }
+        }
+        // Drop already-kept points that this one dominates.
+        out.retain(|q| !dominates(p, q, m));
+        out.push(p.clone());
+    }
+    out
+}
+
+fn dominates(a: &[f64], b: &[f64], m: usize) -> bool {
+    let mut strictly_better = false;
+    for i in 0..m {
+        if a[i] > b[i] {
+            return false;
+        }
+        if a[i] < b[i] {
+            strictly_better = true;
+        }
+    }
+    strictly_better
+}
+
+/// Convenience wrapper that takes raw `Evaluation`s. Useful inside SMS-EMOA
+/// where we want to compute "front HV minus point's contribution."
+pub(crate) fn hypervolume_nd_from_evaluations(
+    evaluations: &[&Evaluation],
+    objectives: &ObjectiveSpace,
+    reference_point: &[f64],
+) -> f64 {
+    if evaluations.is_empty() {
+        return 0.0;
+    }
+    let oriented: Vec<Vec<f64>> = evaluations
+        .iter()
+        .filter_map(|e| {
+            let m = objectives.as_minimization(&e.objectives);
+            if m.iter().zip(reference_point.iter()).all(|(p, r)| p < r) {
+                Some(m)
+            } else {
+                None
+            }
+        })
+        .collect();
+    if oriented.is_empty() {
+        return 0.0;
+    }
+    hso_recursive(&oriented, reference_point)
+}
+
+#[cfg(test)]
+mod nd_tests {
+    use super::*;
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Objective;
+
+    fn cand_n(obj: Vec<f64>) -> Candidate<()> {
+        Candidate::new((), Evaluation::new(obj))
+    }
+
+    #[test]
+    fn nd_matches_2d_on_known_case() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+        ]);
+        let front = [cand_n(vec![1.0, 3.0]), cand_n(vec![2.0, 2.0]), cand_n(vec![3.0, 1.0])];
+        let hv2 = hypervolume_2d(&front, &s, [4.0, 4.0]);
+        let hvn = hypervolume_nd(&front, &s, &[4.0, 4.0]);
+        assert!((hv2 - hvn).abs() < 1e-12, "{hv2} vs {hvn}");
+        assert!((hvn - 6.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nd_three_d_single_point_at_origin() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+            Objective::minimize("f3"),
+        ]);
+        let front = [cand_n(vec![0.0, 0.0, 0.0])];
+        // Reference at (1, 1, 1): one point fully dominates the cube
+        // → HV = 1·1·1 = 1.
+        let hv = hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]);
+        assert!((hv - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn nd_three_d_two_points_no_overlap() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+            Objective::minimize("f3"),
+        ]);
+        // Reference (2, 2, 2). Two non-dominated points, projecting cleanly:
+        //   p1 = (0, 1, 1)  → contributes a 2 × 1 × 1 = 2 box
+        //   p2 = (1, 0, 1)  → contributes 1 × 2 × 1 = 2 minus the overlap with p1
+        //                     overlap (where x<=1 AND y<=1 AND z<=1) is 1·1·1 = 1
+        //   p3 = (1, 1, 0)  → ... and so on
+        // Manual computation is annoying; instead verify monotonicity:
+        // adding more non-dominated points must strictly increase HV.
+        let front_one = [cand_n(vec![0.0, 1.0, 1.0])];
+        let front_two = [cand_n(vec![0.0, 1.0, 1.0]), cand_n(vec![1.0, 0.0, 1.0])];
+        let front_three = [
+            cand_n(vec![0.0, 1.0, 1.0]),
+            cand_n(vec![1.0, 0.0, 1.0]),
+            cand_n(vec![1.0, 1.0, 0.0]),
+        ];
+        let hv1 = hypervolume_nd(&front_one, &s, &[2.0, 2.0, 2.0]);
+        let hv2 = hypervolume_nd(&front_two, &s, &[2.0, 2.0, 2.0]);
+        let hv3 = hypervolume_nd(&front_three, &s, &[2.0, 2.0, 2.0]);
+        assert!(hv1 < hv2, "{hv1} should be < {hv2}");
+        assert!(hv2 < hv3, "{hv2} should be < {hv3}");
+        // Sanity bound: each point is a (2,2,2)-box minus an L-shape;
+        // total can't exceed the box volume of 8.
+        assert!(hv3 < 8.0);
+    }
+
+    #[test]
+    fn nd_empty_is_zero() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+            Objective::minimize("f3"),
+        ]);
+        let front: [Candidate<()>; 0] = [];
+        assert_eq!(hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]), 0.0);
+    }
+
+    #[test]
+    fn nd_skips_points_not_dominating_reference() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+            Objective::minimize("f3"),
+        ]);
+        // (3, 0, 0) is not dominated by reference (1, 1, 1) on axis 0.
+        let front = [cand_n(vec![3.0, 0.0, 0.0])];
+        assert_eq!(hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]), 0.0);
+    }
+
+    #[test]
+    #[should_panic(expected = "must agree on dimension")]
+    fn nd_panics_on_dim_mismatch() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+        ]);
+        let front = [cand_n(vec![1.0, 1.0])];
+        let _ = hypervolume_nd(&front, &s, &[1.0, 1.0, 1.0]);
+    }
+
+    /// Sanity test: pareto_compare and hypervolume_nd should agree on
+    /// the simple "fewer non-dominated points → less HV" intuition.
+    #[test]
+    fn nd_dominated_points_dont_increase_hv() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+            Objective::minimize("f3"),
+        ]);
+        let base = vec![cand_n(vec![0.0, 1.0, 1.0]), cand_n(vec![1.0, 0.0, 1.0])];
+        // Add a dominated point — HV should be unchanged.
+        let mut with_dominated = base.clone();
+        with_dominated.push(cand_n(vec![1.5, 1.5, 1.5]));
+        let hv_base = hypervolume_nd(&base, &s, &[2.0, 2.0, 2.0]);
+        let hv_with = hypervolume_nd(&with_dominated, &s, &[2.0, 2.0, 2.0]);
+        // Confirm that adding the dominated point really is dominated.
+        assert!(matches!(
+            pareto_compare(
+                &Evaluation::new(vec![1.5, 1.5, 1.5]),
+                &Evaluation::new(vec![0.0, 1.0, 1.0]),
+                &s,
+            ),
+            Dominance::DominatedBy,
+        ));
+        assert!((hv_base - hv_with).abs() < 1e-12, "{hv_base} vs {hv_with}");
     }
 }

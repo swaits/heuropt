@@ -27,6 +27,11 @@ const ZDT1_REFERENCE: [f64; 2] = [11.0, 11.0];
 const RASTRIGIN_DIM: usize = 5;
 const RASTRIGIN_BUDGET: usize = 50_000;
 
+const DTLZ2_OBJECTIVES: usize = 3;
+const DTLZ2_K: usize = 10;
+const DTLZ2_DIM: usize = DTLZ2_OBJECTIVES + DTLZ2_K - 1; // 12
+const DTLZ2_BUDGET: usize = 30_000;
+
 // -----------------------------------------------------------------------------
 // Test problems
 // -----------------------------------------------------------------------------
@@ -48,6 +53,41 @@ impl Problem for Zdt1 {
         let g = 1.0 + 9.0 * tail_sum / (self.dim as f64 - 1.0);
         let f2 = g * (1.0 - (f1 / g).sqrt());
         Evaluation::new(vec![f1, f2])
+    }
+}
+
+struct Dtlz2 {
+    num_objectives: usize,
+    dim: usize,
+}
+
+impl Problem for Dtlz2 {
+    type Decision = Vec<f64>;
+
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(
+            (0..self.num_objectives)
+                .map(|i| Objective::minimize(format!("f{}", i + 1)))
+                .collect(),
+        )
+    }
+
+    fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+        let m = self.num_objectives;
+        let g: f64 = x[(m - 1)..self.dim].iter().map(|v| (v - 0.5).powi(2)).sum();
+        let scale = 1.0 + g;
+        let mut f = vec![0.0_f64; m];
+        for i in 0..m {
+            let mut prod = scale;
+            for j in 0..(m - i - 1) {
+                prod *= (x[j] * std::f64::consts::FRAC_PI_2).cos();
+            }
+            if i > 0 {
+                prod *= (x[m - i - 1] * std::f64::consts::FRAC_PI_2).sin();
+            }
+            f[i] = prod;
+        }
+        Evaluation::new(f)
     }
 }
 
@@ -193,6 +233,132 @@ fn zdt1_nsga2(seed: u64) -> MoRun {
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
 }
 
+fn zdt1_nsga3(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 100;
+    let gens = ZDT1_BUDGET / pop;
+    let config = Nsga3Config {
+        population_size: pop,
+        generations: gens,
+        // 99 ref points for 2 objectives — same density as the population.
+        reference_divisions: 99,
+        seed,
+    };
+    let mut opt = Nsga3::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+// -----------------------------------------------------------------------------
+// DTLZ2 algorithm runners (3-objective)
+// -----------------------------------------------------------------------------
+
+fn dtlz2_problem() -> Dtlz2 {
+    Dtlz2 { num_objectives: DTLZ2_OBJECTIVES, dim: DTLZ2_DIM }
+}
+
+fn dtlz2_random(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let initializer = RealBounds::new(vec![(0.0, 1.0); DTLZ2_DIM]);
+    let config = RandomSearchConfig {
+        iterations: DTLZ2_BUDGET,
+        batch_size: 1,
+        seed,
+    };
+    let mut opt = RandomSearch::new(config, initializer);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_nsga2(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 92; // close to the 91-ref-point NSGA-III pop, for fairness
+    let gens = DTLZ2_BUDGET / pop;
+    let config = Nsga2Config { population_size: pop, generations: gens, seed };
+    let mut opt = Nsga2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_spea2(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    let pop = 92;
+    let arc = 92;
+    let gens = (DTLZ2_BUDGET - pop) / pop;
+    let config = Spea2Config {
+        population_size: pop,
+        archive_size: arc,
+        generations: gens,
+        seed,
+    };
+    let mut opt = Spea2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+fn dtlz2_nsga3(seed: u64) -> MoRun {
+    let problem = dtlz2_problem();
+    let bounds = vec![(0.0, 1.0); DTLZ2_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 30.0, 1.0),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / DTLZ2_DIM as f64),
+    };
+    // H=12 → 91 reference points (the canonical NSGA-III 3-objective set).
+    // Population is sized to match: the spec recommends pop ≈ #refs.
+    let pop = 92;
+    let gens = DTLZ2_BUDGET / pop;
+    let config = Nsga3Config {
+        population_size: pop,
+        generations: gens,
+        reference_divisions: 12,
+        seed,
+    };
+    let mut opt = Nsga3::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
+/// DTLZ2's analytical Pareto front is the unit sphere octant in objective
+/// space (`Σ f_i² = 1`, all `f_i ≥ 0`). The closest-point distance from
+/// `f` to that surface is `|‖f‖ - 1|`.
+fn mean_distance_to_dtlz2_front(front: &[Candidate<Vec<f64>>]) -> f64 {
+    if front.is_empty() {
+        return f64::INFINITY;
+    }
+    let total: f64 = front
+        .iter()
+        .map(|c| {
+            let norm: f64 = c.evaluation.objectives.iter().map(|v| v * v).sum::<f64>().sqrt();
+            (norm - 1.0).abs()
+        })
+        .sum();
+    total / front.len() as f64
+}
+
 // -----------------------------------------------------------------------------
 // Rastrigin algorithm runners
 // -----------------------------------------------------------------------------
@@ -298,6 +464,7 @@ fn run_zdt1_comparison() {
         ("PAES", zdt1_paes),
         ("SPEA2", zdt1_spea2),
         ("NSGA-II", zdt1_nsga2),
+        ("NSGA-III", zdt1_nsga3),
     ];
 
     for (name, runner) in runners {
@@ -325,6 +492,55 @@ fn run_zdt1_comparison() {
             format!("{hv_m:.4}±{hv_s:.4}"),
             format!("{sp_m:.4}±{sp_s:.4}"),
             format!("{l2_m:.4}±{l2_s:.4}"),
+            format!("{fs_m:.0}"),
+            format!("{ms_m:.0}"),
+        );
+    }
+}
+
+fn run_dtlz2_comparison() {
+    println!();
+    println!(
+        "== DTLZ2 (3-obj, dim={DTLZ2_DIM}, {DTLZ2_BUDGET} evals/run × {SEEDS} seeds) =="
+    );
+    println!("Pareto front: unit sphere octant (Σf²=1, all f≥0); 'mean dist' is |‖f‖−1|");
+    println!();
+    println!(
+        "{:<14} {:>16} {:>14} {:>10} {:>10}",
+        "algorithm", "mean dist↓", "spacing↓", "front", "ms",
+    );
+    println!("{}", "-".repeat(70));
+
+    let dtlz2 = dtlz2_problem();
+    let dtlz2_objs = dtlz2.objectives();
+
+    type Runner = fn(u64) -> MoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", dtlz2_random),
+        ("NSGA-II", dtlz2_nsga2),
+        ("SPEA2", dtlz2_spea2),
+        ("NSGA-III", dtlz2_nsga3),
+    ];
+
+    for (name, runner) in runners {
+        let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
+        let dist: Vec<f64> =
+            runs.iter().map(|r| mean_distance_to_dtlz2_front(&r.front)).collect();
+        let sp: Vec<f64> =
+            runs.iter().map(|r| spacing(&r.front, &dtlz2_objs)).collect();
+        let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+
+        let (d_m, d_s) = mean_std(&dist);
+        let (sp_m, sp_s) = mean_std(&sp);
+        let (fs_m, _) = mean_std(&fs);
+        let (ms_m, _) = mean_std(&ms);
+
+        println!(
+            "{:<14} {:>16} {:>14} {:>10} {:>10}",
+            name,
+            format!("{d_m:.4}±{d_s:.4}"),
+            format!("{sp_m:.4}±{sp_s:.4}"),
             format!("{fs_m:.0}"),
             format!("{ms_m:.0}"),
         );
@@ -368,5 +584,6 @@ fn run_rastrigin_comparison() {
 
 fn main() {
     run_zdt1_comparison();
+    run_dtlz2_comparison();
     run_rastrigin_comparison();
 }

@@ -2,7 +2,6 @@
 
 use crate::core::candidate::Candidate;
 use crate::core::objective::ObjectiveSpace;
-use crate::pareto::dominance::{Dominance, pareto_compare};
 
 /// Partition the population into Pareto fronts by dominance rank.
 ///
@@ -19,24 +18,79 @@ pub fn non_dominated_sort<D>(
         return Vec::new();
     }
 
+    // Precompute the per-individual feasibility, violation, and
+    // minimization-oriented objective vectors. The naïve formulation
+    // calls `pareto_compare` (and therefore `as_minimization`) twice for
+    // every pair, allocating two fresh Vec<f64>s per call; doing it once
+    // up front cuts that to one allocation per individual.
+    let feasible: Vec<bool> = population
+        .iter()
+        .map(|c| c.evaluation.is_feasible())
+        .collect();
+    let violation: Vec<f64> = population
+        .iter()
+        .map(|c| c.evaluation.constraint_violation)
+        .collect();
+    let oriented: Vec<Vec<f64>> = population
+        .iter()
+        .map(|c| objectives.as_minimization(&c.evaluation.objectives))
+        .collect();
+    let m = objectives.len();
+
     let mut dominates: Vec<Vec<usize>> = vec![Vec::new(); n];
     let mut dominated_by_count: Vec<usize> = vec![0; n];
     let mut fronts: Vec<Vec<usize>> = Vec::new();
     let mut first_front: Vec<usize> = Vec::new();
 
     for i in 0..n {
+        let ai_feasible = feasible[i];
+        let ai_violation = violation[i];
+        let ai = &oriented[i];
         for j in 0..n {
             if i == j {
                 continue;
             }
-            match pareto_compare(
-                &population[i].evaluation,
-                &population[j].evaluation,
-                objectives,
-            ) {
-                Dominance::Dominates => dominates[i].push(j),
-                Dominance::DominatedBy => dominated_by_count[i] += 1,
-                _ => {}
+            let bi_feasible = feasible[j];
+            let bi_violation = violation[j];
+            // Inline the body of `pareto_compare`. We only care about
+            // `Dominates` vs `DominatedBy`; `Equal` and `NonDominated`
+            // are no-ops here.
+            let dominates_outcome = match (ai_feasible, bi_feasible) {
+                (true, false) => Some(true),  // i dominates j
+                (false, true) => Some(false), // i is dominated
+                (false, false) => {
+                    if ai_violation < bi_violation {
+                        Some(true)
+                    } else if ai_violation > bi_violation {
+                        Some(false)
+                    } else {
+                        None
+                    }
+                }
+                (true, true) => {
+                    let bj = &oriented[j];
+                    let mut a_better_anywhere = false;
+                    let mut b_better_anywhere = false;
+                    for k in 0..m {
+                        let av = ai[k];
+                        let bv = bj[k];
+                        if av < bv {
+                            a_better_anywhere = true;
+                        } else if av > bv {
+                            b_better_anywhere = true;
+                        }
+                    }
+                    match (a_better_anywhere, b_better_anywhere) {
+                        (true, false) => Some(true),
+                        (false, true) => Some(false),
+                        _ => None,
+                    }
+                }
+            };
+            match dominates_outcome {
+                Some(true) => dominates[i].push(j),
+                Some(false) => dominated_by_count[i] += 1,
+                None => {}
             }
         }
         if dominated_by_count[i] == 0 {

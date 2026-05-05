@@ -218,6 +218,7 @@ impl Variation<Vec<f64>> for PolynomialMutation {
         );
         let exponent = 1.0 / (self.eta + 1.0);
         let mut child = parents[0].clone();
+        #[allow(clippy::needless_range_loop)] // Body indexes both `self.bounds[j]` and `child[j]`.
         for j in 0..self.bounds.len() {
             if !rng.random_bool(self.per_variable_probability) {
                 continue;
@@ -357,7 +358,7 @@ mod tests {
             assert_eq!(children.len(), 1);
             assert_eq!(children[0].len(), 4);
             for &x in &children[0] {
-                assert!(x >= -1.0 && x <= 1.0, "out of bounds: {x}");
+                assert!((-1.0..=1.0).contains(&x), "out of bounds: {x}");
             }
         }
     }
@@ -394,7 +395,7 @@ mod tests {
         for c in &children {
             assert_eq!(c.len(), 4);
             for &v in c {
-                assert!(v >= -1.0 && v <= 1.0);
+                assert!((-1.0..=1.0).contains(&v));
             }
         }
     }
@@ -435,7 +436,7 @@ mod tests {
             assert_eq!(children.len(), 1);
             assert_eq!(children[0].len(), 5);
             for &x in &children[0] {
-                assert!(x >= -1.0 && x <= 1.0, "out of bounds: {x}");
+                assert!((-1.0..=1.0).contains(&x), "out of bounds: {x}");
             }
         }
     }

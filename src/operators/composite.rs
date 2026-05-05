@@ -75,7 +75,7 @@ mod tests {
         for c in &children {
             assert_eq!(c.len(), 4);
             for &x in c {
-                assert!(x >= -1.0 && x <= 1.0);
+                assert!((-1.0..=1.0).contains(&x));
             }
         }
     }

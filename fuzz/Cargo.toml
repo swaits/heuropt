@@ -1,0 +1,69 @@
+[package]
+name = "heuropt-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+heuropt = { path = ".." }
+
+[[bin]]
+name = "pareto_compare"
+path = "fuzz_targets/pareto_compare.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "non_dominated_sort"
+path = "fuzz_targets/non_dominated_sort.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hypervolume_2d"
+path = "fuzz_targets/hypervolume_2d.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pareto_archive"
+path = "fuzz_targets/pareto_archive.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crowding_distance"
+path = "fuzz_targets/crowding_distance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spacing"
+path = "fuzz_targets/spacing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sbx_polymut"
+path = "fuzz_targets/sbx_polymut.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "clamp_to_bounds"
+path = "fuzz_targets/clamp_to_bounds.rs"
+test = false
+doc = false
+bench = false

@@ -35,13 +35,9 @@ impl Problem for Zdt1 {
 
     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
         debug_assert_eq!(x.len(), self.dim);
-        // GaussianMutation does not enforce bounds (spec §11.2); clamp here so
-        // the example stays well-defined on a bounded benchmark. This is the
-        // spec-recommended pattern for handling bounds in v1.
-        let x0 = x[0].clamp(0.0, 1.0);
-        let tail_sum: f64 = x[1..].iter().map(|v| v.clamp(0.0, 1.0)).sum();
+        let f1 = x[0];
+        let tail_sum: f64 = x[1..].iter().sum();
         let g = 1.0 + 9.0 * tail_sum / (self.dim as f64 - 1.0);
-        let f1 = x0;
         let f2 = g * (1.0 - (f1 / g).sqrt());
         Evaluation::new(vec![f1, f2])
     }
@@ -99,9 +95,16 @@ fn mean_distance_to_zdt1_front(front: &[Candidate<Vec<f64>>]) -> f64 {
 fn run_zdt1() {
     let dim = 30;
     let problem = Zdt1 { dim };
-    let initializer = RealBounds::new(vec![(0.0, 1.0); dim]);
-    let variation = GaussianMutation { sigma: 0.05 };
-    let config = Nsga2Config { population_size: 100, generations: 400, seed: 42 };
+    let bounds = vec![(0.0, 1.0); dim];
+    let initializer = RealBounds::new(bounds.clone());
+    // Canonical NSGA-II operator pair: SBX (η_c=15) + polynomial mutation
+    // (η_m=20, per-var prob 1/dim). Both are bounds-aware so children stay
+    // feasible without any clamping inside `evaluate`.
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / dim as f64),
+    };
+    let config = Nsga2Config { population_size: 100, generations: 1000, seed: 42 };
     let mut optimizer = Nsga2::new(config, initializer, variation);
 
     let result = optimizer.run(&problem);

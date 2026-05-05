@@ -24,7 +24,7 @@ pub(crate) fn symmetric_eigen(
     debug_assert!(matrix.iter().all(|row| row.len() == n), "matrix must be square");
 
     // Working copy of the matrix; converges to a diagonal of eigenvalues.
-    let mut a: Vec<Vec<f64>> = matrix.iter().map(|row| row.clone()).collect();
+    let mut a: Vec<Vec<f64>> = matrix.to_vec();
     // Eigenvector accumulator, starts as identity.
     let mut v: Vec<Vec<f64>> = (0..n)
         .map(|i| (0..n).map(|j| if i == j { 1.0 } else { 0.0 }).collect())
@@ -32,6 +32,7 @@ pub(crate) fn symmetric_eigen(
 
     for _ in 0..max_sweeps {
         let mut max_off = 0.0;
+        #[allow(clippy::needless_range_loop)]
         for i in 0..n {
             for j in (i + 1)..n {
                 let abs_off = a[i][j].abs();
@@ -71,6 +72,7 @@ pub(crate) fn symmetric_eigen(
                 a[q][p] = 0.0;
 
                 // Update other off-diagonal entries in rows/cols p and q.
+                #[allow(clippy::needless_range_loop)]
                 for r in 0..n {
                     if r != p && r != q {
                         let arp = a[r][p];
@@ -83,6 +85,7 @@ pub(crate) fn symmetric_eigen(
                 }
 
                 // Update accumulated eigenvectors.
+                #[allow(clippy::needless_range_loop)]
                 for r in 0..n {
                     let vrp = v[r][p];
                     let vrq = v[r][q];

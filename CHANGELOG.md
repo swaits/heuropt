@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-05
+
+A substantial expansion of the algorithm catalog (21 new algorithms),
+five new operators, an n-D hypervolume utility, an algorithm-selection
+guide in the README, and a multi-seed comparison harness covering seven
+benchmark problems. No breaking changes to the v0.1.0 public API.
+
+### Added
+
+#### New algorithms
+
+**Single-objective:**
+
+- `HillClimber` — simplest greedy local search.
+- `SimulatedAnnealing` — Kirkpatrick et al. 1983, generic over decision type.
+- `GeneticAlgorithm` — generational SO GA with tournament selection + elitism.
+- `ParticleSwarm` — Eberhart & Kennedy 1995 PSO for `Vec<f64>`.
+- `CmaEs` — Hansen & Ostermeier 2001 covariance-matrix adaptation.
+- `TabuSearch` — Glover 1986, with a user-supplied neighbor generator.
+- `AntColonyTsp` — Dorigo Ant System for permutation problems.
+- `Umda` — Mühlenbein 1997 univariate marginal-distribution EDA for
+  `Vec<bool>`.
+- `Tlbo` — Rao 2011 Teaching-Learning-Based Optimization (parameter-free).
+
+**Multi-objective:**
+
+- `Mopso` — Coello, Pulido & Lechuga 2004 multi-objective PSO.
+- `Ibea` — Zitzler & Künzli 2004 indicator-based EA.
+- `SmsEmoa` — Beume, Naujoks & Emmerich 2007 S-metric selection EMOA.
+- `Hype` — Bader & Zitzler 2011 Hypervolume Estimation Algorithm.
+- `Rvea` — Cheng et al. 2016 Reference Vector-guided EA.
+- `PesaII` — Corne et al. 2001 Pareto Envelope-based Selection II.
+- `EpsilonMoea` — Deb, Mohan & Mishra 2003 ε-dominance MOEA.
+- `AgeMoea` — Panichella 2019 Adaptive Geometry Estimation MOEA.
+- `Grea` — Yang et al. 2013 Grid-based EA.
+- `Knea` — Zhang, Tian & Jin 2015 Knee point-driven EA.
+
+#### New operators
+
+- `BoundedGaussianMutation` — Gaussian noise + per-axis clamping.
+- `SimulatedBinaryCrossover` (SBX) — Deb & Agrawal 1995 canonical
+  real-valued crossover.
+- `PolynomialMutation` — Deb's polynomial mutation, the standard NSGA-II
+  pair to SBX.
+- `CompositeVariation` — pipeline two `Variation` operators
+  (typically crossover → mutation).
+- `LevyMutation` — heavy-tailed Lévy-flight mutation via Mantegna's
+  algorithm.
+
+#### New metrics / utilities
+
+- `hypervolume_nd` — exact N-dimensional dominated hypervolume via the
+  Hypervolume-by-Slicing-Objectives (HSO) algorithm, plus an internal
+  Jacobi symmetric eigendecomposition helper used by CMA-ES.
+
+#### New examples
+
+- `compare` — multi-seed comparison harness running every applicable
+  algorithm across ZDT1, ZDT3, DTLZ1, DTLZ2 (multi/many-objective) and
+  Rastrigin, Rosenbrock, Ackley (single-objective). Reports
+  hypervolume, spacing, mean L2/dist, front size, and wall-clock ms.
+- `benchmarks` — canonical reference runs of NSGA-II on ZDT1 and DE on
+  Rastrigin.
+- `jiggly_tuning` — real-world 4-objective NSGA-III firmware tuning
+  for the [`jiggly`](https://github.com/swaits/jiggly) USB-mouse-jiggler,
+  with an a-posteriori weighted-decision step that picks one
+  recommendation off the Pareto front.
+
+#### New optional feature
+
+- `parallel` — rayon-backed parallel population evaluation in
+  `RandomSearch`, `Nsga2`, `DifferentialEvolution`, `Spea2`, `Ibea`,
+  `Mopso`, and most other algorithms with batchable inner loops.
+  Seeded runs stay bit-identical to serial mode.
+
+#### Documentation
+
+- README gained an explanatory algorithm-selection decision tree that
+  walks newcomers through choosing an optimizer, defining the
+  terminology (multi-objective, Pareto front, dominance, multimodality,
+  evaluation cost) as it goes.
+
+### Changed
+
+- Minimum supported Rust version remains 1.85 (edition 2024).
+- Algorithm impls now require `P: Sync` and `P::Decision: Send` so the
+  same impl serves both `parallel` and serial feature builds. Any
+  `Problem` / decision type without exotic interior mutability already
+  satisfies these.
+
+[0.2.0]: https://github.com/swaits/heuropt/releases/tag/v0.2.0
+
 ## [0.1.0] — 2026-05-04
 
 Initial release.
@@ -74,5 +166,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.2.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

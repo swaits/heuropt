@@ -17,13 +17,13 @@ framework concepts.
 
 ```toml
 [dependencies]
-heuropt = "0.1"
+heuropt = "0.2"
 
 # Optional features:
 # - "serde":     derive Serialize/Deserialize on the core data types.
 # - "parallel":  evaluate populations across rayon's thread pool.
 #                Seeded runs stay bit-identical to serial mode.
-# heuropt = { version = "0.1", features = ["serde", "parallel"] }
+# heuropt = { version = "0.2", features = ["serde", "parallel"] }
 ```
 
 ## Define a problem

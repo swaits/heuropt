@@ -152,6 +152,30 @@ fn zdt1_paes(seed: u64) -> MoRun {
     MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
 }
 
+fn zdt1_spea2(seed: u64) -> MoRun {
+    let problem = Zdt1 { dim: ZDT1_DIM };
+    let bounds = vec![(0.0, 1.0); ZDT1_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT1_DIM as f64),
+    };
+    let pop = 100;
+    let arc = 100;
+    // SPEA2 evaluates `pop_size` per generation after the initial population.
+    let gens = (ZDT1_BUDGET - pop) / pop;
+    let config = Spea2Config {
+        population_size: pop,
+        archive_size: arc,
+        generations: gens,
+        seed,
+    };
+    let mut opt = Spea2::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun { front: result.pareto_front, wall_ms: t0.elapsed().as_millis() }
+}
+
 fn zdt1_nsga2(seed: u64) -> MoRun {
     let problem = Zdt1 { dim: ZDT1_DIM };
     let bounds = vec![(0.0, 1.0); ZDT1_DIM];
@@ -272,6 +296,7 @@ fn run_zdt1_comparison() {
     let runners: &[(&str, Runner)] = &[
         ("RandomSearch", zdt1_random),
         ("PAES", zdt1_paes),
+        ("SPEA2", zdt1_spea2),
         ("NSGA-II", zdt1_nsga2),
     ];
 

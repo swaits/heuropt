@@ -73,6 +73,90 @@ impl Variation<Vec<f64>> for GaussianMutation {
     }
 }
 
+/// Simulated Binary Crossover (Deb & Agrawal 1995): the standard real-valued
+/// crossover used by NSGA-II.
+///
+/// Takes two parents, produces two children. Per dimension, with probability
+/// `per_variable_probability`, mixes the parents using a polynomial spread
+/// `β` drawn from a distribution controlled by `eta` (distribution index;
+/// typical values 10–30, default 15: smaller `eta` → more spread, larger →
+/// children stay closer to parents). Output is clamped to per-variable
+/// bounds.
+///
+/// Panics on construction if any bound has `lo > hi`, or at run time if
+/// `parents.len() < 2` or any parent length differs from `bounds.len()`.
+#[derive(Debug, Clone)]
+pub struct SimulatedBinaryCrossover {
+    /// Per-variable inclusive bounds. Length must match the parent decisions.
+    pub bounds: Vec<(f64, f64)>,
+    /// Distribution index `η_c`. Must be `>= 0.0`. Default 15.0.
+    pub eta: f64,
+    /// Probability of mixing each variable. Typical: 0.5 or 1.0.
+    pub per_variable_probability: f64,
+}
+
+impl SimulatedBinaryCrossover {
+    /// Construct a `SimulatedBinaryCrossover`.
+    ///
+    /// # Panics
+    /// If any bound has `lo > hi`, `eta < 0.0`, or
+    /// `per_variable_probability` is outside `[0.0, 1.0]`.
+    pub fn new(bounds: Vec<(f64, f64)>, eta: f64, per_variable_probability: f64) -> Self {
+        for (i, &(lo, hi)) in bounds.iter().enumerate() {
+            assert!(
+                lo <= hi,
+                "SimulatedBinaryCrossover bound at index {i} has lo > hi: ({lo}, {hi})",
+            );
+        }
+        assert!(eta >= 0.0, "SimulatedBinaryCrossover eta must be >= 0.0");
+        assert!(
+            (0.0..=1.0).contains(&per_variable_probability),
+            "SimulatedBinaryCrossover per_variable_probability must be in [0.0, 1.0]",
+        );
+        Self { bounds, eta, per_variable_probability }
+    }
+}
+
+impl Variation<Vec<f64>> for SimulatedBinaryCrossover {
+    fn vary(&mut self, parents: &[Vec<f64>], rng: &mut Rng) -> Vec<Vec<f64>> {
+        assert!(
+            parents.len() >= 2,
+            "SimulatedBinaryCrossover requires at least two parents",
+        );
+        let p1 = &parents[0];
+        let p2 = &parents[1];
+        assert_eq!(
+            p1.len(),
+            self.bounds.len(),
+            "SimulatedBinaryCrossover parent length must match bounds length",
+        );
+        assert_eq!(
+            p2.len(),
+            self.bounds.len(),
+            "SimulatedBinaryCrossover parent length must match bounds length",
+        );
+
+        let mut c1 = p1.clone();
+        let mut c2 = p2.clone();
+        let exponent = 1.0 / (self.eta + 1.0);
+        for j in 0..self.bounds.len() {
+            if !rng.random_bool(self.per_variable_probability) {
+                continue;
+            }
+            let u: f64 = rng.random();
+            let beta = if u <= 0.5 {
+                (2.0 * u).powf(exponent)
+            } else {
+                (1.0 / (2.0 * (1.0 - u))).powf(exponent)
+            };
+            let (lo, hi) = self.bounds[j];
+            c1[j] = (0.5 * ((1.0 + beta) * p1[j] + (1.0 - beta) * p2[j])).clamp(lo, hi);
+            c2[j] = (0.5 * ((1.0 - beta) * p1[j] + (1.0 + beta) * p2[j])).clamp(lo, hi);
+        }
+        vec![c1, c2]
+    }
+}
+
 /// Bounded variant of [`GaussianMutation`]: add `Normal(0, sigma)` noise to
 /// every variable of the first parent, then clamp each variable to its
 /// per-dimension inclusive bound.
@@ -218,5 +302,48 @@ mod tests {
         let mut m = BoundedGaussianMutation::new(0.1, vec![(0.0, 1.0); 3]);
         let mut rng = rng_from_seed(0);
         m.vary(&[vec![0.0; 2]], &mut rng);
+    }
+
+    #[test]
+    fn sbx_returns_two_children_inside_bounds() {
+        let mut x = SimulatedBinaryCrossover::new(vec![(-1.0, 1.0); 4], 15.0, 1.0);
+        let mut rng = rng_from_seed(7);
+        let p1 = vec![-0.5, 0.0, 0.25, -0.75];
+        let p2 = vec![0.5, -0.25, -0.5, 0.75];
+        let parents = vec![p1, p2];
+        let children = x.vary(&parents, &mut rng);
+        assert_eq!(children.len(), 2);
+        for c in &children {
+            assert_eq!(c.len(), 4);
+            for &v in c {
+                assert!(v >= -1.0 && v <= 1.0);
+            }
+        }
+    }
+
+    #[test]
+    fn sbx_zero_per_variable_probability_returns_parents() {
+        let mut x = SimulatedBinaryCrossover::new(vec![(-10.0, 10.0); 3], 15.0, 0.0);
+        let mut rng = rng_from_seed(0);
+        let p1 = vec![1.0, 2.0, 3.0];
+        let p2 = vec![-1.0, -2.0, -3.0];
+        let parents = vec![p1.clone(), p2.clone()];
+        let children = x.vary(&parents, &mut rng);
+        assert_eq!(children[0], p1);
+        assert_eq!(children[1], p2);
+    }
+
+    #[test]
+    #[should_panic(expected = "at least two parents")]
+    fn sbx_one_parent_panics() {
+        let mut x = SimulatedBinaryCrossover::new(vec![(0.0, 1.0)], 15.0, 0.5);
+        let mut rng = rng_from_seed(0);
+        let _ = x.vary(&[vec![0.5]], &mut rng);
+    }
+
+    #[test]
+    #[should_panic(expected = "eta must be >= 0.0")]
+    fn sbx_negative_eta_panics() {
+        let _ = SimulatedBinaryCrossover::new(vec![(0.0, 1.0)], -1.0, 0.5);
     }
 }

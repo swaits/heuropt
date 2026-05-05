@@ -15,9 +15,11 @@ pub(crate) fn cholesky(a: &[Vec<f64>]) -> Result<Vec<Vec<f64>>, &'static str> {
     }
     debug_assert!(a.iter().all(|row| row.len() == n));
     let mut l = vec![vec![0.0_f64; n]; n];
+    #[allow(clippy::needless_range_loop)] // body indexes both `a` and `l` rows.
     for i in 0..n {
         for j in 0..=i {
             let mut sum = a[i][j];
+            #[allow(clippy::needless_range_loop)]
             for k in 0..j {
                 sum -= l[i][k] * l[j][k];
             }
@@ -90,9 +92,11 @@ mod tests {
         assert!(approx_eq(l[1][0], 1.0, 1e-12));
         assert!(approx_eq(l[1][1], 2.0, 1e-12));
         // L · L^T should reconstruct A.
+        #[allow(clippy::needless_range_loop)]
         for i in 0..2 {
             for j in 0..2 {
                 let mut s = 0.0;
+                #[allow(clippy::needless_range_loop)]
                 for k in 0..2 {
                     s += l[i][k] * l[j][k];
                 }
@@ -111,7 +115,7 @@ mod tests {
         ];
         let l = cholesky(&a).unwrap();
         // Choose a vector and check A · x = b round trip.
-        let x_truth = vec![1.0, -2.0, 0.5];
+        let x_truth = [1.0, -2.0, 0.5];
         let b: Vec<f64> = (0..3)
             .map(|i| (0..3).map(|j| a[i][j] * x_truth[j]).sum())
             .collect();

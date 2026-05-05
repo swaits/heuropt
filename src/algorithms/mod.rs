@@ -2,6 +2,7 @@
 
 pub mod age_moea;
 pub mod ant_colony_tsp;
+pub mod bayesian_opt;
 pub mod cma_es;
 pub mod differential_evolution;
 pub mod epsilon_moea;
@@ -33,6 +34,7 @@ pub mod umda;
 
 pub use age_moea::*;
 pub use ant_colony_tsp::*;
+pub use bayesian_opt::*;
 pub use cma_es::*;
 pub use differential_evolution::*;
 pub use epsilon_moea::*;

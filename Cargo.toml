@@ -2,9 +2,16 @@
 name = "heuropt"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+authors = ["Stephen Waits <steve@waits.net>"]
 description = "A practical Rust toolkit for heuristic single-, multi-, and many-objective optimization."
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/swaits/heuropt"
+homepage = "https://github.com/swaits/heuropt"
+documentation = "https://docs.rs/heuropt"
+keywords = ["optimization", "evolutionary", "nsga", "pareto", "moead"]
+categories = ["algorithms", "science", "mathematics", "simulation"]
 
 [features]
 default = []

@@ -1,5 +1,9 @@
 # heuropt
 
+[![Crates.io](https://img.shields.io/crates/v/heuropt.svg)](https://crates.io/crates/heuropt)
+[![Documentation](https://docs.rs/heuropt/badge.svg)](https://docs.rs/heuropt)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A practical Rust toolkit for implementing heuristic single-objective,
 multi-objective, and many-objective optimization algorithms.
 
@@ -136,4 +140,8 @@ See `docs/heuropt_tech_design_spec.md` for the full design rationale.
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).

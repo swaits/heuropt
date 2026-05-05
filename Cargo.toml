@@ -23,3 +23,10 @@ rand = "0.9"
 rand_distr = "0.5"
 rayon = { version = "1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+gungraun = "0.18"
+
+[[bench]]
+name = "hot_paths"
+harness = false

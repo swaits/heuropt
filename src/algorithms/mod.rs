@@ -1,6 +1,7 @@
 //! Built-in reference optimizers.
 
 pub mod differential_evolution;
+pub mod hill_climber;
 pub mod moead;
 pub mod nsga2;
 pub mod nsga3;
@@ -10,6 +11,7 @@ pub mod random_search;
 pub mod spea2;
 
 pub use differential_evolution::*;
+pub use hill_climber::*;
 pub use moead::*;
 pub use nsga2::*;
 pub use nsga3::*;

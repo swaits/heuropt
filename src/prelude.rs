@@ -22,7 +22,7 @@ pub use crate::operators::{
 };
 
 pub use crate::algorithms::{
-    DifferentialEvolution, DifferentialEvolutionConfig, Moead, MoeadConfig, Nsga2,
-    Nsga2Config, Nsga3, Nsga3Config, Paes, PaesConfig, RandomSearch, RandomSearchConfig,
-    Spea2, Spea2Config,
+    DifferentialEvolution, DifferentialEvolutionConfig, HillClimber, HillClimberConfig,
+    Moead, MoeadConfig, Nsga2, Nsga2Config, Nsga3, Nsga3Config, Paes, PaesConfig,
+    RandomSearch, RandomSearchConfig, Spea2, Spea2Config,
 };

@@ -12,8 +12,8 @@ pub use crate::core::{
 pub use crate::traits::{Initializer, Optimizer, Variation};
 
 pub use crate::pareto::{
-    Dominance, ParetoArchive, best_candidate, crowding_distance, non_dominated_sort,
-    pareto_compare, pareto_front,
+    Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis,
+    non_dominated_sort, pareto_compare, pareto_front,
 };
 
 pub use crate::operators::{

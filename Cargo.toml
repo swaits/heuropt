@@ -2,5 +2,15 @@
 name = "heuropt"
 version = "0.1.0"
 edition = "2024"
+description = "A practical Rust toolkit for heuristic single-, multi-, and many-objective optimization."
+license = "MIT"
+readme = "README.md"
+
+[features]
+default = []
+serde = ["dep:serde"]
 
 [dependencies]
+rand = "0.9"
+rand_distr = "0.5"
+serde = { version = "1", features = ["derive"], optional = true }

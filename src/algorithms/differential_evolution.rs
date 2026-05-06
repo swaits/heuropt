@@ -305,7 +305,10 @@ fn pick_three_distinct(
 
 impl crate::traits::AlgorithmInfo for DifferentialEvolution {
     fn name(&self) -> &'static str {
-        "DifferentialEvolution"
+        "DE"
+    }
+    fn full_name(&self) -> &'static str {
+        "Differential Evolution"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

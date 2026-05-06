@@ -481,7 +481,10 @@ impl Tpe {
 
 impl crate::traits::AlgorithmInfo for Tpe {
     fn name(&self) -> &'static str {
-        "Tpe"
+        "TPE"
+    }
+    fn full_name(&self) -> &'static str {
+        "Tree-structured Parzen Estimator"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

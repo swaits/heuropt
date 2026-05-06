@@ -2,11 +2,11 @@
 
 When your decision is "an ordering" — visiting cities, scheduling
 jobs, routing — the natural representation is `Vec<usize>` and the
-specialized algorithm is [`AntColonyTsp`]. Generic alternatives are
-[`SimulatedAnnealing`] + [`SwapMutation`] for any permutation, and
-[`TabuSearch`] when you have a custom neighbor function.
+specialized algorithm is [Ant Colony][AntColonyTsp]. Generic alternatives are
+[Simulated Annealing][SimulatedAnnealing] + [`SwapMutation`] for any permutation, and
+[Tabu Search][TabuSearch] when you have a custom neighbor function.
 
-## TSP with `AntColonyTsp`
+## TSP with Ant Colony
 
 ```rust,no_run
 use heuropt::prelude::*;
@@ -138,10 +138,10 @@ println!("schedule: {:?}", best.decision);
 `SwapMutation` swaps two random indices in the permutation —
 preserves the "every element appears once" invariant for free.
 
-## Custom neighborhoods: `TabuSearch`
+## Custom neighborhoods: Tabu Search
 
 When swap isn't the right move set (e.g., 2-opt for TSP, insert /
-shift for scheduling), use [`TabuSearch`] with your own neighbor
+shift for scheduling), use [Tabu Search][TabuSearch] with your own neighbor
 function.
 
 ```rust,ignore
@@ -161,7 +161,7 @@ let neighbors = |x: &Vec<usize>, _rng: &mut Rng| -> Vec<Vec<usize>> {
 // Pass `neighbors` to TabuSearch::new(...).
 ```
 
-[`AntColonyTsp`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
-[`SimulatedAnnealing`]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
+[AntColonyTsp]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
+[SimulatedAnnealing]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
 [`SwapMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.SwapMutation.html
-[`TabuSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html
+[TabuSearch]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html

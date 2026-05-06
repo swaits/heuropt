@@ -338,7 +338,7 @@ where
     N: FnMut(&D, &mut Rng) -> Vec<D>,
 {
     fn name(&self) -> &'static str {
-        "TabuSearch"
+        "Tabu Search"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

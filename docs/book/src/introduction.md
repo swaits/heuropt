@@ -28,7 +28,7 @@ hyperopt, optuna, DEAP). heuropt's design priorities:
 
 1. **Approachable code.** No trait objects in the public API. No
    GATs, HRTBs, generic-RNG plumbing. A junior Rust engineer should
-   be able to read `RandomSearch` and write a new optimizer by
+   be able to read Random Search and write a new optimizer by
    implementing only the `Optimizer<P>` trait.
 2. **One concrete RNG type.** Seeded determinism is a property tested
    across the crate; identical inputs always produce identical
@@ -44,20 +44,18 @@ hyperopt, optuna, DEAP). heuropt's design priorities:
 
 ## What's in the box
 
-heuropt v0.8 ships **33 algorithms** spanning:
+heuropt v0.10 ships **33 algorithms** spanning:
 
-- Single-objective continuous: `RandomSearch`, `HillClimber`,
-  `OnePlusOneEs`, `SimulatedAnnealing`, `GeneticAlgorithm`,
-  `ParticleSwarm`, `DifferentialEvolution`, `Tlbo`, `CmaEs`,
-  `IpopCmaEs`, `SeparableNes`, `NelderMead`.
-- Single-objective other types: `Umda` (binary), `TabuSearch`
-  (any), `AntColonyTsp` (permutation).
-- Multi-objective (2–3): `Paes`, `Nsga2`, `Spea2`, `Mopso`, `Ibea`,
-  `SmsEmoa`, `HypE`, `EpsilonMoea`, `PesaII`, `AgeMoea`, `Knea`,
-  `Moead`.
-- Many-objective (4+): `Nsga3`, `Rvea`, `Grea`.
-- Sample-efficient / multi-fidelity: `BayesianOpt`, `Tpe`,
-  `Hyperband`.
+- Single-objective continuous: Random Search, Hill Climber,
+  (1+1)-ES, Simulated Annealing, GA, PSO, Differential Evolution,
+  TLBO, CMA-ES, IPOP-CMA-ES, sNES, Nelder-Mead.
+- Single-objective other types: UMDA (binary), Tabu Search (any),
+  Ant Colony (permutation).
+- Multi-objective (2–3): PAES, NSGA-II, SPEA2, MOPSO, IBEA,
+  SMS-EMOA, HypE, ε-MOEA, PESA-II, AGE-MOEA, KnEA, MOEA/D.
+- Many-objective (4+): NSGA-III, RVEA, GrEA.
+- Sample-efficient / multi-fidelity: Bayesian Optimization, TPE,
+  Hyperband.
 
 Plus the operators (SBX, PolynomialMutation, BoundedGaussianMutation,
 LevyMutation, BitFlipMutation, SwapMutation, ClampToBounds,

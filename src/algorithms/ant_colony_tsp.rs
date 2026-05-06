@@ -431,7 +431,10 @@ fn better_than_so(
 
 impl crate::traits::AlgorithmInfo for AntColonyTsp {
     fn name(&self) -> &'static str {
-        "AntColonyTsp"
+        "Ant Colony"
+    }
+    fn full_name(&self) -> &'static str {
+        "Ant Colony System for TSP"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

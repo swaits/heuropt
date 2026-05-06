@@ -387,7 +387,10 @@ fn binary_tournament(fitness: &[f64], rng: &mut Rng) -> usize {
 
 impl<I, V> crate::traits::AlgorithmInfo for Ibea<I, V> {
     fn name(&self) -> &'static str {
-        "Ibea"
+        "IBEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Indicator-Based Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

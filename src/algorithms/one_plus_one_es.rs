@@ -287,7 +287,10 @@ impl OnePlusOneEs {
 
 impl crate::traits::AlgorithmInfo for OnePlusOneEs {
     fn name(&self) -> &'static str {
-        "OnePlusOneEs"
+        "(1+1)-ES"
+    }
+    fn full_name(&self) -> &'static str {
+        "(1+1) Evolution Strategy with one-fifth success rule"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

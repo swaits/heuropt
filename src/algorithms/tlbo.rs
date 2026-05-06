@@ -327,7 +327,10 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
 
 impl crate::traits::AlgorithmInfo for Tlbo {
     fn name(&self) -> &'static str {
-        "Tlbo"
+        "TLBO"
+    }
+    fn full_name(&self) -> &'static str {
+        "Teaching-Learning-Based Optimization"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

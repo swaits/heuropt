@@ -542,7 +542,10 @@ impl BayesianOpt {
 
 impl crate::traits::AlgorithmInfo for BayesianOpt {
     fn name(&self) -> &'static str {
-        "BayesianOpt"
+        "Bayesian Optimization"
+    }
+    fn full_name(&self) -> &'static str {
+        "Gaussian Process Bayesian Optimization with Expected Improvement"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

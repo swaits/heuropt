@@ -544,7 +544,10 @@ fn associate(
 
 impl<I, V> crate::traits::AlgorithmInfo for Nsga3<I, V> {
     fn name(&self) -> &'static str {
-        "Nsga3"
+        "NSGA-III"
+    }
+    fn full_name(&self) -> &'static str {
+        "Non-dominated Sorting Genetic Algorithm III"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

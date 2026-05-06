@@ -244,7 +244,10 @@ impl<I, V> Paes<I, V> {
 
 impl<I, V> crate::traits::AlgorithmInfo for Paes<I, V> {
     fn name(&self) -> &'static str {
-        "Paes"
+        "PAES"
+    }
+    fn full_name(&self) -> &'static str {
+        "Pareto Archived Evolution Strategy"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

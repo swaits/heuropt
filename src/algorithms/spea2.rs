@@ -505,7 +505,10 @@ fn binary_tournament(fitness: &[f64], rng: &mut Rng) -> usize {
 
 impl<I, V> crate::traits::AlgorithmInfo for Spea2<I, V> {
     fn name(&self) -> &'static str {
-        "Spea2"
+        "SPEA2"
+    }
+    fn full_name(&self) -> &'static str {
+        "Strength Pareto Evolutionary Algorithm 2"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

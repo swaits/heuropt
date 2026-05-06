@@ -461,7 +461,10 @@ fn binary_tournament(fitness: &[f64], rng: &mut Rng) -> usize {
 
 impl<I, V> crate::traits::AlgorithmInfo for Hype<I, V> {
     fn name(&self) -> &'static str {
-        "Hype"
+        "HypE"
+    }
+    fn full_name(&self) -> &'static str {
+        "Hypervolume Estimation Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

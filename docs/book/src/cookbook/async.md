@@ -13,7 +13,7 @@ evaluation path.
 
 ```toml
 [dependencies]
-heuropt = { version = "0.8", features = ["async"] }
+heuropt = { version = "0.10", features = ["async"] }
 
 # Pick whatever async runtime you want; heuropt itself depends only on
 # `futures`. The example below uses tokio.
@@ -112,8 +112,8 @@ results back to the algorithm.
 
 ## What the worked example shows
 
-`examples/async_eval.rs` runs `RandomSearch` (200 evaluations × 20 ms
-each) at `concurrency = 1, 4, 16` and `DifferentialEvolution` at
+`examples/async_eval.rs` runs Random Search (200 evaluations × 20 ms
+each) at `concurrency = 1, 4, 16` and Differential Evolution at
 `concurrency = 8`. On a recent machine:
 
 ```text

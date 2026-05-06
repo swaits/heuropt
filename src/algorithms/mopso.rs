@@ -332,7 +332,10 @@ impl Mopso {
 
 impl crate::traits::AlgorithmInfo for Mopso {
     fn name(&self) -> &'static str {
-        "Mopso"
+        "MOPSO"
+    }
+    fn full_name(&self) -> &'static str {
+        "Multi-Objective Particle Swarm Optimization"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

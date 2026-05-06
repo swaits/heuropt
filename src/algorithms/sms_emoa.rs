@@ -291,7 +291,10 @@ fn pick_drop_index<D>(
 
 impl<I, V> crate::traits::AlgorithmInfo for SmsEmoa<I, V> {
     fn name(&self) -> &'static str {
-        "SmsEmoa"
+        "SMS-EMOA"
+    }
+    fn full_name(&self) -> &'static str {
+        "S-Metric Selection Evolutionary Multi-Objective Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

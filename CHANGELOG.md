@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-05-06
+
+Theme: every algorithm now returns its **canonical name** as it
+appears in the literature, with an academic long form available
+alongside, and the docs use those names everywhere. Plus the
+explorer JSON export now carries both forms so display tools can
+show the short name with a hover tooltip for the long one.
+
+No public-API breaks beyond the value of `AlgorithmInfo::name()`,
+which previously returned the Rust type name and now returns the
+literature short name (`"NSGA-II"` vs `"Nsga2"`). If your code
+matched on those strings you'll need to update — but the trait
+shape itself is unchanged and `algorithm.name()` continues to be
+the way to read it.
+
+### Added
+
+- `AlgorithmInfo::full_name(&self) -> &'static str` — academic
+  long form, e.g. `"Non-dominated Sorting Genetic Algorithm II"`.
+  Defaults to `name()` for algorithms whose short and long forms
+  coincide (Random Search, Hill Climber, Tabu Search).
+- Every built-in algorithm overrides `full_name()` with its
+  expanded literature name. Mapping table is in the cookbook
+  recipe at `docs/book/src/cookbook/explorer.md`.
+- `ExplorerExport`'s `RunMeta` gained an optional
+  `algorithm_full_name: Option<String>` field. The
+  `with_algorithm_info()` builder populates both that and
+  `algorithm` from the same `AlgorithmInfo` source. Schema
+  version stays at **1** — the new field is `#[serde(default)]`,
+  so older readers tolerate it and older writers' output still
+  loads cleanly.
+
+### Changed
+
+- `AlgorithmInfo::name()` return values for every built-in
+  algorithm. Examples: `"Nsga2"` → `"NSGA-II"`, `"Cmaes"` →
+  `"CMA-ES"`, `"Mopso"` → `"MOPSO"`, `"Moead"` → `"MOEA/D"`,
+  `"EpsilonMoea"` → `"ε-MOEA"`. Full table in the cookbook recipe.
+- README, mdbook chapters, decision tree, choosing-an-algorithm
+  guide, comparison page, getting-started, defining-problems,
+  cookbook recipes, and migration notes now all use the canonical
+  algorithm names in body prose. Code blocks (which reference the
+  Rust types like `Nsga2::new(...)` or `Nsga2Config { … }`)
+  unchanged — those are still the API.
+- Default `cargo run --release --example pick_a_car` output now
+  reads `"algorithm": "NSGA-III", "algorithm_full_name":
+  "Non-dominated Sorting Genetic Algorithm III"` in the JSON
+  envelope instead of `"Nsga3"`.
+
+### Migration
+
+If you display `optimizer.name()` in your own UI, you'll suddenly
+get the proper short name for free — usually a strict improvement.
+The only break: code that pattern-matched on the Rust-type-shaped
+strings (e.g. `if name == "Nsga3"`) needs updating to the new
+canonical strings. The names are stable now (they match the
+literature), so this is a one-time fix.
+
+[0.10.0]: https://github.com/swaits/heuropt/releases/tag/v0.10.0
+
+## [0.9.0] — 2026-05-06
+
+Theme: explorer JSON export. Real Pareto fronts have 50–200+
+candidates spanning 2–7+ objectives — too many to read as numbers
+in a terminal. 0.9.0 adds a tiny additive surface that turns any
+`OptimizationResult` into a self-describing JSON file you can drop
+into [heuropt-explorer](https://swaits.github.io/heuropt-explorer/)
+to filter, brush, pin, and rank candidates interactively.
+
+No public-API breaks. The new surface lives behind the existing
+`serde` feature and the new methods on `Problem` / the new
+`AlgorithmInfo` trait have working defaults so existing impls
+compile untouched.
+
+### Added
+
+#### Explorer export (the headline feature)
+
+- New `heuropt::explorer` module (gated on the `serde` feature).
+  Defines `ExplorerExport`, `ExplorerCandidate`, `RunMeta`, the
+  `ToDecisionValues` adapter trait, and free functions
+  `to_json` / `to_writer` / `to_file`.
+- Schema is versioned (`SCHEMA_VERSION = 1`); the explorer webapp
+  refuses to load files with an unknown version.
+- `front_rank` is computed once via `non_dominated_sort` at export
+  time and attached to every candidate so downstream tools don't
+  have to re-derive it.
+- `ToDecisionValues` is implemented for `Vec<f64>`, `Vec<bool>`,
+  `Vec<usize>`, and `Vec<i64>` out of the box; users with custom
+  decision types implement it themselves (one method).
+
+#### Problem-side metadata (single source of truth, no duplication)
+
+- `Objective` gained optional `label: Option<String>` and
+  `unit: Option<String>` fields plus fluent builders
+  `.with_label("Price")` / `.with_unit("$k")`. Existing
+  `Objective::minimize("name")` / `Objective::maximize("name")`
+  unchanged. Backwards-compatible at source level and at the JSON
+  level (the new fields use `#[serde(default,
+  skip_serializing_if = "Option::is_none")]`).
+- `Problem` trait gained an optional `fn decision_schema(&self)
+  -> Vec<DecisionVariable>` with default empty impl. Override it
+  to provide pretty names / labels / units / bounds for the
+  explorer; the default produces fallback `x[0]`, `x[1]`, … names.
+- New `DecisionVariable` type at `heuropt::core::DecisionVariable`,
+  re-exported via the prelude. Builder methods: `with_label`,
+  `with_unit`, `with_bounds`.
+
+#### Algorithm metadata for the export header
+
+- New `heuropt::traits::AlgorithmInfo` trait with `name() ->
+  &'static str` (required) and `seed() -> Option<u64>` (default
+  `None`). Every built-in algorithm — all 33 — implements it.
+  Separate from `Optimizer<P>` so multi-fidelity algorithms
+  (Hyperband, which uses `PartialProblem`) implement it uniformly.
+- `ExplorerExport::with_algorithm_info(&optimizer)` pulls the
+  algorithm name and seed from this trait into the export's `run`
+  metadata.
+
+#### Worked example
+
+- New `examples/pick_a_car.rs` (gated on `serde`). Implements the
+  README's `PickACar` multi-objective problem with a fully
+  enriched `decision_schema` and labelled / unit-tagged objectives,
+  runs NSGA-III, and writes `pick_a_car.json` ready to drop into
+  the explorer.
+
+#### Documentation
+
+- New cookbook recipe at `docs/book/src/cookbook/explorer.md`
+  covering Problem enrichment, the export call, the JSON schema,
+  and custom decision-type handling.
+
+### Notes
+
+- The explorer webapp itself lives in a separate repo
+  (`heuropt-explorer`) on its own release cadence. The schema in
+  `heuropt::explorer` is the contract between them; bumping
+  `SCHEMA_VERSION` is reserved for breaking changes.
+- Phase 1 is additive only. No existing test breaks; the lib test
+  count went from 229 to 242 (10 new explorer tests + 3 from the
+  new `Objective` / `DecisionVariable` builders).
+
+[0.9.0]: https://github.com/swaits/heuropt/releases/tag/v0.9.0
+
 ## [0.8.0] — 2026-05-06
 
 Theme: async evaluation, plus the docs / governance / CI catch-up
@@ -552,5 +697,5 @@ Initial release.
   `RandomSearch`, `Nsga2`, and `DifferentialEvolution`. Seeded runs stay
   bit-identical to serial mode.
 
-[Unreleased]: https://github.com/swaits/heuropt/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/swaits/heuropt/compare/v0.10.0...HEAD
 [0.1.0]: https://github.com/swaits/heuropt/releases/tag/v0.1.0

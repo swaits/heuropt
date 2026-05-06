@@ -354,7 +354,10 @@ fn better_than_so(
 
 impl crate::traits::AlgorithmInfo for Umda {
     fn name(&self) -> &'static str {
-        "Umda"
+        "UMDA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Univariate Marginal Distribution Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

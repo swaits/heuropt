@@ -398,7 +398,10 @@ fn box_dominates(a: &[i64], b: &[i64]) -> bool {
 
 impl<I, V> crate::traits::AlgorithmInfo for EpsilonMoea<I, V> {
     fn name(&self) -> &'static str {
-        "EpsilonMoea"
+        "ε-MOEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "ε-dominance Multi-Objective Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

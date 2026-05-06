@@ -7,9 +7,9 @@ algorithms aimed at this regime.
 
 | Algorithm | Surrogate | Best for |
 |---|---|---|
-| [`BayesianOpt`] | Gaussian process + Expected Improvement | The textbook choice; needs kernel tuning to shine |
-| [`Tpe`] | Kernel-density estimate of good vs bad points | Cheaper per step; more robust without tuning |
-| [`Hyperband`] | (none — it's a multi-fidelity scheduler) | When each eval has a tunable budget (epochs, MC samples) |
+| [Bayesian Optimization][BayesianOpt] | Gaussian process + Expected Improvement | The textbook choice; needs kernel tuning to shine |
+| [TPE] | Kernel-density estimate of good vs bad points | Cheaper per step; more robust without tuning |
+| [Hyperband] | (none — it's a multi-fidelity scheduler) | When each eval has a tunable budget (epochs, MC samples) |
 
 ## When each is right
 
@@ -101,7 +101,7 @@ canonical Bergstra value.
 
 ## Hyperband
 
-[`Hyperband`] needs your problem to implement [`PartialProblem`] —
+[Hyperband] needs your problem to implement [`PartialProblem`] —
 that is, you can evaluate at a tunable fidelity (e.g. number of
 training epochs). The algorithm schedules many cheap-fidelity runs
 and promotes only the survivors to higher fidelity.
@@ -156,9 +156,9 @@ The state of the art (BOHB) combines BO with Hyperband: TPE picks the
 configurations Hyperband then evaluates at increasing fidelity.
 heuropt doesn't ship a unified BOHB but the building blocks are
 there — wrap your `PartialProblem` with a TPE-driven sampler and
-feed the picks into `Hyperband`. PRs welcome.
+feed the picks into Hyperband. PRs welcome.
 
-[`BayesianOpt`]: https://docs.rs/heuropt/latest/heuropt/algorithms/bayesian_opt/struct.BayesianOpt.html
-[`Tpe`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tpe/struct.Tpe.html
-[`Hyperband`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hyperband/struct.Hyperband.html
+[BayesianOpt]: https://docs.rs/heuropt/latest/heuropt/algorithms/bayesian_opt/struct.BayesianOpt.html
+[TPE]: https://docs.rs/heuropt/latest/heuropt/algorithms/tpe/struct.Tpe.html
+[Hyperband]: https://docs.rs/heuropt/latest/heuropt/algorithms/hyperband/struct.Hyperband.html
 [`PartialProblem`]: https://docs.rs/heuropt/latest/heuropt/core/partial_problem/trait.PartialProblem.html

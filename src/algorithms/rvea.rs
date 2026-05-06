@@ -468,7 +468,10 @@ fn smallest_neighbor_angle(references: &[Vec<f64>]) -> f64 {
 
 impl<I, V> crate::traits::AlgorithmInfo for Rvea<I, V> {
     fn name(&self) -> &'static str {
-        "Rvea"
+        "RVEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Reference Vector-guided Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

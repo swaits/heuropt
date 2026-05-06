@@ -630,7 +630,10 @@ fn better_than_so(
 
 impl crate::traits::AlgorithmInfo for CmaEs {
     fn name(&self) -> &'static str {
-        "CmaEs"
+        "CMA-ES"
+    }
+    fn full_name(&self) -> &'static str {
+        "Covariance Matrix Adaptation Evolution Strategy"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

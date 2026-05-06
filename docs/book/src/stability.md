@@ -18,10 +18,10 @@ versions — use them at your own risk.
 
 While we are pre-1.0:
 
-- **Minor bumps (`0.8 → 0.9`) may break the public API.** The
+- **Minor bumps (`0.10 → 0.11`) may break the public API.** The
   CHANGELOG calls out everything that changed, and a **migration
   guide** in this book documents the move.
-- **Patch bumps (`0.8.0 → 0.8.1`) only contain bug fixes,
+- **Patch bumps (`0.10.0 → 0.10.1`) only contain bug fixes,
   performance improvements, and additive non-breaking features.**
   No deprecations, no removals.
 
@@ -61,7 +61,7 @@ optimizations has been bit-identical against the v0.3.0 reference.
 
 ## MSRV (minimum supported Rust version)
 
-heuropt's MSRV is **1.85** as of v0.8. This is tested in CI against
+heuropt's MSRV is **1.85** as of v0.10. This is tested in CI against
 every PR.
 
 MSRV bumps are treated as patch-bump-eligible (they don't break the

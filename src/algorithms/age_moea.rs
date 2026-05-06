@@ -426,7 +426,10 @@ fn estimate_p(front_indices: &[usize], translated: &[Vec<f64>], m: usize) -> f64
 
 impl<I, V> crate::traits::AlgorithmInfo for AgeMoea<I, V> {
     fn name(&self) -> &'static str {
-        "AgeMoea"
+        "AGE-MOEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Adaptive Geometry Estimation Multi-Objective Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

@@ -9,7 +9,7 @@ population, and rayon parallelizes that batch.
 
 ```toml
 [dependencies]
-heuropt = { version = "0.8", features = ["parallel"] }
+heuropt = { version = "0.10", features = ["parallel"] }
 ```
 
 There's nothing else to opt into in your code. The
@@ -29,14 +29,14 @@ pass.
 
 Algorithms with a per-generation `evaluate_batch`:
 
-- [`RandomSearch`], [`Nsga2`], [`Nsga3`], [`Spea2`], [`Moead`],
-  [`Mopso`], [`Ibea`], [`SmsEmoa`], [`HypE`], [`PesaII`],
-  [`EpsilonMoea`], [`AgeMoea`], [`Knea`], [`Grea`], [`Rvea`].
-- [`DifferentialEvolution`] and [`GeneticAlgorithm`] benefit on the
+- [Random Search][RandomSearch], [NSGA-II][Nsga2], [NSGA-III][Nsga3], [SPEA2][Spea2], [MOEA/D][Moead],
+  [MOPSO][Mopso], [IBEA][Ibea], [SMS-EMOA][SmsEmoa], [HypE][Hype], [PESA-II][PesaII],
+  [ε-MOEA][EpsilonMoea], [AGE-MOEA][AgeMoea], [KnEA][Knea], [GrEA][Grea], [RVEA][Rvea].
+- [Differential Evolution][DifferentialEvolution] and [GA][GeneticAlgorithm] benefit on the
   initial population and offspring batches.
 
-Steady-state algorithms ([`Paes`], [`SimulatedAnnealing`],
-[`HillClimber`], [`OnePlusOneEs`]) only evaluate one or a few
+Steady-state algorithms ([PAES][Paes], [Simulated Annealing][SimulatedAnnealing],
+[Hill Climber][HillClimber], [(1+1)-ES][OnePlusOneEs]) only evaluate one or a few
 candidates per iteration, so the parallel feature gives them
 nothing — leave it off if those are your primary optimizers.
 
@@ -102,7 +102,7 @@ to scope it.
 - You're already running multiple seeds in parallel at the harness
   level (see [Compare two algorithms](./compare.md)). Stacking
   parallelism rarely helps.
-- The algorithm is steady-state (Paes, SA, hill climber).
+- The algorithm is steady-state (PAES, SA, hill climber).
 
 ## `parallel` vs `async`
 
@@ -114,24 +114,24 @@ to scope it.
 Both can be on at once if your evaluation does *both* substantial
 CPU work *and* IO. The two features are independent.
 
-[`RandomSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/random_search/struct.RandomSearch.html
-[`Nsga2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
-[`Nsga3`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga3/struct.Nsga3.html
-[`Spea2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/spea2/struct.Spea2.html
-[`Moead`]: https://docs.rs/heuropt/latest/heuropt/algorithms/moead/struct.Moead.html
-[`Mopso`]: https://docs.rs/heuropt/latest/heuropt/algorithms/mopso/struct.Mopso.html
-[`Ibea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ibea/struct.Ibea.html
-[`SmsEmoa`]: https://docs.rs/heuropt/latest/heuropt/algorithms/sms_emoa/struct.SmsEmoa.html
-[`HypE`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hype/struct.Hype.html
-[`PesaII`]: https://docs.rs/heuropt/latest/heuropt/algorithms/pesa2/struct.PesaII.html
-[`EpsilonMoea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/epsilon_moea/struct.EpsilonMoea.html
-[`AgeMoea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/age_moea/struct.AgeMoea.html
-[`Knea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/knea/struct.Knea.html
-[`Grea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/grea/struct.Grea.html
-[`Rvea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/rvea/struct.Rvea.html
-[`DifferentialEvolution`]: https://docs.rs/heuropt/latest/heuropt/algorithms/differential_evolution/struct.DifferentialEvolution.html
-[`GeneticAlgorithm`]: https://docs.rs/heuropt/latest/heuropt/algorithms/genetic_algorithm/struct.GeneticAlgorithm.html
-[`Paes`]: https://docs.rs/heuropt/latest/heuropt/algorithms/paes/struct.Paes.html
-[`SimulatedAnnealing`]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
-[`HillClimber`]: https://docs.rs/heuropt/latest/heuropt/algorithms/hill_climber/struct.HillClimber.html
-[`OnePlusOneEs`]: https://docs.rs/heuropt/latest/heuropt/algorithms/one_plus_one_es/struct.OnePlusOneEs.html
+[RandomSearch]: https://docs.rs/heuropt/latest/heuropt/algorithms/random_search/struct.RandomSearch.html
+[Nsga2]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
+[Nsga3]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga3/struct.Nsga3.html
+[Spea2]: https://docs.rs/heuropt/latest/heuropt/algorithms/spea2/struct.Spea2.html
+[Moead]: https://docs.rs/heuropt/latest/heuropt/algorithms/moead/struct.Moead.html
+[Mopso]: https://docs.rs/heuropt/latest/heuropt/algorithms/mopso/struct.Mopso.html
+[Ibea]: https://docs.rs/heuropt/latest/heuropt/algorithms/ibea/struct.Ibea.html
+[SmsEmoa]: https://docs.rs/heuropt/latest/heuropt/algorithms/sms_emoa/struct.SmsEmoa.html
+[Hype]: https://docs.rs/heuropt/latest/heuropt/algorithms/hype/struct.Hype.html
+[PesaII]: https://docs.rs/heuropt/latest/heuropt/algorithms/pesa2/struct.PesaII.html
+[EpsilonMoea]: https://docs.rs/heuropt/latest/heuropt/algorithms/epsilon_moea/struct.EpsilonMoea.html
+[AgeMoea]: https://docs.rs/heuropt/latest/heuropt/algorithms/age_moea/struct.AgeMoea.html
+[Knea]: https://docs.rs/heuropt/latest/heuropt/algorithms/knea/struct.Knea.html
+[Grea]: https://docs.rs/heuropt/latest/heuropt/algorithms/grea/struct.Grea.html
+[Rvea]: https://docs.rs/heuropt/latest/heuropt/algorithms/rvea/struct.Rvea.html
+[DifferentialEvolution]: https://docs.rs/heuropt/latest/heuropt/algorithms/differential_evolution/struct.DifferentialEvolution.html
+[GeneticAlgorithm]: https://docs.rs/heuropt/latest/heuropt/algorithms/genetic_algorithm/struct.GeneticAlgorithm.html
+[Paes]: https://docs.rs/heuropt/latest/heuropt/algorithms/paes/struct.Paes.html
+[SimulatedAnnealing]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
+[HillClimber]: https://docs.rs/heuropt/latest/heuropt/algorithms/hill_climber/struct.HillClimber.html
+[OnePlusOneEs]: https://docs.rs/heuropt/latest/heuropt/algorithms/one_plus_one_es/struct.OnePlusOneEs.html

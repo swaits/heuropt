@@ -335,7 +335,7 @@ impl<I, V> SimulatedAnnealing<I, V> {
 
 impl<I, V> crate::traits::AlgorithmInfo for SimulatedAnnealing<I, V> {
     fn name(&self) -> &'static str {
-        "SimulatedAnnealing"
+        "Simulated Annealing"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

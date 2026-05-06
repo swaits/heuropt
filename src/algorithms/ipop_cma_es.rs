@@ -289,7 +289,10 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
 
 impl crate::traits::AlgorithmInfo for IpopCmaEs {
     fn name(&self) -> &'static str {
-        "IpopCmaEs"
+        "IPOP-CMA-ES"
+    }
+    fn full_name(&self) -> &'static str {
+        "Increasing-Population CMA-ES with Restarts"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

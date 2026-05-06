@@ -336,7 +336,10 @@ fn environmental_selection<D: Clone>(
 
 impl<I, V> crate::traits::AlgorithmInfo for Grea<I, V> {
     fn name(&self) -> &'static str {
-        "Grea"
+        "GrEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Grid-based Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

@@ -87,8 +87,8 @@ impl Problem for Zdt1 {
 ```
 
 For multi-objective problems, pick a Pareto-aware optimizer:
-[`Nsga2`] is the canonical default; [`Mopso`] often wins on
-smooth-front 2-objective problems; [`Ibea`] often wins on
+[NSGA-II][Nsga2] is the canonical default; [MOPSO][Mopso] often wins on
+smooth-front 2-objective problems; [IBEA][Ibea] often wins on
 disconnected fronts. See [choosing-an-algorithm](./choosing-an-algorithm.md).
 
 ## Maximizing instead of minimizing
@@ -166,8 +166,8 @@ impl Problem for OneMax {
 }
 ```
 
-For `Vec<bool>` problems, [`Umda`] is a parameter-free EDA;
-[`GeneticAlgorithm`] with [`BitFlipMutation`] is the GA route.
+For `Vec<bool>` problems, [UMDA][Umda] is a parameter-free EDA;
+[GA][GeneticAlgorithm] with [`BitFlipMutation`] is the GA route.
 
 ### Permutations (`Vec<usize>`)
 
@@ -191,9 +191,9 @@ impl Problem for Tsp {
 }
 ```
 
-For permutations, [`AntColonyTsp`] specializes on TSP-style problems;
-[`TabuSearch`] takes a user-supplied neighbor function for arbitrary
-discrete neighborhoods; [`SimulatedAnnealing`] with [`SwapMutation`]
+For permutations, [Ant Colony][AntColonyTsp] specializes on TSP-style problems;
+[Tabu Search][TabuSearch] takes a user-supplied neighbor function for arbitrary
+discrete neighborhoods; [Simulated Annealing][SimulatedAnnealing] with [`SwapMutation`]
 is the simplest baseline.
 
 ### Custom decision types
@@ -232,13 +232,13 @@ through the decision tree.
 [`Evaluation`]: https://docs.rs/heuropt/latest/heuropt/core/evaluation/struct.Evaluation.html
 [`Evaluation::new`]: https://docs.rs/heuropt/latest/heuropt/core/evaluation/struct.Evaluation.html#method.new
 [`Evaluation::constrained`]: https://docs.rs/heuropt/latest/heuropt/core/evaluation/struct.Evaluation.html#method.constrained
-[`Nsga2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
-[`Mopso`]: https://docs.rs/heuropt/latest/heuropt/algorithms/mopso/struct.Mopso.html
-[`Ibea`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ibea/struct.Ibea.html
-[`Umda`]: https://docs.rs/heuropt/latest/heuropt/algorithms/umda/struct.Umda.html
-[`GeneticAlgorithm`]: https://docs.rs/heuropt/latest/heuropt/algorithms/genetic_algorithm/struct.GeneticAlgorithm.html
+[Nsga2]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
+[Mopso]: https://docs.rs/heuropt/latest/heuropt/algorithms/mopso/struct.Mopso.html
+[Ibea]: https://docs.rs/heuropt/latest/heuropt/algorithms/ibea/struct.Ibea.html
+[Umda]: https://docs.rs/heuropt/latest/heuropt/algorithms/umda/struct.Umda.html
+[GeneticAlgorithm]: https://docs.rs/heuropt/latest/heuropt/algorithms/genetic_algorithm/struct.GeneticAlgorithm.html
 [`BitFlipMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.BitFlipMutation.html
-[`AntColonyTsp`]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
-[`TabuSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html
-[`SimulatedAnnealing`]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
+[AntColonyTsp]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
+[TabuSearch]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html
+[SimulatedAnnealing]: https://docs.rs/heuropt/latest/heuropt/algorithms/simulated_annealing/struct.SimulatedAnnealing.html
 [`SwapMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.SwapMutation.html

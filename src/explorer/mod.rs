@@ -101,10 +101,16 @@ pub struct RunMeta {
     /// Optional human-readable problem name (e.g. `"Pick a car"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub problem_name: Option<String>,
-    /// Canonical algorithm name (e.g. `"Nsga3"`). Pulled from
-    /// [`AlgorithmInfo::name`] when an algorithm is provided.
+    /// Canonical short algorithm name (e.g. `"NSGA-III"`). Pulled
+    /// from [`AlgorithmInfo::name`] when an algorithm is provided.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub algorithm: Option<String>,
+    /// Academic long form (e.g. `"Non-dominated Sorting Genetic
+    /// Algorithm III"`). Pulled from [`AlgorithmInfo::full_name`]
+    /// when an algorithm is provided. Display tools render this
+    /// as a tooltip / aria-label on the short name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub algorithm_full_name: Option<String>,
     /// Seed driving this run, if applicable. Pulled from
     /// [`AlgorithmInfo::seed`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -216,10 +222,12 @@ impl ExplorerExport {
         }
     }
 
-    /// Populate `algorithm` and `seed` from anything implementing
-    /// [`AlgorithmInfo`] — every built-in algorithm does.
+    /// Populate `algorithm`, `algorithm_full_name`, and `seed`
+    /// from anything implementing [`AlgorithmInfo`] — every
+    /// built-in algorithm does.
     pub fn with_algorithm_info<A: AlgorithmInfo>(mut self, algorithm: &A) -> Self {
         self.run.algorithm = Some(algorithm.name().to_owned());
+        self.run.algorithm_full_name = Some(algorithm.full_name().to_owned());
         self.run.seed = algorithm.seed();
         self
     }
@@ -412,6 +420,9 @@ mod tests {
         fn name(&self) -> &'static str {
             "DummyAlgo"
         }
+        fn full_name(&self) -> &'static str {
+            "Dummy Test Algorithm"
+        }
         fn seed(&self) -> Option<u64> {
             Some(123)
         }
@@ -513,6 +524,10 @@ mod tests {
         let result = make_result(vec![vec![0.0, 1.0]], |d| d.to_vec());
         let export = ExplorerExport::from_result(&problem, &result).with_algorithm_info(&DummyAlgo);
         assert_eq!(export.run.algorithm.as_deref(), Some("DummyAlgo"));
+        assert_eq!(
+            export.run.algorithm_full_name.as_deref(),
+            Some("Dummy Test Algorithm"),
+        );
         assert_eq!(export.run.seed, Some(123));
     }
 

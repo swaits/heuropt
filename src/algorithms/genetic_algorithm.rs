@@ -319,7 +319,10 @@ fn compare_for_fitness<D>(
 
 impl<I, V> crate::traits::AlgorithmInfo for GeneticAlgorithm<I, V> {
     fn name(&self) -> &'static str {
-        "GeneticAlgorithm"
+        "GA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Genetic Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

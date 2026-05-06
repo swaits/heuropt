@@ -366,7 +366,10 @@ fn binary_tournament<D>(entries: &[Nsga2Entry<D>], rng: &mut Rng) -> usize {
 
 impl<I, V> crate::traits::AlgorithmInfo for Nsga2<I, V> {
     fn name(&self) -> &'static str {
-        "Nsga2"
+        "NSGA-II"
+    }
+    fn full_name(&self) -> &'static str {
+        "Non-dominated Sorting Genetic Algorithm II"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

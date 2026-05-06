@@ -452,7 +452,10 @@ impl NelderMead {
 
 impl crate::traits::AlgorithmInfo for NelderMead {
     fn name(&self) -> &'static str {
-        "NelderMead"
+        "Nelder-Mead"
+    }
+    fn full_name(&self) -> &'static str {
+        "Nelder-Mead simplex direct search"
     }
 }
 

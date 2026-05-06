@@ -330,7 +330,10 @@ fn perpendicular_distance(point: &[f64], extremes: &[usize], oriented: &[Vec<f64
 
 impl<I, V> crate::traits::AlgorithmInfo for Knea<I, V> {
     fn name(&self) -> &'static str {
-        "Knea"
+        "KnEA"
+    }
+    fn full_name(&self) -> &'static str {
+        "Knee point-driven Evolutionary Algorithm"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

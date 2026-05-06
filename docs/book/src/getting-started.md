@@ -6,19 +6,21 @@ The shortest path from a fresh project to a working optimizer.
 
 ```toml
 [dependencies]
-heuropt = "0.8"
+heuropt = "0.10"
 ```
 
 The default feature set is small. Optional features:
 
 - `parallel` — rayon-backed parallel population evaluation.
 - `serde` — `Serialize` / `Deserialize` derives on the core data
-  types.
+  types, plus the `heuropt::explorer` JSON export module for the
+  [heuropt-explorer](https://swaits.github.io/heuropt-explorer/)
+  webapp.
 - `async` — `AsyncProblem` trait + per-algorithm `run_async` for
   IO-bound evaluations.
 
 ```toml
-heuropt = { version = "0.8", features = ["parallel"] }
+heuropt = { version = "0.10", features = ["parallel"] }
 ```
 
 ## 2. Define a problem and run an optimizer
@@ -31,7 +33,7 @@ how to score one decision.
 We'll fit a straight line to a handful of `(x, y)` data points by
 finding the slope and intercept that minimize the sum of squared
 errors — same objective as least-squares regression. For a smooth
-single-objective continuous problem like this, [`CmaEs`] is a strong
+single-objective continuous problem like this, [CMA-ES][CmaEs] is a strong
 default.
 
 ```rust,no_run
@@ -138,7 +140,7 @@ problems this clean in well under that budget.
 ## 4. What just happened
 
 - [`Problem`] is the **what** you're optimizing.
-- [`CmaEs`] (or any other optimizer) is the **how**.
+- [CMA-ES][CmaEs] (or any other optimizer) is the **how**.
 - [`CmaEsConfig`] is a plain public-field struct: there are no
   builders, no chained setters, just public fields you set
   directly.
@@ -163,5 +165,5 @@ problems this clean in well under that budget.
 [`Problem`]: https://docs.rs/heuropt/latest/heuropt/core/problem/trait.Problem.html
 [`Optimizer::run`]: https://docs.rs/heuropt/latest/heuropt/traits/trait.Optimizer.html
 [`OptimizationResult`]: https://docs.rs/heuropt/latest/heuropt/core/result/struct.OptimizationResult.html
-[`CmaEs`]: https://docs.rs/heuropt/latest/heuropt/algorithms/cma_es/struct.CmaEs.html
+[CmaEs]: https://docs.rs/heuropt/latest/heuropt/algorithms/cma_es/struct.CmaEs.html
 [`CmaEsConfig`]: https://docs.rs/heuropt/latest/heuropt/algorithms/cma_es/struct.CmaEsConfig.html

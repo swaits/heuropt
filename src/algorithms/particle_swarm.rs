@@ -359,7 +359,10 @@ fn best_index(values: &[f64], direction: Direction) -> usize {
 
 impl crate::traits::AlgorithmInfo for ParticleSwarm {
     fn name(&self) -> &'static str {
-        "ParticleSwarm"
+        "PSO"
+    }
+    fn full_name(&self) -> &'static str {
+        "Particle Swarm Optimization"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

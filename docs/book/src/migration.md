@@ -3,6 +3,70 @@
 Per-release notes for upgrading between heuropt versions. Skip the
 sections that don't apply to your starting version.
 
+## To 0.10
+
+### From 0.9.x
+
+**Almost additive.** Bumping `heuropt = "0.10"` recompiles
+without touching most code. The one breaking change is the value
+returned by `AlgorithmInfo::name()`:
+
+| Before (`0.9`) | After (`0.10`) |
+|---|---|
+| `"Nsga2"` | `"NSGA-II"` |
+| `"Nsga3"` | `"NSGA-III"` |
+| `"Cmaes"` | `"CMA-ES"` |
+| `"Mopso"` | `"MOPSO"` |
+| `"Moead"` | `"MOEA/D"` |
+| `"EpsilonMoea"` | `"ε-MOEA"` |
+| (and 27 more) | … |
+
+If you pattern-matched on those strings (e.g. for branching
+display logic), update to the new canonical strings. They now
+match the literature and will be stable going forward.
+
+What's new and additive:
+
+- `AlgorithmInfo::full_name(&self) -> &'static str` — academic
+  long form (`"Non-dominated Sorting Genetic Algorithm II"`).
+  Defaults to `name()` for algorithms whose long and short
+  forms coincide.
+- `ExplorerExport`'s `RunMeta` gained `algorithm_full_name:
+  Option<String>`. Schema version stays at **1** (the new field
+  is `#[serde(default)]`); display tools can use the long form
+  as a hover tooltip on the short name.
+
+## To 0.9
+
+### From 0.8.x
+
+**Additive only.** Bumping `heuropt = "0.9"` works for all 0.8.x
+code untouched. The new surfaces ship behind the existing `serde`
+feature.
+
+What's new:
+
+- `heuropt::explorer` module (gated on `serde`) — turns an
+  `OptimizationResult` into a self-describing JSON file that the
+  [heuropt-explorer](https://swaits.github.io/heuropt-explorer/)
+  webapp can load. See the
+  [Explore your results](./cookbook/explorer.md) recipe.
+- `Objective` gained optional `label` and `unit` fields with
+  fluent builders `.with_label("…")` / `.with_unit("…")`. Existing
+  `Objective::minimize("…")` / `Objective::maximize("…")` are
+  unchanged. The serde representation is forward- and backward-
+  compatible (new fields are `#[serde(default)]`).
+- `Problem` trait gained a default-empty
+  `fn decision_schema(&self) -> Vec<DecisionVariable>` method.
+  Existing impls compile untouched; override it to provide pretty
+  names / labels / units / bounds for the explorer.
+- `heuropt::traits::AlgorithmInfo` — every built-in algorithm
+  exposes its short canonical name (`"Nsga3"`, …) and its seed.
+  Used by the explorer JSON export.
+
+If you don't want any of this, no migration needed — just bump
+the version.
+
 ## To 0.8
 
 ### From 0.5.x
@@ -101,9 +165,9 @@ from v0.3 are still numerically accurate but will run faster.
 
 ### From 0.2.x
 
-**Additive only.** New algorithms (`BayesianOpt`, `Tpe`,
-`OnePlusOneEs`, `IpopCmaEs`, `SeparableNes`, `NelderMead`,
-`Hyperband`), new operators (`LevyMutation`, `ClampToBounds`,
+**Additive only.** New algorithms (Bayesian Optimization, TPE,
+(1+1)-ES, IPOP-CMA-ES, sNES, Nelder-Mead,
+Hyperband), new operators (`LevyMutation`, `ClampToBounds`,
 `ProjectToSimplex`), new traits (`PartialProblem`, `Repair<D>`).
 
 `CmaEsConfig` gained an `initial_mean: Option<Vec<f64>>` field;
@@ -114,8 +178,8 @@ existing call sites need a `.. CmaEsConfig { initial_mean: None,
 
 ### From 0.1.x
 
-**Additive.** New algorithms across the catalog (HillClimber, SA,
-GA, PSO, CMA-ES, TabuSearch, AntColonyTsp, Umda, TLBO, MOPSO, IBEA,
+**Additive.** New algorithms across the catalog (Hill Climber, SA,
+GA, PSO, CMA-ES, Tabu Search, Ant Colony, UMDA, TLBO, MOPSO, IBEA,
 SMS-EMOA, HypE, RVEA, PESA-II, ε-MOEA, AGE-MOEA, GrEA, KnEA), new
 operators (`SimulatedBinaryCrossover`, `PolynomialMutation`,
 `CompositeVariation`, `BoundedGaussianMutation`), and the

@@ -15,7 +15,7 @@ The columns:
 
 | Library | Lang | Algorithms | Multi-obj | Surrogates | Determinism | Async |
 |---|---|---|---|---|---|---|
-| **heuropt 0.8** | Rust | 33 | ✅ NSGA-II/III, SPEA2, IBEA, MOEA/D, MOPSO, SMS-EMOA, HypE, AGE-MOEA, GrEA, KnEA, RVEA, PESA-II, ε-MOEA, PAES | ✅ BO, TPE, Hyperband | ✅ bit-identical seeded | ✅ `AsyncProblem` + `run_async` on every algorithm |
+| **heuropt 0.10** | Rust | 33 | ✅ NSGA-II/III, SPEA2, IBEA, MOEA/D, MOPSO, SMS-EMOA, HypE, AGE-MOEA, GrEA, KnEA, RVEA, PESA-II, ε-MOEA, PAES | ✅ BO, TPE, Hyperband | ✅ bit-identical seeded | ✅ `AsyncProblem` + `run_async` on every algorithm |
 | pymoo | Python | ~25 | ✅ extensive | partial (BO via plug-ins) | ✅ | ❌ |
 | DEAP | Python | flexible toolbox | ✅ | ❌ | ✅ | ❌ |
 | hyperopt | Python | TPE-focused | ❌ | ✅ TPE | partial | partial |
@@ -36,7 +36,7 @@ The columns:
   otherwise.
 - You want a **small, readable codebase** — every algorithm is
   written for clarity, no trait-object plumbing, no GATs in user-
-  facing APIs. Reading `RandomSearch` should be enough to write a
+  facing APIs. Reading Random Search should be enough to write a
   new optimizer.
 - You have **IO-bound evaluations** — calling an HTTP service, an
   RPC, or a subprocess — and want first-class `async fn evaluate`
@@ -64,12 +64,12 @@ heuropt covers the same major Pareto MOEAs as pymoo and MOEA Framework:
 NSGA-II/III, SPEA2, IBEA, MOEA/D, MOPSO, SMS-EMOA, HypE, AGE-MOEA,
 GrEA, KnEA, RVEA, PESA-II, ε-MOEA, PAES.
 
-The expensive-evaluation regime: BayesianOpt + TPE + Hyperband. This
+The expensive-evaluation regime: Bayesian Optimization + TPE + Hyperband. This
 is comparable to optuna's coverage but in pure Rust.
 
 The single-objective continuous catalog (CMA-ES, IPOP-CMA-ES, sNES,
-DE, PSO, GA, TLBO, (1+1)-ES, NelderMead, RandomSearch, HillClimber,
-SimulatedAnnealing) covers the canonical baselines and several modern
+DE, PSO, GA, TLBO, (1+1)-ES, Nelder-Mead, Random Search, Hill Climber,
+Simulated Annealing) covers the canonical baselines and several modern
 variants.
 
 What heuropt does **not** ship that some libraries do:

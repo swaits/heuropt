@@ -14,7 +14,7 @@ install needed beyond a browser.
 
 ```toml
 [dependencies]
-heuropt = { version = "0.9", features = ["serde"] }
+heuropt = { version = "0.10", features = ["serde"] }
 ```
 
 The export uses `serde_json` under the hood, so the explorer module

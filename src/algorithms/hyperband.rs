@@ -337,6 +337,9 @@ where
     fn name(&self) -> &'static str {
         "Hyperband"
     }
+    fn full_name(&self) -> &'static str {
+        "Hyperband multi-fidelity bandit search"
+    }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)
     }

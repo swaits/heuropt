@@ -18,6 +18,7 @@
   - [Optimize a permutation (TSP-style)](./cookbook/permutation.md)
   - [Constrain your search with `Repair`](./cookbook/constraints.md)
   - [Pick one answer off a Pareto front](./cookbook/pick-one.md)
+  - [Explore your results in a webapp](./cookbook/explorer.md)
   - [Write your own algorithm](./cookbook/custom-optimizer.md)
 
 # Reference

@@ -365,7 +365,10 @@ fn weight_distance(a: &[f64], b: &[f64]) -> f64 {
 
 impl<I, V> crate::traits::AlgorithmInfo for Moead<I, V> {
     fn name(&self) -> &'static str {
-        "Moead"
+        "MOEA/D"
+    }
+    fn full_name(&self) -> &'static str {
+        "Multi-Objective Evolutionary Algorithm based on Decomposition"
     }
     fn seed(&self) -> Option<u64> {
         Some(self.config.seed)

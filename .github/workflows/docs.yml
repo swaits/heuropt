@@ -10,6 +10,14 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time. Don't cancel a running deploy
+# (otherwise we can leave the Pages site partially updated).
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -27,15 +35,21 @@ jobs:
         run: |
           cd docs/book
           mdbook build
-      - name: Upload book as artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
-          name: book
           path: target/book
-          if-no-files-found: error
-          retention-days: 14
 
-  # GitHub Pages deployment is intentionally not in this workflow.
-  # Once Pages is enabled on the repo (Settings → Pages → Build and
-  # deployment: GitHub Actions), this file can grow a `deploy` job
-  # using actions/configure-pages + actions/deploy-pages.
+  deploy:
+    name: Deploy to GitHub Pages
+    # Only deploy on pushes to main / tag pushes / manual runs.
+    # PR builds get the build-and-upload step but no deploy.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -184,6 +184,106 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl DifferentialEvolution {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch (initial
+    /// population and per-generation trials).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use rand::Rng as _;
+
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+        use crate::traits::Initializer as _;
+
+        assert!(
+            self.config.population_size >= 4,
+            "DifferentialEvolution requires population_size >= 4",
+        );
+        assert!(
+            (0.0..=1.0).contains(&self.config.crossover_probability),
+            "DifferentialEvolution crossover_probability must be in [0.0, 1.0]",
+        );
+
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "DifferentialEvolution only supports single-objective problems",
+        );
+        let direction = objectives.objectives[0].direction;
+
+        let dim = self.bounds.bounds.len();
+        let n = self.config.population_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut decisions: Vec<Vec<f64>> = self.bounds.initialize(n, &mut rng);
+        let initial_pop = evaluate_batch_async(problem, decisions.clone(), concurrency).await;
+        let mut evaluations = initial_pop.len();
+        let mut current_pop = initial_pop;
+        let mut evals: Vec<f64> = current_pop
+            .iter()
+            .map(|c| c.evaluation.objectives[0])
+            .collect();
+
+        for _generation in 0..self.config.generations {
+            let trials: Vec<Vec<f64>> = (0..n)
+                .map(|i| {
+                    let (r1, r2, r3) = pick_three_distinct(n, i, &mut rng);
+                    let j_rand = rng.random_range(0..dim);
+                    let mut trial = decisions[i].clone();
+                    for j in 0..dim {
+                        let take_donor =
+                            rng.random_bool(self.config.crossover_probability) || j == j_rand;
+                        if take_donor {
+                            let mutant = decisions[r1][j]
+                                + self.config.differential_weight
+                                    * (decisions[r2][j] - decisions[r3][j]);
+                            let (lo, hi) = self.bounds.bounds[j];
+                            trial[j] = mutant.clamp(lo, hi);
+                        }
+                    }
+                    trial
+                })
+                .collect();
+            let trial_cands: Vec<Candidate<Vec<f64>>> =
+                evaluate_batch_async(problem, trials, concurrency).await;
+            evaluations += trial_cands.len();
+            for (i, trial_cand) in trial_cands.into_iter().enumerate() {
+                let trial_obj = trial_cand.evaluation.objectives[0];
+                let target_obj = evals[i];
+                let trial_better = match direction {
+                    Direction::Minimize => trial_obj <= target_obj,
+                    Direction::Maximize => trial_obj >= target_obj,
+                };
+                if trial_better {
+                    decisions[i] = trial_cand.decision.clone();
+                    evals[i] = trial_obj;
+                    current_pop[i] = trial_cand;
+                }
+            }
+        }
+
+        let front = pareto_front(&current_pop, &objectives);
+        let best = best_candidate(&current_pop, &objectives);
+        OptimizationResult::new(
+            Population::new(current_pop),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn pick_three_distinct(
     n: usize,
     exclude: usize,

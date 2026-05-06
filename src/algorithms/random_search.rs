@@ -113,6 +113,51 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I> RandomSearch<I> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime (typically tokio). Useful when
+    /// `evaluate` is IO-bound (HTTP, RPC, subprocess).
+    ///
+    /// `concurrency` bounds how many evaluations are in-flight at once;
+    /// `1` is sequential, larger values push more load to the
+    /// downstream service.
+    ///
+    /// Available only with the `async` feature.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+        let objectives = problem.objectives();
+        let mut rng = rng_from_seed(self.config.seed);
+        let mut all: Vec<Candidate<P::Decision>> = Vec::new();
+        let mut evaluations = 0usize;
+        for _ in 0..self.config.iterations {
+            let decisions = self
+                .initializer
+                .initialize(self.config.batch_size, &mut rng);
+            evaluations += decisions.len();
+            let cands = evaluate_batch_async(problem, decisions, concurrency).await;
+            all.extend(cands);
+        }
+        let front = pareto_front(&all, &objectives);
+        let best = best_candidate(&all, &objectives);
+        OptimizationResult::new(
+            Population::new(all),
+            front,
+            best,
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

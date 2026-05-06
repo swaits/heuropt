@@ -22,6 +22,8 @@ pub mod nsga3;
 pub mod one_plus_one_es;
 pub mod paes;
 pub(crate) mod parallel_eval;
+#[cfg(feature = "async")]
+pub(crate) mod parallel_eval_async;
 pub mod particle_swarm;
 pub mod pesa2;
 pub mod random_search;

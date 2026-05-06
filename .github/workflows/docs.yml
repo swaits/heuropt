@@ -4,16 +4,12 @@ on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   build:
@@ -31,22 +27,15 @@ jobs:
         run: |
           cd docs/book
           mdbook build
-      - uses: actions/configure-pages@v5
+      - name: Upload book as artifact
+        uses: actions/upload-artifact@v4
         with:
-          # Auto-enable Pages on the repo if not already configured.
-          # Without this, the action errors with "Get Pages site failed".
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
+          name: book
           path: target/book
+          if-no-files-found: error
+          retention-days: 14
 
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+  # GitHub Pages deployment is intentionally not in this workflow.
+  # Once Pages is enabled on the repo (Settings → Pages → Build and
+  # deployment: GitHub Actions), this file can grow a `deploy` job
+  # using actions/configure-pages + actions/deploy-pages.

@@ -8,8 +8,8 @@ needed.
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.5.x   | ✅                 |
-| ≤ 0.4.x | ❌ (please upgrade) |
+| 0.8.x   | ✅                  |
+| ≤ 0.7.x | ❌ (please upgrade) |
 
 heuropt is pre-1.0; the public API may change between minor versions.
 Once 1.0.0 ships, the support window will be at least the latest two

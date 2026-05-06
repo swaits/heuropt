@@ -44,7 +44,7 @@ hyperopt, optuna, DEAP). heuropt's design priorities:
 
 ## What's in the box
 
-heuropt v0.5 ships **35 algorithms** spanning:
+heuropt v0.8 ships **33 algorithms** spanning:
 
 - Single-objective continuous: `RandomSearch`, `HillClimber`,
   `OnePlusOneEs`, `SimulatedAnnealing`, `GeneticAlgorithm`,
@@ -64,6 +64,15 @@ LevyMutation, BitFlipMutation, SwapMutation, ClampToBounds,
 ProjectToSimplex), the metrics (hypervolume, spacing), and the Pareto
 utilities (dominance, fronts, crowding distance, Das–Dennis reference
 points, the `ParetoArchive`) that you'd expect.
+
+**Async evaluation** (since v0.8, behind the `async` feature flag):
+when your `evaluate` function is IO-bound — calling an HTTP service,
+an RPC, or a subprocess — implement [`AsyncProblem`] and use
+`run_async(&problem, concurrency).await` on any algorithm in the
+catalog. heuropt is the only mainstream optimization library with
+first-class async support across its entire algorithm set.
+
+[`AsyncProblem`]: https://docs.rs/heuropt/latest/heuropt/core/async_problem/trait.AsyncProblem.html
 
 ## How to use this guide
 

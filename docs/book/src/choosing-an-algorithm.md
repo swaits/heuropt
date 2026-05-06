@@ -222,8 +222,14 @@ evaluate via rayon when the feature is on. **Seeded runs stay
 bit-identical** to serial mode.
 
 ```toml
-heuropt = { version = "0.5", features = ["parallel"] }
+heuropt = { version = "0.8", features = ["parallel"] }
 ```
+
+If your evaluation is **IO-bound** (HTTP request, RPC, subprocess)
+rather than CPU-bound, use the `async` feature instead — it gives
+you `AsyncProblem` and a `run_async(&problem, concurrency).await`
+method on every algorithm in the catalog. See the
+[Async evaluation cookbook recipe](./cookbook/async.md).
 
 ## TL;DR table
 

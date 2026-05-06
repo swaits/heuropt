@@ -134,8 +134,11 @@ parallel.
   result.
 - **No error type.** Invalid configuration panics with a clear
   message; this matches the style of the built-in algorithms.
-- **No async.** `evaluate` is synchronous; for async work, drive it
-  on a tokio runtime around the optimizer loop yourself.
+- **No async on the trait.** `Optimizer<P>` is synchronous. For
+  async evaluation, implement [`AsyncProblem`](https://docs.rs/heuropt/latest/heuropt/core/async_problem/trait.AsyncProblem.html)
+  on your problem and use the `run_async(&problem, concurrency)`
+  method that comes with the `async` feature. See the
+  [Async evaluation cookbook recipe](./async.md).
 
 The smallness is the point: you should be able to read a built-in
 algorithm and write your own in an afternoon. See

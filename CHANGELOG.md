@@ -9,39 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0] — 2026-05-06
 
-Theme: async evaluation. heuropt now supports problems where each
-evaluation is a `.await`-able operation — HTTP services, RPC clients,
-spawned subprocesses. This is the differentiating capability vs.
-pymoo / hyperopt / MOEA Framework, none of which ship first-class
-async support.
+Theme: async evaluation, plus the docs / governance / CI catch-up
+that came with finalizing the release.
+
+heuropt now supports problems where each evaluation is a
+`.await`-able operation — HTTP services, RPC clients, spawned
+subprocesses. This is the differentiating capability vs.
+pymoo / hyperopt / optuna / DEAP / MOEA Framework, none of which
+ship first-class async support at the *evaluation* level.
 
 No public-API breaks for synchronous users. The new surface is
 gated behind a new `async` feature flag.
 
-> **Note on version numbers.** Versions 0.6.0 and 0.7.0 were
-> published on crates.io but contained experimental observability
-> APIs and metrics that were rolled back. Both are yanked. 0.8.0
-> picks up cleanly from 0.5.0 with just the async additions; if
-> you were on 0.5.x, upgrading to 0.8 is a feature-additive bump.
-
 ### Added
+
+#### Async evaluation (the headline feature)
 
 - New optional feature `async`, gated on
   [`futures`](https://crates.io/crates/futures).
 - `core::async_problem::AsyncProblem` trait — mirrors `Problem` but
   with `async fn evaluate_async(&self, decision)`. Adapt an
   existing sync `Problem` with a one-line wrapper.
+- `core::async_problem::AsyncPartialProblem` trait — mirrors
+  `PartialProblem` for multi-fidelity (Hyperband) workloads with
+  `async fn evaluate_at_budget_async(decision, budget)`.
 - Per-algorithm `run_async(&problem, concurrency).await` methods on
-  `RandomSearch` and `DifferentialEvolution` — drives evaluations
-  through whichever async runtime the caller is using (typically
-  tokio). `concurrency` bounds in-flight evaluations.
+  **every** algorithm in the catalog — all 33 of them — driving
+  evaluations through whichever async runtime the caller is using
+  (typically tokio). `concurrency` bounds in-flight evaluations.
+  Population-based algorithms (NSGA-II, NSGA-III, SPEA2, MOEA/D,
+  CMA-ES, DE, GA, PSO, IBEA, SMS-EMOA, HypE, ε-MOEA, PESA-II,
+  AGE-MOEA, KnEA, GrEA, RVEA, MOPSO, TLBO, IPOP-CMA-ES, sNES, UMDA,
+  Ant Colony, GA, Random Search) fan out per generation. Steady-state
+  algorithms (Hill Climber, SA, (1+1)-ES, PAES, Nelder-Mead, Tabu
+  Search) await each step sequentially. Surrogate algorithms (BO,
+  TPE) batch the initial design and then await per-iteration
+  acquisitions. Hyperband fans out each Successive-Halving rung
+  through `AsyncPartialProblem`.
 - Internal `algorithms::parallel_eval_async::evaluate_batch_async`
-  helper — uses `futures::stream::FuturesOrdered` with concurrency-
-  bounded chunks, preserves input order so seeded determinism is
-  preserved when evaluations are themselves deterministic.
+  and `evaluate_batch_at_budget_async` helpers — use
+  `futures::stream::FuturesOrdered` with concurrency-bounded chunks,
+  preserve input order so seeded determinism is preserved when
+  evaluations are themselves deterministic.
 - `examples/async_eval.rs` — worked example with a simulated 20 ms
   remote service. At concurrency = 1 it's serial; at concurrency = 4
-  it's 2× faster; demonstrates DifferentialEvolution under tokio.
+  it's 2× faster; demonstrates `DifferentialEvolution` under tokio.
+
+#### Documentation
+
+- New cookbook recipe **[Async evaluation](docs/book/src/cookbook/async.md)**
+  — implementing `AsyncProblem`, picking concurrency, determinism
+  guarantees, async vs. `parallel`.
+- Comparison-with-other-libraries chapter updated: `heuropt 0.8`
+  row, `Async ✅ AsyncProblem + run_async` column, "When to pick
+  heuropt" gains an explicit IO-bound bullet.
+- Stability chapter rewritten: removes the speculative "Observer /
+  Checkpoint planned" bullet (those didn't ship), documents the new
+  `async` feature flag.
+- Migration guide: new "To 0.8" section covering both
+  `0.5.x → 0.8` (feature-additive — opt in by enabling the `async`
+  feature) and `0.7 → 0.8` (the partial async surface from 0.7 is
+  superseded by complete coverage; existing `run_async` callers
+  keep working).
+- Runnable `cargo test --doc` examples added to every public
+  operator (10), metric (3), and Pareto utility (7) — every
+  public item across the crate now ships with at least one
+  example. 55 doctests in total (was 45).
+
+#### CI / build
+
+- `.github/workflows/docs.yml` builds the mdbook user guide on
+  every push and deploys to GitHub Pages on `main` /
+  tag pushes.
+- `mdbook` book now uses `[rust] edition = "2021"` to satisfy
+  `mdbook 0.4.40`.
+- `clamp_to_bounds` cargo-fuzz target tolerance loosened to
+  `1e-4 · max(simplex_total, max_abs_x, 1)` so the fuzzer doesn't
+  flag ULP-level slop in the simplex projection's
+  `max(x_i − τ, 0)` clamp boundary.
 
 [0.8.0]: https://github.com/swaits/heuropt/releases/tag/v0.8.0
 

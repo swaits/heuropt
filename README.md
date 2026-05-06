@@ -7,85 +7,184 @@
 [![CI](https://github.com/swaits/heuropt/actions/workflows/ci.yml/badge.svg)](https://github.com/swaits/heuropt/actions/workflows/ci.yml)
 
 **A practical Rust toolkit for heuristic optimization.** Single-objective.
-Multi-objective. Many-objective. 35 algorithms. One small set of traits.
-Bit-identical seeded determinism. No trait objects, no GATs, no generic-RNG
-plumbing in the public API.
+Multi-objective. Many-objective. 33 algorithms — every one of them with a
+sync `run` and an async `run_async`. One small set of traits. Bit-identical
+seeded determinism. No trait objects, no GATs, no generic-RNG plumbing in
+the public API.
 
 If you can write a `Problem` impl and read `RandomSearch`, you can write your
 own optimizer. That's the whole pitch.
 
-- 📖 **Read the [user guide](https://swaits.github.io/heuropt/)** for tutorials,
-  cookbook recipes, comparison with pymoo / hyperopt / MOEA Framework, and
-  stability policy.
-- 🔧 **[API reference on docs.rs](https://docs.rs/heuropt)** has runnable
-  ` ```rust ` examples on every algorithm.
-- 🧪 Tested with **316+ unit / integration / property tests** plus 8
-  cargo-fuzz targets running on every PR.
-- ⚡ Hot paths heavily optimized — comparison harness 3.27× faster as of
-  v0.4.0, all bit-identical to the reference output.
+Docs: [user guide](https://swaits.github.io/heuropt/) · [API reference](https://docs.rs/heuropt).
 
 ## Installation
 
 ```toml
 [dependencies]
-heuropt = "0.5"
+heuropt = "0.8"
 
 # Optional features:
 # - "serde":     derive Serialize/Deserialize on the core data types.
 # - "parallel":  evaluate populations across rayon's thread pool.
 #                Seeded runs stay bit-identical to serial mode.
-# heuropt = { version = "0.5", features = ["serde", "parallel"] }
+# - "async":     AsyncProblem / AsyncPartialProblem traits and a
+#                run_async(&problem, concurrency).await method on
+#                every algorithm — for IO-bound evaluations.
+# heuropt = { version = "0.8", features = ["serde", "parallel", "async"] }
 ```
 
-## Define a problem
+## Define a problem and run an optimizer
+
+You're designing a car. Three things you can pick: **engine
+displacement** (1.0–6.0 L), **curb weight** (1100–2200 kg, where
+going lighter requires aluminum/carbon and costs money), and
+**aerodynamic drag** (Cd from 0.20 to 0.40, where slipperier needs
+expensive aero R&D). Four things you want to optimize: **price**,
+**0-60 acceleration**, **fuel consumption**, **idle noise** — all
+in tension.
+
+The relationships between decisions and objectives are nonlinear
+and coupled: engine cost grows superlinearly with displacement,
+weight reduction below 1500 kg costs a quadratic premium, drag
+reduction below 0.35 Cd costs a 1.5-power premium, and 0-60 depends
+on weight × engine in a non-trivial way. You can't just sweep one
+slider — the Pareto front is a genuine surface in 3D decision space,
+and finding it by hand is hopeless.
+
+NSGA-III is the canonical many-objective (4+) optimizer; it uses
+Das–Dennis reference points to keep the front well-spread.
 
 ```rust
 use heuropt::prelude::*;
 
-struct SchafferN1;
+struct PickACar;
 
-impl Problem for SchafferN1 {
-    type Decision = Vec<f64>;
+impl Problem for PickACar {
+    type Decision = Vec<f64>; // [engine_liters, weight_kg, drag_cd]
 
     fn objectives(&self) -> ObjectiveSpace {
         ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
+            Objective::minimize("price_thousand_dollars"),
+            Objective::minimize("seconds_to_60mph"),
+            Objective::minimize("fuel_gallons_per_100mi"),
+            Objective::minimize("noise_db_at_idle"),
         ])
     }
 
     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
-        let v = x[0];
-        Evaluation::new(vec![v * v, (v - 2.0).powi(2)])
+        let displacement = x[0]; // liters
+        let weight       = x[1]; // kg
+        let drag         = x[2]; // dimensionless Cd
+
+        // Price ($k): engine cost grows superlinearly; weight reduction
+        // below 1500 kg and drag reduction below 0.35 Cd both cost extra.
+        let engine_cost = 3.0 * displacement.powf(1.6);
+        let weight_cost = ((1500.0 - weight).max(0.0) / 100.0).powi(2) * 2.0;
+        let aero_cost   = ((0.35 - drag).max(0.0) * 100.0).powf(1.5) * 0.4;
+        let price = 10.0 + engine_cost + weight_cost + aero_cost;
+
+        // 0-60 (s): heavier = slower; bigger engine = quicker but with
+        // diminishing returns.
+        let weight_factor = (weight - 1100.0) / 1000.0;
+        let engine_factor = ((displacement - 1.0) / 5.0).max(0.0).powf(0.7);
+        let zero_to_sixty = 5.0 + 5.0 * weight_factor - 4.0 * engine_factor;
+
+        // Fuel consumption (gal/100 mi): all three matter.
+        let fuel = 0.5 + 0.5 * displacement + 0.5 * weight / 1000.0 + 4.0 * drag;
+
+        // Idle noise (dB): engine dominates, mildly nonlinear.
+        let noise = 60.0 + 3.0 * displacement.powf(1.2);
+
+        Evaluation::new(vec![price, zero_to_sixty, fuel, noise])
+    }
+}
+
+fn main() {
+    let bounds = vec![
+        (1.0_f64, 6.0_f64),       // engine
+        (1100.0_f64, 2200.0_f64), // weight
+        (0.20_f64, 0.40_f64),     // drag
+    ];
+
+    let mut optimizer = Nsga3::new(
+        Nsga3Config {
+            population_size: 100,
+            generations: 200,
+            reference_divisions: 5,
+            seed: 42,
+        },
+        RealBounds::new(bounds.clone()),
+        CompositeVariation {
+            crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.9),
+            mutation:  PolynomialMutation::new(bounds, 20.0, 1.0 / 3.0),
+        },
+    );
+    let result = optimizer.run(&PickACar);
+
+    let mut front: Vec<_> = result.pareto_front.iter().collect();
+    front.sort_by(|a, b| {
+        a.evaluation.objectives[0]
+            .partial_cmp(&b.evaluation.objectives[0]).unwrap()
+    });
+    println!("{:>5} {:>5} {:>4}    {:>6} {:>5} {:>5} {:>5}",
+             "L", "kg", "Cd", "$k", "0-60", "fuel", "dB");
+    for c in &front {
+        let d = &c.decision;
+        let o = &c.evaluation.objectives;
+        println!("{:>5.2} {:>5.0} {:>4.2}    {:>6.1} {:>5.1} {:>5.2} {:>5.1}",
+                 d[0], d[1], d[2], o[0], o[1], o[2], o[3]);
     }
 }
 ```
 
-## Run NSGA-II
+Run it (`cargo run --release`) and you get 100 cars on the front.
+A representative slice from the actual output, hand-picked across
+the spectrum:
 
-```rust
-use heuropt::prelude::*;
-
-# struct SchafferN1;
-# impl Problem for SchafferN1 {
-#     type Decision = Vec<f64>;
-#     fn objectives(&self) -> ObjectiveSpace {
-#         ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
-#     }
-#     fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
-#         Evaluation::new(vec![x[0] * x[0], (x[0] - 2.0).powi(2)])
-#     }
-# }
-let initializer = RealBounds::new(vec![(-5.0, 5.0)]);
-let variation = GaussianMutation { sigma: 0.2 };
-let config = Nsga2Config { population_size: 60, generations: 80, seed: 42 };
-let mut optimizer = Nsga2::new(config, initializer, variation);
-let result = optimizer.run(&SchafferN1);
-
-println!("Pareto front size: {}", result.pareto_front.len());
+```text
+    L    kg   Cd        $k  0-60  fuel    dB     ← role
+ 1.00  1505 0.35      13.0   7.0  3.17  63.0     cheap baseline
+ 2.00  1370 0.35      22.4   5.1  3.56  66.7     sensible sport sedan
+ 2.45  1330 0.38      28.5   4.5  3.92  68.8     quicker midprice
+ 1.00  1430 0.21      35.8   6.6  2.54  63.0     fuel-saver (small + slippery)
+ 3.50  1300 0.25      52.9   3.5  3.88  73.3     genuine sports car
+ 5.27  1100 0.20     108.1   1.4  4.48  82.0     hypercar corner
 ```
 
-See `examples/toy_nsga2.rs` for the full version.
+### Reading the result
+
+Every row is **non-dominated** — no row is strictly better than
+another on every metric. The interesting part is what each one does
+*differently*:
+
+- The **cheap baseline** ($13k) takes the path of least resistance:
+  smallest engine, no weight reduction, average drag. Slow but
+  affordable.
+- The **sensible sedan** ($22k) trades $9k for **2 seconds off
+  0-60** by running a 2.0L engine with mild weight reduction.
+- The **fuel-saver** is interesting: it's a 1.0L econobox engine,
+  but it spends $22k *just on aero* (0.21 Cd) to push fuel
+  consumption down to **2.54 gal/100mi**. The optimizer figured
+  out that aero matters more than displacement at this fuel point.
+  No human would pick this combo by intuition.
+- The **sports car** ($53k) doesn't blow money on the lightest
+  possible weight — it picks 1300 kg, because dropping further
+  costs disproportionately and the 3.5L engine is doing most of
+  the acceleration work.
+- The **hypercar corner** ($108k) is the optimizer pushing every
+  decision to its ceiling: minimum weight (1100 kg), minimum
+  drag (0.20 Cd), big engine (5.3L). Sub-1.5 second 0-60, but
+  you pay for it on every other axis except fuel (because the
+  weight + aero savings partly cancel the V8's thirst).
+
+That last point is the kind of insight a Pareto front gives you
+that no single-objective optimizer would: **the cheapest fuel-
+efficient car is not the smallest engine alone**, it's a small
+engine + aggressive aero. **The lightest sports car is not the
+lightest possible**, it's the point where weight cost stops paying
+back in 0-60. The optimizer doesn't tell you what to buy — it
+hands you the frontier of *every defensible compromise* and lets
+you pick by your own priorities.
 
 ## Implement a custom optimizer
 
@@ -105,13 +204,7 @@ where
         // Evaluate them with `problem.evaluate(...)`.
         // Keep the best, or maintain a Pareto archive.
         // Return an OptimizationResult.
-        # OptimizationResult::new(
-        #     Population::new(Vec::new()),
-        #     Vec::new(),
-        #     None,
-        #     0,
-        #     0,
-        # )
+        todo!()
     }
 }
 ```

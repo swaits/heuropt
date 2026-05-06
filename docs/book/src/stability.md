@@ -18,10 +18,10 @@ versions — use them at your own risk.
 
 While we are pre-1.0:
 
-- **Minor bumps (`0.5 → 0.6`) may break the public API.** The
+- **Minor bumps (`0.8 → 0.9`) may break the public API.** The
   CHANGELOG calls out everything that changed, and a **migration
   guide** in this book documents the move.
-- **Patch bumps (`0.5.0 → 0.5.1`) only contain bug fixes,
+- **Patch bumps (`0.8.0 → 0.8.1`) only contain bug fixes,
   performance improvements, and additive non-breaking features.**
   No deprecations, no removals.
 
@@ -29,24 +29,20 @@ While we are pre-1.0:
 
 In rough order of likelihood:
 
-1. **`Optimizer<P>` may grow new optional methods** for callbacks,
-   stop conditions, and save/resume support. These will land as
-   methods with default implementations so existing trait impls
-   keep compiling, but the trait shape will be different.
-2. **Algorithm config structs may gain fields.** All current configs
+1. **Algorithm config structs may gain fields.** All current configs
    are public-field structs; adding a non-`Default` field is a
    breaking change. We may switch to builder patterns to avoid this
    class of break, or we may add `#[non_exhaustive]`.
-3. **The `Snapshot`, `Observer`, and `Checkpoint` types** (planned
-   for a future release) will land as new public surfaces.
-4. **Some operators may move between `operators` and `pareto`** as
+2. **Some operators may move between `operators` and `pareto`** as
    the boundary between "things that produce candidates" and "Pareto
    utilities" gets clearer.
 
 What is **not** likely to change:
 
 - The `Problem` trait shape.
+- The `AsyncProblem` / `AsyncPartialProblem` trait shapes.
 - The `Variation` / `Initializer` / `Repair` traits.
+- The `Optimizer<P>` trait — single `run` method, no callbacks.
 - The `Evaluation` / `Candidate` / `Population` / `OptimizationResult`
   data types.
 - The seeded determinism property.
@@ -60,12 +56,12 @@ Across minor versions, output may change if an algorithm's
 implementation changes (e.g. a perf rewrite that reorders
 floating-point operations, or a new feature that changes the
 RNG-consumption pattern). The CHANGELOG calls this out explicitly
-when it happens. As of v0.5, the entire history of perf optimizations
-has been bit-identical against the v0.3.0 reference.
+when it happens. As of v0.8, the entire history of perf
+optimizations has been bit-identical against the v0.3.0 reference.
 
 ## MSRV (minimum supported Rust version)
 
-heuropt's MSRV is **1.85** as of v0.5. This is tested in CI against
+heuropt's MSRV is **1.85** as of v0.8. This is tested in CI against
 every PR.
 
 MSRV bumps are treated as patch-bump-eligible (they don't break the
@@ -79,6 +75,9 @@ The current optional features:
 - `serde` — adds `Serialize` / `Deserialize` derives on the core data
   types.
 - `parallel` — rayon-backed parallel population evaluation.
+- `async` — `AsyncProblem` + `AsyncPartialProblem` traits, plus a
+  `run_async` method on every algorithm in the catalog, for
+  IO-bound evaluations.
 
 Features added in 0.x can be renamed or removed in any minor bump
 that documents the change. Removing a feature is treated like a

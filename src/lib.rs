@@ -4,7 +4,7 @@
 //! The crate aims to make three things obvious:
 //!
 //! 1. **Define a problem** by implementing [`Problem`](crate::core::Problem).
-//! 2. **Run a built-in optimizer** — pick from 35 algorithms in
+//! 2. **Run a built-in optimizer** — pick from 33 algorithms in
 //!    [`algorithms`] covering single-objective continuous (CMA-ES,
 //!    Differential Evolution, Nelder-Mead, …), multi-objective
 //!    (NSGA-II, MOPSO, IBEA, MOEA/D, …), many-objective (NSGA-III,
@@ -32,6 +32,12 @@
 //! - `parallel` — rayon-backed parallel population evaluation in
 //!   every population-based algorithm. Seeded runs stay bit-
 //!   identical to serial mode.
+//! - `async` — adds the
+//!   [`AsyncProblem`](crate::core::async_problem::AsyncProblem) and
+//!   [`AsyncPartialProblem`](crate::core::async_problem::AsyncPartialProblem)
+//!   traits and a `run_async(&problem, concurrency).await` method on
+//!   every algorithm. Use this when your `evaluate` does IO (HTTP,
+//!   RPC, subprocess) — see the [Async evaluation cookbook recipe](https://swaits.github.io/heuropt/cookbook/async.html).
 //!
 //! # Quick example
 //!

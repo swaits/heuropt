@@ -9,7 +9,7 @@ population, and rayon parallelizes that batch.
 
 ```toml
 [dependencies]
-heuropt = { version = "0.5", features = ["parallel"] }
+heuropt = { version = "0.8", features = ["parallel"] }
 ```
 
 There's nothing else to opt into in your code. The
@@ -103,6 +103,16 @@ to scope it.
   level (see [Compare two algorithms](./compare.md)). Stacking
   parallelism rarely helps.
 - The algorithm is steady-state (Paes, SA, hill climber).
+
+## `parallel` vs `async`
+
+| If your `evaluate` is… | Use |
+|---|---|
+| CPU-bound (math, simulation) | `parallel` feature (this recipe) |
+| IO-bound (HTTP, RPC, subprocess) | `async` feature → see [Async evaluation](./async.md) |
+
+Both can be on at once if your evaluation does *both* substantial
+CPU work *and* IO. The two features are independent.
 
 [`RandomSearch`]: https://docs.rs/heuropt/latest/heuropt/algorithms/random_search/struct.RandomSearch.html
 [`Nsga2`]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html

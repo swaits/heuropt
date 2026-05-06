@@ -15,11 +15,11 @@ The columns:
 
 | Library | Lang | Algorithms | Multi-obj | Surrogates | Determinism | Async |
 |---|---|---|---|---|---|---|
-| **heuropt 0.5** | Rust | 35 | ✅ NSGA-II/III, SPEA2, IBEA, MOEA/D, MOPSO, SMS-EMOA, HypE, AGE-MOEA, GrEA, KnEA, RVEA, PESA-II, ε-MOEA, PAES | ✅ BO, TPE, Hyperband | ✅ bit-identical seeded | ⏳ planned |
+| **heuropt 0.8** | Rust | 33 | ✅ NSGA-II/III, SPEA2, IBEA, MOEA/D, MOPSO, SMS-EMOA, HypE, AGE-MOEA, GrEA, KnEA, RVEA, PESA-II, ε-MOEA, PAES | ✅ BO, TPE, Hyperband | ✅ bit-identical seeded | ✅ `AsyncProblem` + `run_async` on every algorithm |
 | pymoo | Python | ~25 | ✅ extensive | partial (BO via plug-ins) | ✅ | ❌ |
 | DEAP | Python | flexible toolbox | ✅ | ❌ | ✅ | ❌ |
 | hyperopt | Python | TPE-focused | ❌ | ✅ TPE | partial | partial |
-| optuna | Python | TPE / CMA-ES / NSGA-II | ✅ | ✅ TPE, BoTorch via plug-in | ✅ | ✅ |
+| optuna | Python | TPE / CMA-ES / NSGA-II | ✅ | ✅ TPE, BoTorch via plug-in | ✅ | partial (study-level, not eval-level) |
 | MOEA Framework | Java | ~40 | ✅ very extensive | ❌ | ✅ | ❌ |
 | metaheuristics-rs | Rust | ~10 | partial | ❌ | ✅ | ❌ |
 | argmin | Rust | line-search / quasi-Newton | ❌ | ❌ | ✅ | ❌ |
@@ -38,12 +38,13 @@ The columns:
   written for clarity, no trait-object plumbing, no GATs in user-
   facing APIs. Reading `RandomSearch` should be enough to write a
   new optimizer.
+- You have **IO-bound evaluations** — calling an HTTP service, an
+  RPC, or a subprocess — and want first-class `async fn evaluate`
+  support. heuropt is the only mainstream optimization library that
+  ships this (see [Async evaluation](./cookbook/async.md)).
 
 ## When *not* to pick heuropt
 
-- You need **first-class async / await** for evaluations that talk to
-  HTTP services or spawn subprocesses. heuropt is sync; that's on
-  the roadmap but not shipping yet.
 - You need **gradient-based** optimization. Use `argmin` (Rust) or
   `scipy.optimize` (Python) — heuropt is gradient-free by design.
 - You need **GPU-accelerated** evaluations. heuropt's `evaluate`

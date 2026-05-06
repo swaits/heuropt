@@ -31,4 +31,4 @@ use-boolean-and = true
 enable = true
 
 [rust]
-edition = "2024"
+edition = "2021"

@@ -1,3 +1,7 @@
+[workspace]
+# Detach from the parent heuropt workspace so cargo-fuzz can build
+# this crate independently without listing it as a workspace member.
+
 [package]
 name = "heuropt-fuzz"
 version = "0.0.0"

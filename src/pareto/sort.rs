@@ -9,6 +9,26 @@ use crate::core::objective::ObjectiveSpace;
 /// non-dominated after removing `fronts[0]`, and so on. Each entry is an index
 /// into the input population. Equal-objective candidates land on the same
 /// front. O(N²·M) is acceptable for v1 (spec §9.5).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// let pop = [
+///     Candidate::new((), Evaluation::new(vec![1.0, 5.0])), // front 0
+///     Candidate::new((), Evaluation::new(vec![2.0, 3.0])), // front 0
+///     Candidate::new((), Evaluation::new(vec![4.0, 1.0])), // front 0
+///     Candidate::new((), Evaluation::new(vec![3.0, 4.0])), // front 1
+///     Candidate::new((), Evaluation::new(vec![5.0, 6.0])), // front 2
+/// ];
+/// let fronts = non_dominated_sort(&pop, &s);
+/// assert_eq!(fronts.len(), 3);
+/// ```
 pub fn non_dominated_sort<D>(
     population: &[Candidate<D>],
     objectives: &ObjectiveSpace,

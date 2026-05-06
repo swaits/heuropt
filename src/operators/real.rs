@@ -10,6 +10,23 @@ use crate::traits::{Initializer, Variation};
 ///
 /// Bounds are inclusive `(lo, hi)` ranges per dimension. Panics if any bound
 /// has `lo > hi` (spec §11.1).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut rng = rng_from_seed(42);
+/// let mut init = RealBounds::new(vec![(-1.0, 1.0); 3]);
+/// let decisions = init.initialize(5, &mut rng);
+/// assert_eq!(decisions.len(), 5);
+/// for d in &decisions {
+///     assert_eq!(d.len(), 3);
+///     for &v in d {
+///         assert!(v >= -1.0 && v <= 1.0);
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct RealBounds {
     /// Per-variable inclusive bounds in decision order.
@@ -54,6 +71,19 @@ impl Initializer<Vec<f64>> for RealBounds {
 /// Add `Normal(0, sigma)` noise to every variable of the first parent.
 ///
 /// Always returns exactly one child. Does not enforce bounds in v1 (spec §11.2).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut rng = rng_from_seed(42);
+/// let mut m = GaussianMutation { sigma: 0.1 };
+/// let parent = vec![0.0; 4];
+/// let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// assert_eq!(children[0].len(), parent.len());
+/// ```
 #[derive(Debug, Clone)]
 pub struct GaussianMutation {
     /// Standard deviation of the Gaussian noise. Must be positive.
@@ -88,6 +118,26 @@ impl Variation<Vec<f64>> for GaussianMutation {
 ///
 /// Panics on construction if any bound has `lo > hi`, or at run time if
 /// `parents.len() < 2` or any parent length differs from `bounds.len()`.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let bounds = vec![(-1.0, 1.0); 3];
+/// let mut sbx = SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5);
+/// let mut rng = rng_from_seed(42);
+/// let parents = [vec![-0.5, 0.0, 0.5], vec![0.5, 0.5, -0.5]];
+/// let children = sbx.vary(&parents, &mut rng);
+/// assert_eq!(children.len(), 2);
+/// // Children stay in bounds.
+/// for c in &children {
+///     for (j, &v) in c.iter().enumerate() {
+///         let (lo, hi) = bounds[j];
+///         assert!(v >= lo && v <= hi);
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct SimulatedBinaryCrossover {
     /// Per-variable inclusive bounds. Length must match the parent decisions.
@@ -180,6 +230,23 @@ impl Variation<Vec<f64>> for SimulatedBinaryCrossover {
 ///
 /// This is the simple bound-rescale form; the bound-aware `δ_q` variant from
 /// the full paper is left as a future refinement.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let bounds = vec![(-1.0, 1.0); 3];
+/// let mut pm = PolynomialMutation::new(bounds.clone(), 20.0, 1.0 / 3.0);
+/// let mut rng = rng_from_seed(42);
+/// let parent = vec![0.0, 0.5, -0.5];
+/// let children = pm.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// for (j, &v) in children[0].iter().enumerate() {
+///     let (lo, hi) = bounds[j];
+///     assert!(v >= lo && v <= hi);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct PolynomialMutation {
     /// Per-variable inclusive bounds. Length must match the parent decision.
@@ -254,6 +321,23 @@ impl Variation<Vec<f64>> for PolynomialMutation {
 /// Always returns exactly one child. Use this when you want feasibility
 /// maintained across generations without leaning on
 /// clamp-inside-`Problem::evaluate`.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let bounds = vec![(-1.0, 1.0); 3];
+/// let mut m = BoundedGaussianMutation::new(0.3, bounds.clone());
+/// let mut rng = rng_from_seed(42);
+/// let parent = vec![0.0; 3];
+/// let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// for (j, &v) in children[0].iter().enumerate() {
+///     let (lo, hi) = bounds[j];
+///     assert!(v >= lo && v <= hi);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct BoundedGaussianMutation {
     /// Standard deviation of the Gaussian noise. Must be positive.
@@ -315,6 +399,23 @@ impl Variation<Vec<f64>> for BoundedGaussianMutation {
 /// produce a Lévy(α) sample. `alpha` is the tail exponent in `(0, 2]`;
 /// typical value is `1.5`. `1.0` gives the Cauchy distribution (very
 /// heavy); `2.0` collapses to the Normal.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let bounds = vec![(-1.0, 1.0); 3];
+/// let mut m = LevyMutation::new(1.5, 0.1, bounds.clone());
+/// let mut rng = rng_from_seed(42);
+/// let parent = vec![0.0; 3];
+/// let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// for (j, &v) in children[0].iter().enumerate() {
+///     let (lo, hi) = bounds[j];
+///     assert!(v >= lo && v <= hi);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct LevyMutation {
     /// Tail exponent `α ∈ (0, 2]`. Smaller = heavier tail.

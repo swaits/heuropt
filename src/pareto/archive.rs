@@ -9,6 +9,23 @@ use crate::core::objective::ObjectiveSpace;
 /// archive insert/extend operations maintain the non-domination property among
 /// members; `truncate` enforces a maximum size by simple tail-truncation in
 /// v1.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// let mut a: ParetoArchive<u32> = ParetoArchive::new(s);
+/// a.insert(Candidate::new(1, Evaluation::new(vec![1.0, 4.0])));
+/// a.insert(Candidate::new(2, Evaluation::new(vec![3.0, 2.0])));
+/// // Dominated by both — should be discarded:
+/// a.insert(Candidate::new(3, Evaluation::new(vec![5.0, 5.0])));
+/// assert_eq!(a.members().len(), 2);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ParetoArchive<D> {
     /// The current approximate non-dominated set.

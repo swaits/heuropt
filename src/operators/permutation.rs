@@ -8,6 +8,22 @@ use crate::traits::Variation;
 /// Swap two distinct random indices in the first parent (spec §11.4).
 ///
 /// If the parent has length `< 2` the child is returned unchanged.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut rng = rng_from_seed(42);
+/// let mut m = SwapMutation;
+/// let parent: Vec<usize> = (0..6).collect();
+/// let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// // Still a permutation of [0, 1, 2, 3, 4, 5]:
+/// let mut sorted = children[0].clone();
+/// sorted.sort();
+/// assert_eq!(sorted, vec![0, 1, 2, 3, 4, 5]);
+/// ```
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SwapMutation;
 

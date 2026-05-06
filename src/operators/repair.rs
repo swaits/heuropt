@@ -8,6 +8,17 @@ use crate::traits::Repair;
 /// The simplest possible repair — pair with `GaussianMutation` (which
 /// doesn't enforce bounds in v1) to produce a bounds-respecting variant
 /// without writing a custom Variation impl.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut r = ClampToBounds::new(vec![(-1.0, 1.0); 3]);
+/// let mut x = vec![-2.0, 0.5, 5.0];
+/// r.repair(&mut x);
+/// assert_eq!(x, vec![-1.0, 0.5, 1.0]);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ClampToBounds {
     /// Per-variable inclusive bounds.
@@ -46,6 +57,19 @@ impl Repair<Vec<f64>> for ClampToBounds {
 /// Perpiñán 2013. Useful for portfolio-style problems where the
 /// decision must sum to a budget, and for normalizing reference
 /// directions onto the unit simplex.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut r = ProjectToSimplex::new(1.0);
+/// let mut x = vec![0.6, 0.5, -0.1, 0.3];
+/// r.repair(&mut x);
+/// let sum: f64 = x.iter().sum();
+/// assert!((sum - 1.0).abs() < 1e-12);
+/// assert!(x.iter().all(|&v| v >= 0.0));
+/// ```
 #[derive(Debug, Clone)]
 pub struct ProjectToSimplex {
     /// Target sum (the simplex's "size"). Standard probability simplex

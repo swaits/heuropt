@@ -9,6 +9,19 @@ use crate::traits::Variation;
 ///
 /// Always returns exactly one child (spec §11.3). Panics if `probability` is
 /// outside `[0.0, 1.0]` or if no parents are provided.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let mut rng = rng_from_seed(42);
+/// let mut m = BitFlipMutation { probability: 0.5 };
+/// let parent = vec![true, false, true, false];
+/// let children = m.vary(std::slice::from_ref(&parent), &mut rng);
+/// assert_eq!(children.len(), 1);
+/// assert_eq!(children[0].len(), parent.len());
+/// ```
 #[derive(Debug, Clone)]
 pub struct BitFlipMutation {
     /// Per-bit flip probability. Must lie in `[0.0, 1.0]`.

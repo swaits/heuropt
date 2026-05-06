@@ -14,6 +14,26 @@ use crate::core::objective::ObjectiveSpace;
 ///
 /// # Panics
 /// If `objectives` does not have exactly two objectives.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+/// use heuropt::metrics::hypervolume_2d;
+///
+/// let space = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// // Reference (4, 4); front at (1,3), (2,2), (3,1) → dominated area = 6.
+/// let front = [
+///     Candidate::new((), Evaluation::new(vec![1.0, 3.0])),
+///     Candidate::new((), Evaluation::new(vec![2.0, 2.0])),
+///     Candidate::new((), Evaluation::new(vec![3.0, 1.0])),
+/// ];
+/// let hv = hypervolume_2d(&front, &space, [4.0, 4.0]);
+/// assert!((hv - 6.0).abs() < 1e-12);
+/// ```
 pub fn hypervolume_2d<D>(
     front: &[Candidate<D>],
     objectives: &ObjectiveSpace,
@@ -147,6 +167,24 @@ mod tests {
 ///
 /// # Panics
 /// If `objectives.len() != reference_point.len()`, or if either is zero.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+/// use heuropt::metrics::hypervolume_nd;
+///
+/// let space = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+///     Objective::minimize("f3"),
+/// ]);
+/// // Single corner point at the origin against a unit-cube reference:
+/// // dominated volume = 1.
+/// let front = [Candidate::new((), Evaluation::new(vec![0.0, 0.0, 0.0]))];
+/// let hv = hypervolume_nd(&front, &space, &[1.0, 1.0, 1.0]);
+/// assert!((hv - 1.0).abs() < 1e-12);
+/// ```
 pub fn hypervolume_nd<D>(
     front: &[Candidate<D>],
     objectives: &ObjectiveSpace,

@@ -11,6 +11,26 @@ use crate::core::objective::ObjectiveSpace;
 /// uniform front has spacing 0.
 ///
 /// Returns `0.0` for empty or single-point fronts (spec §14.1).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+/// use heuropt::metrics::spacing;
+///
+/// let space = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// // Five points evenly spaced on a line — spacing should be 0.
+/// let front: Vec<Candidate<()>> = (0..5)
+///     .map(|i| {
+///         let t = i as f64;
+///         Candidate::new((), Evaluation::new(vec![t, 4.0 - t]))
+///     })
+///     .collect();
+/// assert!(spacing(&front, &space) < 1e-12);
+/// ```
 pub fn spacing<D>(front: &[Candidate<D>], objectives: &ObjectiveSpace) -> f64 {
     let n = front.len();
     if n < 2 {

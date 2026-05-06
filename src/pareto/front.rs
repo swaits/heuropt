@@ -8,6 +8,25 @@ use crate::pareto::dominance::{Dominance, pareto_compare};
 ///
 /// O(N²·M) in v1 (spec §9.3). Input order is preserved among returned
 /// candidates.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// let pop = [
+///     Candidate::new(1u32, Evaluation::new(vec![1.0, 4.0])), // non-dominated
+///     Candidate::new(2u32, Evaluation::new(vec![3.0, 2.0])), // non-dominated
+///     Candidate::new(3u32, Evaluation::new(vec![5.0, 5.0])), // dominated
+/// ];
+/// let front = pareto_front(&pop, &s);
+/// let kept: Vec<u32> = front.iter().map(|c| c.decision).collect();
+/// assert_eq!(kept, vec![1, 2]);
+/// ```
 pub fn pareto_front<D: Clone>(
     population: &[Candidate<D>],
     objectives: &ObjectiveSpace,
@@ -34,6 +53,21 @@ pub fn pareto_front<D: Clone>(
 ///
 /// Returns `None` if there is not exactly one objective, if the population is
 /// empty, or if every candidate is infeasible (spec §9.4).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+/// let pop = [
+///     Candidate::new(1u32, Evaluation::new(vec![3.0])),
+///     Candidate::new(2u32, Evaluation::new(vec![1.0])),
+///     Candidate::new(3u32, Evaluation::new(vec![2.0])),
+/// ];
+/// let best = best_candidate(&pop, &s).unwrap();
+/// assert_eq!(best.decision, 2);
+/// ```
 pub fn best_candidate<D: Clone>(
     population: &[Candidate<D>],
     objectives: &ObjectiveSpace,

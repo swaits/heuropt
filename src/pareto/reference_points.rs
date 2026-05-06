@@ -10,6 +10,21 @@
 ///
 /// # Panics
 /// If `num_objectives == 0`.
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// // 3 objectives, 4 divisions → binomial(6, 2) = 15 points.
+/// let pts = das_dennis(3, 4);
+/// assert_eq!(pts.len(), 15);
+/// for w in &pts {
+///     assert_eq!(w.len(), 3);
+///     let sum: f64 = w.iter().sum();
+///     assert!((sum - 1.0).abs() < 1e-12);
+/// }
+/// ```
 pub fn das_dennis(num_objectives: usize, divisions: usize) -> Vec<Vec<f64>> {
     assert!(
         num_objectives > 0,

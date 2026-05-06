@@ -29,6 +29,21 @@ pub enum Dominance {
 ///    `constraint_violation` dominates.
 /// 3. Otherwise compare objective values after converting both to
 ///    minimization orientation via [`ObjectiveSpace::as_minimization`].
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// let a = Evaluation::new(vec![1.0, 1.0]);
+/// let b = Evaluation::new(vec![2.0, 2.0]);
+/// assert_eq!(pareto_compare(&a, &b, &s), Dominance::Dominates);
+/// assert_eq!(pareto_compare(&b, &a, &s), Dominance::DominatedBy);
+/// ```
 pub fn pareto_compare(a: &Evaluation, b: &Evaluation, objectives: &ObjectiveSpace) -> Dominance {
     let a_feasible = a.is_feasible();
     let b_feasible = b.is_feasible();

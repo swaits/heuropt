@@ -11,6 +11,28 @@ use crate::core::objective::ObjectiveSpace;
 /// `f64::INFINITY`. If the front has 0 entries an empty vector is returned;
 /// 1 or 2 entries return all `f64::INFINITY`. All comparisons happen on
 /// minimization-oriented objective values (spec §9.6).
+///
+/// # Example
+///
+/// ```
+/// use heuropt::prelude::*;
+///
+/// let s = ObjectiveSpace::new(vec![
+///     Objective::minimize("f1"),
+///     Objective::minimize("f2"),
+/// ]);
+/// // Three points along a Pareto-like trade-off; the interior point gets
+/// // a finite crowding distance, the boundaries get +∞.
+/// let pop = [
+///     Candidate::new((), Evaluation::new(vec![0.0, 4.0])),
+///     Candidate::new((), Evaluation::new(vec![2.0, 2.0])),
+///     Candidate::new((), Evaluation::new(vec![4.0, 0.0])),
+/// ];
+/// let d = crowding_distance(&pop, &[0, 1, 2], &s);
+/// assert!(d[0].is_infinite());
+/// assert!(d[1].is_finite() && d[1] > 0.0);
+/// assert!(d[2].is_infinite());
+/// ```
 pub fn crowding_distance<D>(
     population: &[Candidate<D>],
     front: &[usize],

@@ -1,0 +1,17 @@
+[package]
+name = "heuropt-plot"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+authors = ["Stephen Waits <steve@waits.net>"]
+description = "Lightweight SVG visualization for heuropt Pareto fronts and convergence traces."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/swaits/heuropt"
+homepage = "https://github.com/swaits/heuropt"
+documentation = "https://docs.rs/heuropt-plot"
+keywords = ["optimization", "pareto", "svg", "plotting", "heuropt"]
+categories = ["algorithms", "visualization"]
+
+[dependencies]
+heuropt = { version = "0.8", path = ".." }

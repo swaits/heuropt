@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "heuropt-plot"]
+
 [package]
 name = "heuropt"
 version = "0.8.0"
@@ -28,6 +31,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 gungraun = "0.18"
+heuropt-plot = { path = "heuropt-plot" }
 proptest = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 

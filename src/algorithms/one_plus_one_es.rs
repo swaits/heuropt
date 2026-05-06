@@ -285,6 +285,15 @@ impl OnePlusOneEs {
     }
 }
 
+impl crate::traits::AlgorithmInfo for OnePlusOneEs {
+    fn name(&self) -> &'static str {
+        "OnePlusOneEs"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

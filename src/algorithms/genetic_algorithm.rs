@@ -317,6 +317,15 @@ fn compare_for_fitness<D>(
     }
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for GeneticAlgorithm<I, V> {
+    fn name(&self) -> &'static str {
+        "GeneticAlgorithm"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

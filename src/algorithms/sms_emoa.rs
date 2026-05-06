@@ -289,6 +289,15 @@ fn pick_drop_index<D>(
     worst_front[worst_idx_in_front]
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for SmsEmoa<I, V> {
+    fn name(&self) -> &'static str {
+        "SmsEmoa"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

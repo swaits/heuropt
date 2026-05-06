@@ -325,6 +325,15 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     }
 }
 
+impl crate::traits::AlgorithmInfo for Tlbo {
+    fn name(&self) -> &'static str {
+        "Tlbo"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

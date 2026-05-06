@@ -287,6 +287,15 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     }
 }
 
+impl crate::traits::AlgorithmInfo for IpopCmaEs {
+    fn name(&self) -> &'static str {
+        "IpopCmaEs"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

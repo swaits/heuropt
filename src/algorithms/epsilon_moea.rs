@@ -396,6 +396,15 @@ fn box_dominates(a: &[i64], b: &[i64]) -> bool {
     strictly_less
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for EpsilonMoea<I, V> {
+    fn name(&self) -> &'static str {
+        "EpsilonMoea"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -459,6 +459,15 @@ fn binary_tournament(fitness: &[f64], rng: &mut Rng) -> usize {
     }
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for Hype<I, V> {
+    fn name(&self) -> &'static str {
+        "Hype"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

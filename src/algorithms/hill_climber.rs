@@ -224,6 +224,15 @@ impl<I, V> HillClimber<I, V> {
     }
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for HillClimber<I, V> {
+    fn name(&self) -> &'static str {
+        "HillClimber"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

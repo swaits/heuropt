@@ -409,6 +409,15 @@ fn truncate_by_grid<D: Clone>(archive: &mut ParetoArchive<D>, max_size: usize, d
     }
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for PesaII<I, V> {
+    fn name(&self) -> &'static str {
+        "PesaII"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

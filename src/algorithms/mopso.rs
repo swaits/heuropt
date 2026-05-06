@@ -330,6 +330,15 @@ impl Mopso {
     }
 }
 
+impl crate::traits::AlgorithmInfo for Mopso {
+    fn name(&self) -> &'static str {
+        "Mopso"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

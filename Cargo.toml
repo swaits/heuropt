@@ -1,6 +1,6 @@
 [package]
 name = "heuropt"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Stephen Waits <steve@waits.net>"]
@@ -15,7 +15,7 @@ categories = ["algorithms", "science", "mathematics", "simulation"]
 
 [features]
 default = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "dep:serde_json"]
 parallel = ["dep:rayon"]
 async = ["dep:futures"]
 
@@ -25,6 +25,7 @@ rand = "0.9"
 rand_distr = "0.5"
 rayon = { version = "1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 gungraun = "0.18"
@@ -38,6 +39,10 @@ harness = false
 [[example]]
 name = "async_eval"
 required-features = ["async"]
+
+[[example]]
+name = "pick_a_car"
+required-features = ["serde"]
 
 # Tighten release codegen for the compare harness and downstream binaries
 # that build heuropt directly (i.e. when this crate is the workspace root).

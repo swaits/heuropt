@@ -303,6 +303,15 @@ fn pick_three_distinct(
     (a, b, c)
 }
 
+impl crate::traits::AlgorithmInfo for DifferentialEvolution {
+    fn name(&self) -> &'static str {
+        "DifferentialEvolution"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

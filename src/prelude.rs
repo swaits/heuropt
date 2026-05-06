@@ -7,11 +7,11 @@
 #[cfg(feature = "async")]
 pub use crate::core::async_problem::AsyncProblem;
 pub use crate::core::{
-    Candidate, Direction, Evaluation, Objective, ObjectiveSpace, OptimizationResult,
-    PartialProblem, Population, Problem, Rng, rng_from_seed,
+    Candidate, DecisionVariable, Direction, Evaluation, Objective, ObjectiveSpace,
+    OptimizationResult, PartialProblem, Population, Problem, Rng, rng_from_seed,
 };
 
-pub use crate::traits::{Initializer, Optimizer, Repair, Variation};
+pub use crate::traits::{AlgorithmInfo, Initializer, Optimizer, Repair, Variation};
 
 pub use crate::pareto::{
     Dominance, ParetoArchive, best_candidate, crowding_distance, das_dennis, non_dominated_sort,

@@ -479,6 +479,15 @@ impl Tpe {
     }
 }
 
+impl crate::traits::AlgorithmInfo for Tpe {
+    fn name(&self) -> &'static str {
+        "Tpe"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

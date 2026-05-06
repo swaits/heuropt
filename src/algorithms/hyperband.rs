@@ -329,6 +329,19 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     compare(a, b, direction) == std::cmp::Ordering::Less
 }
 
+impl<I, D> crate::traits::AlgorithmInfo for Hyperband<I, D>
+where
+    D: Clone,
+    I: Initializer<D>,
+{
+    fn name(&self) -> &'static str {
+        "Hyperband"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

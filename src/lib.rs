@@ -28,7 +28,10 @@
 //! - `serde` — derives `Serialize` / `Deserialize` on the core data
 //!   types ([`Candidate`](crate::core::Candidate),
 //!   [`Population`](crate::core::Population),
-//!   [`Evaluation`](crate::core::Evaluation), …).
+//!   [`Evaluation`](crate::core::Evaluation), …) and enables the
+//!   [`heuropt::explorer`](crate::explorer) JSON export module for the
+//!   [heuropt-explorer](https://swaits.github.io/heuropt-explorer/)
+//!   webapp.
 //! - `parallel` — rayon-backed parallel population evaluation in
 //!   every population-based algorithm. Seeded runs stay bit-
 //!   identical to serial mode.
@@ -72,6 +75,8 @@
 
 pub mod algorithms;
 pub mod core;
+#[cfg(feature = "serde")]
+pub mod explorer;
 pub(crate) mod internal;
 pub mod metrics;
 pub mod operators;

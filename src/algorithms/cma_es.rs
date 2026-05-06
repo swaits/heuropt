@@ -628,6 +628,15 @@ fn better_than_so(
     compare_so(a, b, direction) == std::cmp::Ordering::Less
 }
 
+impl crate::traits::AlgorithmInfo for CmaEs {
+    fn name(&self) -> &'static str {
+        "CmaEs"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,5 +1,6 @@
 //! The user-implemented `Problem` trait.
 
+use crate::core::decision_variable::DecisionVariable;
 use crate::core::evaluation::Evaluation;
 use crate::core::objective::ObjectiveSpace;
 
@@ -24,4 +25,18 @@ pub trait Problem {
 
     /// Evaluate a decision. Must not mutate `self`.
     fn evaluate(&self, decision: &Self::Decision) -> Evaluation;
+
+    /// Optional schema describing each decision variable — names,
+    /// labels, units, and bounds. Used by the explorer JSON export
+    /// to label decision-variable axes with the user's preferred
+    /// names and units. Default: empty (the exporter generates
+    /// fallback names like `x[0]`, `x[1]`).
+    ///
+    /// Override this on your `Problem` impl to provide pretty
+    /// metadata. The returned vector should have one entry per
+    /// element of the decision; if its length doesn't match, the
+    /// exporter fills the remainder with `x[i]` defaults.
+    fn decision_schema(&self) -> Vec<DecisionVariable> {
+        Vec::new()
+    }
 }

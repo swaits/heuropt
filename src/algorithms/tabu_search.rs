@@ -331,6 +331,20 @@ where
     }
 }
 
+impl<D, I, N> crate::traits::AlgorithmInfo for TabuSearch<D, I, N>
+where
+    D: Clone + Hash + Eq,
+    I: Initializer<D>,
+    N: FnMut(&D, &mut Rng) -> Vec<D>,
+{
+    fn name(&self) -> &'static str {
+        "TabuSearch"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

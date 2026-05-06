@@ -357,6 +357,15 @@ fn best_index(values: &[f64], direction: Direction) -> usize {
     idx
 }
 
+impl crate::traits::AlgorithmInfo for ParticleSwarm {
+    fn name(&self) -> &'static str {
+        "ParticleSwarm"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -389,6 +389,15 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     compare(a, b, direction) == std::cmp::Ordering::Less
 }
 
+impl crate::traits::AlgorithmInfo for SeparableNes {
+    fn name(&self) -> &'static str {
+        "SeparableNes"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

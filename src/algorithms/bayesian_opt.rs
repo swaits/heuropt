@@ -540,6 +540,15 @@ impl BayesianOpt {
     }
 }
 
+impl crate::traits::AlgorithmInfo for BayesianOpt {
+    fn name(&self) -> &'static str {
+        "BayesianOpt"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

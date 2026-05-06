@@ -429,6 +429,15 @@ fn better_than_so(
     }
 }
 
+impl crate::traits::AlgorithmInfo for AntColonyTsp {
+    fn name(&self) -> &'static str {
+        "AntColonyTsp"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

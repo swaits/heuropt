@@ -363,6 +363,15 @@ fn weight_distance(a: &[f64], b: &[f64]) -> f64 {
         .sqrt()
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for Moead<I, V> {
+    fn name(&self) -> &'static str {
+        "Moead"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

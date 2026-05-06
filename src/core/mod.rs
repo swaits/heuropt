@@ -3,6 +3,7 @@
 #[cfg(feature = "async")]
 pub mod async_problem;
 pub mod candidate;
+pub mod decision_variable;
 pub mod evaluation;
 pub mod objective;
 pub mod partial_problem;
@@ -14,6 +15,7 @@ pub mod rng;
 #[cfg(feature = "async")]
 pub use async_problem::AsyncProblem;
 pub use candidate::*;
+pub use decision_variable::*;
 pub use evaluation::*;
 pub use objective::*;
 pub use partial_problem::*;

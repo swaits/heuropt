@@ -450,6 +450,12 @@ impl NelderMead {
     }
 }
 
+impl crate::traits::AlgorithmInfo for NelderMead {
+    fn name(&self) -> &'static str {
+        "NelderMead"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

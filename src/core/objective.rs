@@ -14,13 +14,32 @@ pub enum Direction {
 }
 
 /// A named objective and its optimization direction.
+///
+/// `name` is the canonical short identifier (used as a key). The
+/// optional `label` is a human-readable display name (e.g. "Price"
+/// vs the technical name `"price_thousand_dollars"`). The optional
+/// `unit` is a display unit string (e.g. `"$k"`, `"s"`, `"dB"`).
+/// Both flow through to the explorer JSON export so the webapp can
+/// render axes with the user's preferred labels and units.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Objective {
-    /// Human-readable name of the objective.
+    /// Canonical short identifier, used as a key.
     pub name: String,
     /// Whether to minimize or maximize.
     pub direction: Direction,
+    /// Human-readable display name (defaults to `name` if not set).
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub label: Option<String>,
+    /// Display unit, e.g. `"$k"`, `"s"`, `"dB"`.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub unit: Option<String>,
 }
 
 impl Objective {
@@ -29,6 +48,8 @@ impl Objective {
         Self {
             name: name.into(),
             direction: Direction::Minimize,
+            label: None,
+            unit: None,
         }
     }
 
@@ -37,7 +58,25 @@ impl Objective {
         Self {
             name: name.into(),
             direction: Direction::Maximize,
+            label: None,
+            unit: None,
         }
+    }
+
+    /// Attach a human-readable display label.
+    ///
+    /// Builder-style; consumes and returns `self`.
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+
+    /// Attach a display unit string (e.g. `"$k"`, `"seconds"`, `"dB"`).
+    ///
+    /// Builder-style; consumes and returns `self`.
+    pub fn with_unit(mut self, unit: impl Into<String>) -> Self {
+        self.unit = Some(unit.into());
+        self
     }
 }
 
@@ -112,6 +151,21 @@ mod tests {
         let o = Objective::maximize("accuracy");
         assert_eq!(o.name, "accuracy");
         assert_eq!(o.direction, Direction::Maximize);
+    }
+
+    #[test]
+    fn label_and_unit_default_to_none_and_round_trip_through_builders() {
+        let o = Objective::minimize("price");
+        assert!(o.label.is_none());
+        assert!(o.unit.is_none());
+
+        let o = Objective::minimize("price")
+            .with_label("Price")
+            .with_unit("$k");
+        assert_eq!(o.label.as_deref(), Some("Price"));
+        assert_eq!(o.unit.as_deref(), Some("$k"));
+        assert_eq!(o.direction, Direction::Minimize);
+        assert_eq!(o.name, "price");
     }
 
     #[test]

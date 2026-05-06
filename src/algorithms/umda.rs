@@ -352,6 +352,15 @@ fn better_than_so(
     compare_so(a, b, direction) == std::cmp::Ordering::Less
 }
 
+impl crate::traits::AlgorithmInfo for Umda {
+    fn name(&self) -> &'static str {
+        "Umda"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

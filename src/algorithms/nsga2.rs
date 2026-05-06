@@ -364,6 +364,15 @@ fn binary_tournament<D>(entries: &[Nsga2Entry<D>], rng: &mut Rng) -> usize {
     }
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for Nsga2<I, V> {
+    fn name(&self) -> &'static str {
+        "Nsga2"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

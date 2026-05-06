@@ -158,6 +158,15 @@ impl<I> RandomSearch<I> {
     }
 }
 
+impl<I> crate::traits::AlgorithmInfo for RandomSearch<I> {
+    fn name(&self) -> &'static str {
+        "RandomSearch"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

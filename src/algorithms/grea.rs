@@ -334,6 +334,15 @@ fn environmental_selection<D: Clone>(
     selected.into_iter().map(|i| combined[i].clone()).collect()
 }
 
+impl<I, V> crate::traits::AlgorithmInfo for Grea<I, V> {
+    fn name(&self) -> &'static str {
+        "Grea"
+    }
+    fn seed(&self) -> Option<u64> {
+        Some(self.config.seed)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

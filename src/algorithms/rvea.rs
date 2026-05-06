@@ -261,6 +261,163 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Rvea<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "Rvea population_size must be > 0"
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        let m = objectives.len();
+        let raw_refs = das_dennis(m, self.config.reference_divisions);
+        let references: Vec<Vec<f64>> = raw_refs.into_iter().map(unit_normalize).collect();
+        assert!(
+            !references.is_empty(),
+            "Rvea: no reference vectors generated"
+        );
+
+        let theta_max = smallest_neighbor_angle(&references);
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        for gen_idx in 0..self.config.generations {
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
+                let p1 = rng.random_range(0..population.len());
+                let p2 = rng.random_range(0..population.len());
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(!children.is_empty(), "Rvea variation returned no children");
+                for child in children {
+                    if offspring_decisions.len() >= n {
+                        break;
+                    }
+                    offspring_decisions.push(child);
+                }
+            }
+            let offspring = evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += offspring.len();
+
+            let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
+            combined.extend(population);
+            combined.extend(offspring);
+
+            let m_dim = m;
+            let mut ideal = vec![f64::INFINITY; m_dim];
+            for c in &combined {
+                let oriented = objectives.as_minimization(&c.evaluation.objectives);
+                for (k, v) in oriented.iter().enumerate() {
+                    if *v < ideal[k] {
+                        ideal[k] = *v;
+                    }
+                }
+            }
+            let translated: Vec<Vec<f64>> = combined
+                .iter()
+                .map(|c| {
+                    let oriented = objectives.as_minimization(&c.evaluation.objectives);
+                    oriented
+                        .iter()
+                        .enumerate()
+                        .map(|(k, v)| v - ideal[k])
+                        .collect()
+                })
+                .collect();
+
+            let mut assoc: Vec<usize> = vec![0; combined.len()];
+            let mut angles: Vec<f64> = vec![0.0; combined.len()];
+            for (i, t) in translated.iter().enumerate() {
+                let (best_ref, best_angle) = closest_reference(t, &references);
+                assoc[i] = best_ref;
+                angles[i] = best_angle;
+            }
+
+            let alpha_t = (gen_idx as f64 / (self.config.generations as f64).max(1.0))
+                .powf(self.config.alpha);
+            let mut keep: Vec<Option<(usize, f64)>> = vec![None; references.len()];
+            for i in 0..combined.len() {
+                let r = assoc[i];
+                let length: f64 = translated[i].iter().map(|v| v * v).sum::<f64>().sqrt();
+                let theta_max_safe = theta_max.max(1e-12);
+                let penalty = 1.0 + (m_dim as f64) * alpha_t * (angles[i] / theta_max_safe);
+                let apd = penalty * length;
+                match keep[r] {
+                    None => keep[r] = Some((i, apd)),
+                    Some((_, current)) if apd < current => keep[r] = Some((i, apd)),
+                    _ => {}
+                }
+            }
+
+            let mut next: Vec<Candidate<P::Decision>> = keep
+                .into_iter()
+                .flatten()
+                .map(|(i, _)| combined[i].clone())
+                .collect();
+            if next.len() < n {
+                let mut all_apds: Vec<(usize, f64)> = (0..combined.len())
+                    .map(|i| {
+                        let length: f64 = translated[i].iter().map(|v| v * v).sum::<f64>().sqrt();
+                        let theta_max_safe = theta_max.max(1e-12);
+                        let penalty = 1.0 + (m_dim as f64) * alpha_t * (angles[i] / theta_max_safe);
+                        (i, penalty * length)
+                    })
+                    .collect();
+                all_apds.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                for (i, _) in all_apds {
+                    if next.len() >= n {
+                        break;
+                    }
+                    if !next
+                        .iter()
+                        .any(|c| std::ptr::eq(c as *const _, &combined[i] as *const _))
+                    {
+                        next.push(combined[i].clone());
+                    }
+                }
+            }
+            if next.len() > n {
+                next.truncate(n);
+            }
+            population = next;
+        }
+
+        let front = pareto_front(&population, &objectives);
+        let best = best_candidate(&population, &objectives);
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn unit_normalize(mut v: Vec<f64>) -> Vec<f64> {
     let n: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
     if n > 1e-12 {

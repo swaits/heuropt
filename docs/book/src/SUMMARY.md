@@ -12,6 +12,7 @@
 
 - [Recipes](./cookbook.md)
   - [Parallelize evaluation with rayon](./cookbook/parallel.md)
+  - [Async evaluation (HTTP / RPC / subprocess)](./cookbook/async.md)
   - [Tune a model with expensive evaluations](./cookbook/expensive-evaluations.md)
   - [Compare two algorithms on your problem](./cookbook/compare.md)
   - [Optimize a permutation (TSP-style)](./cookbook/permutation.md)

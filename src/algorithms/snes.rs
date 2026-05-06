@@ -222,6 +222,137 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl SeparableNes {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per generation.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size >= 2,
+            "SeparableNes population_size must be >= 2",
+        );
+        assert!(
+            self.config.initial_sigma > 0.0,
+            "SeparableNes initial_sigma must be > 0"
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "SeparableNes requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let n = self.bounds.bounds.len();
+        let lambda = self.config.population_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut mean: Vec<f64> = self
+            .bounds
+            .bounds
+            .iter()
+            .map(|&(lo, hi)| 0.5 * (lo + hi))
+            .collect();
+        let mut sigma = vec![self.config.initial_sigma; n];
+
+        let eta_sigma = self
+            .config
+            .sigma_learning_rate
+            .unwrap_or_else(|| (3.0 + (n as f64).ln()) / (5.0 * (n as f64).sqrt()));
+        let eta_mean = self.config.mean_learning_rate;
+
+        let utilities = nes_utilities(lambda);
+
+        let mut best_seen: Option<Candidate<Vec<f64>>> = None;
+        let mut total_evaluations = 0usize;
+
+        for _ in 0..self.config.generations {
+            // Sample λ offspring; matches the sync RNG draw order so seeded
+            // runs reproduce exactly.
+            let mut z_samples: Vec<Vec<f64>> = Vec::with_capacity(lambda);
+            let mut x_samples: Vec<Vec<f64>> = Vec::with_capacity(lambda);
+            for _ in 0..lambda {
+                let z: Vec<f64> = (0..n)
+                    .map(|_| Normal::new(0.0, 1.0).unwrap().sample(&mut rng))
+                    .collect();
+                let x: Vec<f64> = (0..n)
+                    .map(|j| {
+                        let v = mean[j] + sigma[j] * z[j];
+                        let (lo, hi) = self.bounds.bounds[j];
+                        v.clamp(lo, hi)
+                    })
+                    .collect();
+                z_samples.push(z);
+                x_samples.push(x);
+            }
+
+            let cands = evaluate_batch_async(problem, x_samples.clone(), concurrency).await;
+            total_evaluations += cands.len();
+            let evals: Vec<Evaluation> = cands.iter().map(|c| c.evaluation.clone()).collect();
+            for c in &cands {
+                let beats_best = match &best_seen {
+                    None => true,
+                    Some(b) => better(&c.evaluation, &b.evaluation, direction),
+                };
+                if beats_best {
+                    best_seen = Some(c.clone());
+                }
+            }
+
+            let mut order: Vec<usize> = (0..lambda).collect();
+            order.sort_by(|&a, &b| compare(&evals[a], &evals[b], direction));
+
+            let mut grad_mean = vec![0.0_f64; n];
+            for k in 0..lambda {
+                let u = utilities[k];
+                let z = &z_samples[order[k]];
+                for j in 0..n {
+                    grad_mean[j] += u * z[j];
+                }
+            }
+            for j in 0..n {
+                mean[j] += eta_mean * sigma[j] * grad_mean[j];
+                let (lo, hi) = self.bounds.bounds[j];
+                mean[j] = mean[j].clamp(lo, hi);
+            }
+
+            for j in 0..n {
+                let mut grad_sigma_j = 0.0;
+                for k in 0..lambda {
+                    let u = utilities[k];
+                    let z = &z_samples[order[k]];
+                    grad_sigma_j += u * (z[j] * z[j] - 1.0);
+                }
+                sigma[j] *= (0.5 * eta_sigma * grad_sigma_j).exp();
+                if !sigma[j].is_finite() || sigma[j] < 1e-30 {
+                    sigma[j] = 1e-30;
+                }
+            }
+        }
+
+        let best = best_seen.expect("at least one generation evaluated");
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            total_evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn nes_utilities(lambda: usize) -> Vec<f64> {
     let half = lambda as f64 / 2.0 + 1.0;
     let raw: Vec<f64> = (0..lambda)

@@ -187,6 +187,122 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl Tlbo {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations within batched phases
+    /// (only the initial population uses a batch; the teacher and learner
+    /// phases evaluate sequentially because each accept/reject step
+    /// depends on the previous one).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size >= 2,
+            "Tlbo population_size must be >= 2"
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "Tlbo requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let dim = self.bounds.bounds.len();
+        let n = self.config.population_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut decisions: Vec<Vec<f64>> = {
+            use crate::traits::Initializer as _;
+            self.bounds.initialize(n, &mut rng)
+        };
+        let initial = evaluate_batch_async(problem, decisions.clone(), concurrency).await;
+        let mut evals: Vec<Evaluation> = initial.iter().map(|c| c.evaluation.clone()).collect();
+        let mut evaluations = initial.len();
+
+        for _ in 0..self.config.generations {
+            let teacher_idx = best_index(&evals, direction);
+            let teacher = decisions[teacher_idx].clone();
+            let mut mean = vec![0.0_f64; dim];
+            for d in &decisions {
+                for j in 0..dim {
+                    mean[j] += d[j];
+                }
+            }
+            for v in mean.iter_mut() {
+                *v /= n as f64;
+            }
+            let tf = if rng.random_bool(0.5) { 1.0 } else { 2.0 };
+
+            for i in 0..n {
+                let mut candidate = decisions[i].clone();
+                for j in 0..dim {
+                    let r: f64 = rng.random();
+                    candidate[j] += r * (teacher[j] - tf * mean[j]);
+                    let (lo, hi) = self.bounds.bounds[j];
+                    candidate[j] = candidate[j].clamp(lo, hi);
+                }
+                let cand_eval = problem.evaluate_async(&candidate).await;
+                evaluations += 1;
+                if better(&cand_eval, &evals[i], direction) {
+                    decisions[i] = candidate;
+                    evals[i] = cand_eval;
+                }
+            }
+
+            for i in 0..n {
+                let mut k = rng.random_range(0..n);
+                while k == i && n > 1 {
+                    k = rng.random_range(0..n);
+                }
+                let partner_better = better(&evals[k], &evals[i], direction);
+                let mut candidate = decisions[i].clone();
+                for j in 0..dim {
+                    let r: f64 = rng.random();
+                    let delta = if partner_better {
+                        r * (decisions[k][j] - decisions[i][j])
+                    } else {
+                        r * (decisions[i][j] - decisions[k][j])
+                    };
+                    candidate[j] += delta;
+                    let (lo, hi) = self.bounds.bounds[j];
+                    candidate[j] = candidate[j].clamp(lo, hi);
+                }
+                let cand_eval = problem.evaluate_async(&candidate).await;
+                evaluations += 1;
+                if better(&cand_eval, &evals[i], direction) {
+                    decisions[i] = candidate;
+                    evals[i] = cand_eval;
+                }
+            }
+        }
+
+        let final_pop: Vec<Candidate<Vec<f64>>> = decisions
+            .into_iter()
+            .zip(evals)
+            .map(|(d, e)| Candidate::new(d, e))
+            .collect();
+        let best = best_candidate(&final_pop, &objectives);
+        let front: Vec<Candidate<Vec<f64>>> = best.iter().cloned().collect();
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn best_index(evals: &[Evaluation], direction: Direction) -> usize {
     let mut idx = 0;
     for i in 1..evals.len() {

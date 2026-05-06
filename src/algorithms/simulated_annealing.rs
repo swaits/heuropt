@@ -215,6 +215,124 @@ fn better_than(
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> SimulatedAnnealing<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` is mostly inert here because SA evaluates one
+    /// child per iteration; it's accepted for API parity with other
+    /// algorithms.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        let _ = concurrency;
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "SimulatedAnnealing requires exactly one objective",
+        );
+        assert!(
+            self.config.initial_temperature > 0.0,
+            "SimulatedAnnealing initial_temperature must be positive",
+        );
+        assert!(
+            self.config.final_temperature > 0.0,
+            "SimulatedAnnealing final_temperature must be positive",
+        );
+        assert!(
+            self.config.final_temperature <= self.config.initial_temperature,
+            "SimulatedAnnealing final_temperature must be <= initial_temperature",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut initial = self.initializer.initialize(1, &mut rng);
+        assert!(
+            !initial.is_empty(),
+            "SimulatedAnnealing initializer returned no decisions",
+        );
+        let mut current_decision = initial.remove(0);
+        let mut current_eval = problem.evaluate_async(&current_decision).await;
+        let mut best_decision = current_decision.clone();
+        let mut best_eval = current_eval.clone();
+        let mut evaluations = 1usize;
+
+        let cooling = if self.config.iterations <= 1 {
+            1.0
+        } else {
+            (self.config.final_temperature / self.config.initial_temperature)
+                .powf(1.0 / (self.config.iterations as f64 - 1.0))
+        };
+        let mut temperature = self.config.initial_temperature;
+
+        for _ in 0..self.config.iterations {
+            let parents = vec![current_decision.clone()];
+            let children = self.variation.vary(&parents, &mut rng);
+            assert!(
+                !children.is_empty(),
+                "SimulatedAnnealing variation returned no children"
+            );
+            let child_decision = children.into_iter().next().unwrap();
+            let child_eval = problem.evaluate_async(&child_decision).await;
+            evaluations += 1;
+
+            let accept = match (child_eval.is_feasible(), current_eval.is_feasible()) {
+                (true, false) => true,
+                (false, true) => false,
+                (false, false) => {
+                    child_eval.constraint_violation <= current_eval.constraint_violation
+                }
+                (true, true) => {
+                    let delta = match direction {
+                        Direction::Minimize => {
+                            child_eval.objectives[0] - current_eval.objectives[0]
+                        }
+                        Direction::Maximize => {
+                            current_eval.objectives[0] - child_eval.objectives[0]
+                        }
+                    };
+                    if delta <= 0.0 {
+                        true
+                    } else {
+                        let prob = (-delta / temperature).exp();
+                        rng.random::<f64>() < prob
+                    }
+                }
+            };
+
+            if accept {
+                current_decision = child_decision;
+                current_eval = child_eval;
+                if better_than(&current_eval, &best_eval, direction) {
+                    best_decision = current_decision.clone();
+                    best_eval = current_eval.clone();
+                }
+            }
+            temperature *= cooling;
+        }
+
+        let best = Candidate::new(best_decision, best_eval);
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

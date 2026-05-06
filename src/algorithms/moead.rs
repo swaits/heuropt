@@ -219,6 +219,126 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Moead<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations of the initial
+    /// population. Per-generation evaluations are sequential because
+    /// each child's outcome feeds back into the same generation's
+    /// neighborhood updates.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        let objectives = problem.objectives();
+        let m = objectives.len();
+        let weights = das_dennis(m, self.config.reference_divisions);
+        assert!(
+            !weights.is_empty(),
+            "Moead weight set is empty — increase reference_divisions",
+        );
+        let n = weights.len();
+        let t = self.config.neighborhood_size.min(n);
+        assert!(t >= 2, "Moead neighborhood_size must be >= 2");
+
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        assert_eq!(
+            initial_decisions.len(),
+            n,
+            "MOEA/D initializer must return exactly {n} decisions",
+        );
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        let mut ideal = vec![f64::INFINITY; m];
+        for c in &population {
+            let oriented = objectives.as_minimization(&c.evaluation.objectives);
+            for (k, v) in oriented.iter().enumerate() {
+                if *v < ideal[k] {
+                    ideal[k] = *v;
+                }
+            }
+        }
+
+        let neighborhoods: Vec<Vec<usize>> = (0..n)
+            .map(|i| {
+                let mut idx: Vec<usize> = (0..n).collect();
+                idx.sort_by(|&a, &b| {
+                    let da = weight_distance(&weights[i], &weights[a]);
+                    let db = weight_distance(&weights[i], &weights[b]);
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                idx.into_iter().take(t).collect()
+            })
+            .collect();
+
+        for _ in 0..self.config.generations {
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..n {
+                let nbh = &neighborhoods[i];
+                let p1 = *nbh.choose(&mut rng).unwrap();
+                let mut p2 = *nbh.choose(&mut rng).unwrap();
+                while p2 == p1 && nbh.len() > 1 {
+                    p2 = *nbh.choose(&mut rng).unwrap();
+                }
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(
+                    !children.is_empty(),
+                    "MOEA/D variation returned no children"
+                );
+                let child_decision = children.into_iter().next().unwrap();
+                let child_eval = problem.evaluate_async(&child_decision).await;
+                evaluations += 1;
+
+                let oriented_child = objectives.as_minimization(&child_eval.objectives);
+                for (k, v) in oriented_child.iter().enumerate() {
+                    if *v < ideal[k] {
+                        ideal[k] = *v;
+                    }
+                }
+
+                for &j in nbh {
+                    let cur_oriented =
+                        objectives.as_minimization(&population[j].evaluation.objectives);
+                    let g_cur = tchebycheff(&cur_oriented, &weights[j], &ideal);
+                    let g_new = tchebycheff(&oriented_child, &weights[j], &ideal);
+                    if g_new <= g_cur {
+                        population[j] = Candidate::new(child_decision.clone(), child_eval.clone());
+                    }
+                }
+            }
+        }
+
+        let front = pareto_front(&population, &objectives);
+        let best = best_candidate(&population, &objectives);
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 /// Tchebycheff scalarization: `max_k w_k * |f_k - z*_k|`.
 ///
 /// `weight` components that are zero are floored to `1e-6` so every axis

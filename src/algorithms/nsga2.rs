@@ -232,6 +232,117 @@ fn annotate<D: Clone>(
         .collect()
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Nsga2<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch (initial
+    /// population and per-generation offspring).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "Nsga2 population_size must be greater than 0",
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        assert_eq!(
+            initial_decisions.len(),
+            n,
+            "NSGA-II initializer must return exactly population_size decisions",
+        );
+        let population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        let mut annotated = annotate(population, &objectives);
+
+        for _ in 0..self.config.generations {
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
+                let p1 = binary_tournament(&annotated, &mut rng);
+                let p2 = binary_tournament(&annotated, &mut rng);
+                let parents = vec![
+                    annotated[p1].candidate.decision.clone(),
+                    annotated[p2].candidate.decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(
+                    !children.is_empty(),
+                    "NSGA-II variation returned no children",
+                );
+                for child_decision in children {
+                    if offspring_decisions.len() >= n {
+                        break;
+                    }
+                    offspring_decisions.push(child_decision);
+                }
+            }
+            let offspring: Vec<Candidate<P::Decision>> =
+                evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += offspring.len();
+
+            let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
+            combined.extend(annotated.into_iter().map(|e| e.candidate));
+            combined.extend(offspring);
+
+            let fronts = non_dominated_sort(&combined, &objectives);
+            let mut next: Vec<Candidate<P::Decision>> = Vec::with_capacity(n);
+            for front in &fronts {
+                if next.len() + front.len() <= n {
+                    for &idx in front {
+                        next.push(combined[idx].clone());
+                    }
+                } else {
+                    let dist = crowding_distance(&combined, front, &objectives);
+                    let mut order: Vec<usize> = (0..front.len()).collect();
+                    order.sort_by(|&a, &b| {
+                        dist[b]
+                            .partial_cmp(&dist[a])
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let needed = n - next.len();
+                    for &k in order.iter().take(needed) {
+                        next.push(combined[front[k]].clone());
+                    }
+                    break;
+                }
+                if next.len() == n {
+                    break;
+                }
+            }
+            annotated = annotate(next, &objectives);
+        }
+
+        let final_pop: Vec<Candidate<P::Decision>> =
+            annotated.into_iter().map(|e| e.candidate).collect();
+        let front = pareto_front(&final_pop, &objectives);
+        let best = best_candidate(&final_pop, &objectives);
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn binary_tournament<D>(entries: &[Nsga2Entry<D>], rng: &mut Rng) -> usize {
     let n = entries.len();
     let a = rng.random_range(0..n);

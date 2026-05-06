@@ -191,6 +191,100 @@ fn worse_than(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     }
 }
 
+#[cfg(feature = "async")]
+impl OnePlusOneEs {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` is mostly inert here because (1+1)-ES evaluates
+    /// one child per iteration; it's accepted for API parity with
+    /// other algorithms.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        let _ = concurrency;
+        assert!(
+            self.config.initial_sigma > 0.0,
+            "OnePlusOneEs initial_sigma must be > 0"
+        );
+        assert!(
+            self.config.step_increase > 1.0,
+            "OnePlusOneEs step_increase must be > 1",
+        );
+        assert!(
+            self.config.adaptation_period >= 1,
+            "OnePlusOneEs adaptation_period must be >= 1",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "OnePlusOneEs requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut parent: Vec<f64> = self
+            .bounds
+            .bounds
+            .iter()
+            .map(|&(lo, hi)| 0.5 * (lo + hi))
+            .collect();
+        let mut parent_eval = problem.evaluate_async(&parent).await;
+        let mut evaluations = 1usize;
+
+        let mut sigma = self.config.initial_sigma;
+        let mut window = std::collections::VecDeque::with_capacity(self.config.adaptation_period);
+
+        for _ in 0..self.config.iterations {
+            let normal = Normal::new(0.0, sigma).expect("Normal::new(0, sigma)");
+            let mut child = parent.clone();
+            for (j, x) in child.iter_mut().enumerate() {
+                let (lo, hi) = self.bounds.bounds[j];
+                *x = (*x + normal.sample(&mut rng)).clamp(lo, hi);
+            }
+            let child_eval = problem.evaluate_async(&child).await;
+            evaluations += 1;
+
+            let accepted = !worse_than(&child_eval, &parent_eval, direction);
+            if accepted {
+                parent = child;
+                parent_eval = child_eval;
+            }
+
+            window.push_back(if accepted { 1u8 } else { 0u8 });
+            if window.len() > self.config.adaptation_period {
+                window.pop_front();
+            }
+            if window.len() == self.config.adaptation_period {
+                let success_count: usize = window.iter().map(|&b| b as usize).sum();
+                let rate = success_count as f64 / window.len() as f64;
+                if rate > 0.2 {
+                    sigma *= self.config.step_increase;
+                } else if rate < 0.2 {
+                    sigma /= self.config.step_increase;
+                }
+            }
+        }
+
+        let best = Candidate::new(parent, parent_eval);
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

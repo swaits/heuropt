@@ -173,6 +173,80 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> SmsEmoa<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations of the initial
+    /// population. Per-generation evaluations are sequential because
+    /// SMS-EMOA is a steady-state algorithm (one child per generation).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "SmsEmoa population_size must be > 0"
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        assert_eq!(
+            self.config.reference_point.len(),
+            objectives.len(),
+            "SmsEmoa reference_point.len() must equal number of objectives",
+        );
+        let reference = self.config.reference_point.clone();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        for _ in 0..self.config.generations {
+            let p1 = rng.random_range(0..population.len());
+            let p2 = rng.random_range(0..population.len());
+            let parents = vec![
+                population[p1].decision.clone(),
+                population[p2].decision.clone(),
+            ];
+            let children = self.variation.vary(&parents, &mut rng);
+            assert!(
+                !children.is_empty(),
+                "SmsEmoa variation returned no children"
+            );
+            let child_decision = children.into_iter().next().unwrap();
+            let child_eval = problem.evaluate_async(&child_decision).await;
+            evaluations += 1;
+            let child = Candidate::new(child_decision, child_eval);
+
+            population.push(child);
+            let drop_idx = pick_drop_index(&population, &objectives, &reference);
+            population.swap_remove(drop_idx);
+        }
+
+        let front = pareto_front(&population, &objectives);
+        let best = best_candidate(&population, &objectives);
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 /// Choose the index in `pool` whose removal is preferred per SMS-EMOA's
 /// rules: drop from the worst non-dominated front; within that front,
 /// drop the member whose removal increases hypervolume the most (= the

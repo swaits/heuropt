@@ -204,6 +204,109 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> PesaII<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations of the initial
+    /// population. Per-step evaluations are sequential to preserve the
+    /// algorithm's exact RNG sequencing.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "PesaII population_size must be > 0"
+        );
+        assert!(
+            self.config.archive_size > 0,
+            "PesaII archive_size must be > 0"
+        );
+        assert!(
+            self.config.grid_divisions >= 1,
+            "PesaII grid_divisions must be >= 1"
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut internal: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = internal.len();
+
+        let mut archive = ParetoArchive::new(objectives.clone());
+        for c in &internal {
+            archive.insert(c.clone());
+        }
+        truncate_by_grid(
+            &mut archive,
+            self.config.archive_size,
+            self.config.grid_divisions,
+        );
+
+        for _ in 0..self.config.generations {
+            let (boxes, counts) = build_grid(&archive, &objectives, self.config.grid_divisions);
+
+            let mut offspring: Vec<Candidate<P::Decision>> = Vec::with_capacity(n);
+            while offspring.len() < n {
+                let p1 = region_tournament(&archive, &boxes, &counts, &mut rng);
+                let p2 = region_tournament(&archive, &boxes, &counts, &mut rng);
+                let parents = vec![
+                    archive.members()[p1].decision.clone(),
+                    archive.members()[p2].decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(
+                    !children.is_empty(),
+                    "PesaII variation returned no children"
+                );
+                for child in children {
+                    if offspring.len() >= n {
+                        break;
+                    }
+                    let eval = problem.evaluate_async(&child).await;
+                    evaluations += 1;
+                    offspring.push(Candidate::new(child, eval));
+                }
+            }
+
+            for c in &offspring {
+                archive.insert(c.clone());
+            }
+            truncate_by_grid(
+                &mut archive,
+                self.config.archive_size,
+                self.config.grid_divisions,
+            );
+            internal = offspring;
+        }
+
+        let _ = internal;
+        let members = archive.into_vec();
+        let front = pareto_front(&members, &objectives);
+        let best = best_candidate(&members, &objectives);
+        OptimizationResult::new(
+            Population::new(members),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 /// Compute per-member box index (M-tuple of grid coordinates) and the
 /// population count of each occupied box.
 fn build_grid<D: Clone>(

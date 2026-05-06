@@ -212,6 +212,124 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl Mopso {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+        use crate::traits::Initializer as _;
+
+        assert!(self.config.swarm_size >= 1, "Mopso swarm_size must be >= 1");
+        assert!(
+            self.config.archive_size >= 1,
+            "Mopso archive_size must be >= 1"
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_multi_objective(),
+            "Mopso requires multi-objective problems (use ParticleSwarm for single-objective)",
+        );
+        let dim = self.bounds.bounds.len();
+        let n = self.config.swarm_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut positions: Vec<Vec<f64>> = self.bounds.initialize(n, &mut rng);
+        let mut velocities: Vec<Vec<f64>> = (0..n)
+            .map(|_| {
+                self.bounds
+                    .bounds
+                    .iter()
+                    .map(|&(lo, hi)| 0.1 * (hi - lo) * (rng.random::<f64>() * 2.0 - 1.0))
+                    .collect()
+            })
+            .collect();
+        let v_max: Vec<f64> = self.bounds.bounds.iter().map(|&(lo, hi)| hi - lo).collect();
+
+        let initial_pop = evaluate_batch_async(problem, positions.clone(), concurrency).await;
+        let mut evaluations = initial_pop.len();
+
+        let mut pbest_decisions: Vec<Vec<f64>> = positions.clone();
+        let mut pbest_evals: Vec<crate::core::evaluation::Evaluation> =
+            initial_pop.iter().map(|c| c.evaluation.clone()).collect();
+
+        let mut archive = ParetoArchive::new(objectives.clone());
+        for c in initial_pop {
+            archive.insert(c);
+        }
+        archive.truncate(self.config.archive_size);
+
+        for _ in 0..self.config.generations {
+            for i in 0..n {
+                let leader = archive
+                    .members()
+                    .choose(&mut rng)
+                    .map(|c| c.decision.clone())
+                    .unwrap_or_else(|| positions[i].clone());
+                #[allow(clippy::needless_range_loop)]
+                for j in 0..dim {
+                    let r1: f64 = rng.random();
+                    let r2: f64 = rng.random();
+                    let cognitive_term =
+                        self.config.cognitive * r1 * (pbest_decisions[i][j] - positions[i][j]);
+                    let social_term = self.config.social * r2 * (leader[j] - positions[i][j]);
+                    let mut v =
+                        self.config.inertia * velocities[i][j] + cognitive_term + social_term;
+                    if v > v_max[j] {
+                        v = v_max[j];
+                    } else if v < -v_max[j] {
+                        v = -v_max[j];
+                    }
+                    velocities[i][j] = v;
+                    let (lo, hi) = self.bounds.bounds[j];
+                    positions[i][j] = (positions[i][j] + v).clamp(lo, hi);
+                }
+            }
+
+            let evaluated = evaluate_batch_async(problem, positions.clone(), concurrency).await;
+            evaluations += evaluated.len();
+
+            for (i, cand) in evaluated.iter().enumerate() {
+                let dominance = pareto_compare(&cand.evaluation, &pbest_evals[i], &objectives);
+                let replace = match dominance {
+                    Dominance::Dominates => true,
+                    Dominance::DominatedBy => false,
+                    Dominance::Equal | Dominance::NonDominated => rng.random_bool(0.5),
+                };
+                if replace {
+                    pbest_decisions[i] = cand.decision.clone();
+                    pbest_evals[i] = cand.evaluation.clone();
+                }
+            }
+            for c in evaluated {
+                archive.insert(c);
+            }
+            archive.truncate(self.config.archive_size);
+        }
+
+        let members = archive.into_vec();
+        let front = pareto_front(&members, &objectives);
+        let best = best_candidate(&members, &objectives);
+        OptimizationResult::new(
+            Population::new(members),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

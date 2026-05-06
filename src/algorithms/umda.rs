@@ -202,6 +202,125 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl Umda {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch (initial
+    /// population and per-generation samples).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<bool>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<bool>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size >= 2,
+            "Umda population_size must be >= 2"
+        );
+        assert!(
+            self.config.selected_size >= 1,
+            "Umda selected_size must be >= 1",
+        );
+        assert!(
+            self.config.selected_size <= self.config.population_size,
+            "Umda selected_size must be <= population_size",
+        );
+        assert!(self.config.bits >= 1, "Umda bits must be >= 1");
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "Umda requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let n = self.config.population_size;
+        let bits = self.config.bits;
+        let mu = self.config.selected_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut decisions: Vec<Vec<bool>> = (0..n)
+            .map(|_| (0..bits).map(|_| rng.random_bool(0.5)).collect())
+            .collect();
+        let mut population = evaluate_batch_async(problem, decisions.clone(), concurrency).await;
+        let mut evaluations = population.len();
+
+        let smoothing = 1.0 / (2.0 * mu as f64);
+        let prob_min = smoothing;
+        let prob_max = 1.0 - smoothing;
+
+        let mut best_seen: Option<Candidate<Vec<bool>>> = None;
+        for c in &population {
+            let beats = match &best_seen {
+                None => true,
+                Some(b) => better_than_so(&c.evaluation, &b.evaluation, direction),
+            };
+            if beats {
+                best_seen = Some(c.clone());
+            }
+        }
+
+        for _ in 0..self.config.generations {
+            let mut order: Vec<usize> = (0..population.len()).collect();
+            order.sort_by(|&a, &b| {
+                compare_so(
+                    &population[a].evaluation,
+                    &population[b].evaluation,
+                    direction,
+                )
+            });
+            let selected: Vec<&Candidate<Vec<bool>>> =
+                order.iter().take(mu).map(|&i| &population[i]).collect();
+
+            let mut probs = vec![0.0_f64; bits];
+            for c in &selected {
+                for (i, b) in c.decision.iter().enumerate() {
+                    if *b {
+                        probs[i] += 1.0;
+                    }
+                }
+            }
+            for p in probs.iter_mut() {
+                *p = (*p / mu as f64).clamp(prob_min, prob_max);
+            }
+
+            decisions = (0..n)
+                .map(|_| probs.iter().map(|&p| rng.random_bool(p)).collect())
+                .collect();
+
+            population = evaluate_batch_async(problem, decisions.clone(), concurrency).await;
+            evaluations += population.len();
+
+            for c in &population {
+                let beats = match &best_seen {
+                    None => true,
+                    Some(b) => better_than_so(&c.evaluation, &b.evaluation, direction),
+                };
+                if beats {
+                    best_seen = Some(c.clone());
+                }
+            }
+        }
+
+        let best = best_seen.expect("at least one generation evaluated");
+        let final_pop = vec![best.clone()];
+        let front = vec![best.clone()];
+        let best_opt = best_candidate(&final_pop, &objectives);
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best_opt,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn compare_so(
     a: &crate::core::evaluation::Evaluation,
     b: &crate::core::evaluation::Evaluation,

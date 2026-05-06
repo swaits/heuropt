@@ -7,8 +7,12 @@ project.
 ## Recipes
 
 - [Parallelize evaluation with rayon](./cookbook/parallel.md) — when
-  your `evaluate` is non-trivial, the `parallel` feature pays for
-  itself almost immediately.
+  your `evaluate` is non-trivial CPU work, the `parallel` feature
+  pays for itself almost immediately.
+- [Async evaluation](./cookbook/async.md) — when your `evaluate` is
+  IO-bound (HTTP / RPC / subprocess), the `async` feature lets the
+  optimizer await many evaluations concurrently. The differentiating
+  feature vs other optimization libraries.
 - [Tune a model with expensive evaluations](./cookbook/expensive-evaluations.md)
   — `BayesianOpt`, `Tpe`, and `Hyperband` for the 50–500-eval
   regime.

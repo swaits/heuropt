@@ -190,6 +190,98 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> EpsilonMoea<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations of the initial
+    /// population. Per-step evaluations are sequential because the
+    /// algorithm is steady-state (one offspring per step).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "EpsilonMoea population_size must be > 0"
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        assert_eq!(
+            self.config.epsilon.len(),
+            objectives.len(),
+            "EpsilonMoea epsilon.len() must equal number of objectives",
+        );
+        for (i, &e) in self.config.epsilon.iter().enumerate() {
+            assert!(e > 0.0, "EpsilonMoea epsilon[{i}] must be > 0.0");
+        }
+        let epsilon = self.config.epsilon.clone();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        let mut archive: Vec<Candidate<P::Decision>> = Vec::new();
+        for c in &population {
+            insert_into_epsilon_archive(&mut archive, c.clone(), &objectives, &epsilon);
+        }
+
+        let total_evals = self.config.evaluations.max(evaluations);
+        while evaluations < total_evals {
+            let p1_idx = rng.random_range(0..population.len());
+            let parent_a = population[p1_idx].decision.clone();
+            let parent_b = if !archive.is_empty() {
+                let j = rng.random_range(0..archive.len());
+                archive[j].decision.clone()
+            } else {
+                let j = rng.random_range(0..population.len());
+                population[j].decision.clone()
+            };
+            let parents = vec![parent_a, parent_b];
+            let children = self.variation.vary(&parents, &mut rng);
+            assert!(
+                !children.is_empty(),
+                "EpsilonMoea variation returned no children"
+            );
+            let child_decision = children.into_iter().next().unwrap();
+            let child_eval = problem.evaluate_async(&child_decision).await;
+            evaluations += 1;
+            let child = Candidate::new(child_decision, child_eval);
+
+            update_population(&mut population, &child, &objectives, &mut rng);
+
+            insert_into_epsilon_archive(&mut archive, child, &objectives, &epsilon);
+        }
+
+        let final_pop: Vec<Candidate<P::Decision>> = if !archive.is_empty() {
+            archive.clone()
+        } else {
+            population
+        };
+        let front = pareto_front(&final_pop, &objectives);
+        let best = best_candidate(&final_pop, &objectives);
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best,
+            evaluations,
+            self.config.evaluations,
+        )
+    }
+}
+
 /// Standard ε-MOEA population update: if the child is dominated by some
 /// member, drop it; if it dominates a member, replace that member; if
 /// non-dominated wrt all, replace a random member.

@@ -181,6 +181,94 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> GeneticAlgorithm<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch (initial
+    /// population and per-generation offspring).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size >= 2,
+            "GeneticAlgorithm population_size must be >= 2",
+        );
+        assert!(
+            self.config.tournament_size >= 1,
+            "GeneticAlgorithm tournament_size must be >= 1",
+        );
+        assert!(
+            self.config.elitism < self.config.population_size,
+            "GeneticAlgorithm elitism must be < population_size",
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "GeneticAlgorithm requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        for _ in 0..self.config.generations {
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
+                let parents_decisions = tournament_select_single_objective(
+                    &population,
+                    &objectives,
+                    self.config.tournament_size,
+                    2,
+                    &mut rng,
+                );
+                let children = self.variation.vary(&parents_decisions, &mut rng);
+                assert!(
+                    !children.is_empty(),
+                    "GeneticAlgorithm variation returned no children"
+                );
+                for child in children {
+                    if offspring_decisions.len() >= n {
+                        break;
+                    }
+                    offspring_decisions.push(child);
+                }
+            }
+
+            let offspring = evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += offspring.len();
+
+            population =
+                survival_selection(&population, offspring, direction, n, self.config.elitism);
+        }
+
+        let best = best_candidate(&population, &objectives);
+        let front: Vec<Candidate<P::Decision>> = best.iter().cloned().collect();
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn survival_selection<D: Clone>(
     parents: &[Candidate<D>],
     offspring: Vec<Candidate<D>>,

@@ -209,6 +209,128 @@ fn better_than(
     }
 }
 
+#[cfg(feature = "async")]
+impl<D, I, N> TabuSearch<D, I, N>
+where
+    D: Clone + Hash + Eq,
+    I: Initializer<D>,
+    N: FnMut(&D, &mut Rng) -> Vec<D>,
+{
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// Each iteration evaluates the K neighbors of the current
+    /// incumbent concurrently (bounded by `concurrency`), then picks
+    /// the best non-tabu (or aspiration-passing) move.
+    pub async fn run_async<P>(&mut self, problem: &P, concurrency: usize) -> OptimizationResult<D>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = D>,
+        D: Send + Sync,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "TabuSearch requires exactly one objective",
+        );
+        assert!(
+            self.config.tabu_tenure >= 1,
+            "TabuSearch tabu_tenure must be >= 1",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut initial = self.initializer.initialize(1, &mut rng);
+        assert!(
+            !initial.is_empty(),
+            "TabuSearch initializer returned no decisions"
+        );
+        let mut current_decision = initial.remove(0);
+        let mut current_eval = problem.evaluate_async(&current_decision).await;
+        let mut best_decision = current_decision.clone();
+        let mut best_eval = current_eval.clone();
+        let mut evaluations = 1usize;
+
+        let mut tabu_queue: VecDeque<D> = VecDeque::with_capacity(self.config.tabu_tenure);
+        let mut tabu_set: HashSet<D> = HashSet::new();
+
+        for _ in 0..self.config.iterations {
+            let candidates = (self.neighbors)(&current_decision, &mut rng);
+            if candidates.is_empty() {
+                break;
+            }
+
+            let cand_results = evaluate_batch_async(problem, candidates.clone(), concurrency).await;
+            let mut cand_evals: Vec<crate::core::evaluation::Evaluation> =
+                cand_results.into_iter().map(|c| c.evaluation).collect();
+            evaluations += candidates.len();
+
+            let mut best_idx: Option<usize> = None;
+            let mut best_cand_eval: Option<crate::core::evaluation::Evaluation> = None;
+
+            for (i, c) in candidates.iter().enumerate() {
+                let is_tabu = tabu_set.contains(c);
+                let aspires = is_tabu && better_than(&cand_evals[i], &best_eval, direction);
+                if is_tabu && !aspires {
+                    continue;
+                }
+                let eligible = match &best_cand_eval {
+                    None => true,
+                    Some(b) => better_than(&cand_evals[i], b, direction),
+                };
+                if eligible {
+                    best_idx = Some(i);
+                    best_cand_eval = Some(cand_evals[i].clone());
+                }
+            }
+
+            if best_idx.is_none() {
+                for (i, _) in candidates.iter().enumerate() {
+                    let eligible = match &best_cand_eval {
+                        None => true,
+                        Some(b) => better_than(&cand_evals[i], b, direction),
+                    };
+                    if eligible {
+                        best_idx = Some(i);
+                        best_cand_eval = Some(cand_evals[i].clone());
+                    }
+                }
+            }
+
+            let chosen_idx = best_idx.expect("non-empty candidate list");
+            let chosen_decision = candidates[chosen_idx].clone();
+            current_eval = cand_evals.remove(chosen_idx);
+            current_decision = chosen_decision.clone();
+
+            if better_than(&current_eval, &best_eval, direction) {
+                best_decision = current_decision.clone();
+                best_eval = current_eval.clone();
+            }
+
+            tabu_queue.push_back(chosen_decision.clone());
+            tabu_set.insert(chosen_decision);
+            if tabu_queue.len() > self.config.tabu_tenure {
+                if let Some(old) = tabu_queue.pop_front() {
+                    tabu_set.remove(&old);
+                }
+            }
+        }
+
+        let best = Candidate::new(best_decision, best_eval);
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -156,6 +156,92 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Paes<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` is mostly inert here because PAES evaluates one
+    /// child per iteration; it's accepted for API parity with other
+    /// algorithms.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        let _ = concurrency;
+        assert!(
+            self.config.archive_size > 0,
+            "PAES archive_size must be greater than 0",
+        );
+
+        let objectives = problem.objectives();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut initial = self.initializer.initialize(1, &mut rng);
+        assert!(
+            !initial.is_empty(),
+            "PAES initializer returned no decisions",
+        );
+        let mut current_decision = initial.remove(0);
+        let mut current_eval = problem.evaluate_async(&current_decision).await;
+        let mut evaluations = 1usize;
+
+        let mut archive = ParetoArchive::new(objectives.clone());
+        archive.insert(Candidate::new(
+            current_decision.clone(),
+            current_eval.clone(),
+        ));
+
+        for _ in 0..self.config.iterations {
+            let parents = vec![current_decision.clone()];
+            let children = self.variation.vary(&parents, &mut rng);
+            assert!(!children.is_empty(), "PAES variation returned no children",);
+            let child_decision = children.into_iter().next().unwrap();
+            let child_eval = problem.evaluate_async(&child_decision).await;
+            evaluations += 1;
+
+            match pareto_compare(&child_eval, &current_eval, &objectives) {
+                Dominance::Dominates => {
+                    current_decision = child_decision.clone();
+                    current_eval = child_eval.clone();
+                }
+                Dominance::DominatedBy => {
+                    // Stay at current.
+                }
+                Dominance::NonDominated | Dominance::Equal => {
+                    current_decision = child_decision.clone();
+                    current_eval = child_eval.clone();
+                }
+            }
+
+            archive.insert(Candidate::new(child_decision, child_eval));
+            archive.insert(Candidate::new(
+                current_decision.clone(),
+                current_eval.clone(),
+            ));
+            archive.truncate(self.config.archive_size);
+        }
+
+        let members = archive.into_vec();
+        let front = pareto_front(&members, &objectives);
+        let best = best_candidate(&members, &objectives);
+        OptimizationResult::new(
+            Population::new(members),
+            front,
+            best,
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -187,6 +187,94 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl IpopCmaEs {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations within each restart's
+    /// CMA-ES generation.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        assert!(
+            self.config.initial_population_size >= 4,
+            "IpopCmaEs initial_population_size must be >= 4",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "IpopCmaEs requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut remaining_gens = self.config.total_generations;
+        let mut pop_size = self.config.initial_population_size;
+        let mut total_evaluations = 0usize;
+        let mut total_iterations = 0usize;
+        let mut best_seen: Option<Candidate<Vec<f64>>> = None;
+        let _ = self.config.stall_generations;
+
+        let mut restart_counter = 0u64;
+        while remaining_gens > 0 {
+            let this_gens = (remaining_gens / 2).max(20).min(remaining_gens);
+            let inner_seed = self
+                .config
+                .seed
+                .wrapping_add(restart_counter.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+            let restart_mean: Vec<f64> = self
+                .bounds
+                .bounds
+                .iter()
+                .map(|&(lo, hi)| lo + (hi - lo) * rng.random::<f64>())
+                .collect();
+            let cfg = CmaEsConfig {
+                population_size: pop_size,
+                generations: this_gens,
+                initial_sigma: self.config.initial_sigma,
+                eigen_decomposition_period: self.config.eigen_decomposition_period,
+                initial_mean: Some(restart_mean),
+                seed: inner_seed,
+            };
+            let mut inner = CmaEs::new(cfg, RealBounds::new(self.bounds.bounds.clone()));
+
+            let result = inner.run_async(problem, concurrency).await;
+            total_evaluations += result.evaluations;
+            total_iterations += result.generations;
+            if let Some(b) = result.best.clone() {
+                let beats = match &best_seen {
+                    None => true,
+                    Some(prev) => better(&b.evaluation, &prev.evaluation, direction),
+                };
+                if beats {
+                    best_seen = Some(b);
+                }
+            }
+            remaining_gens = remaining_gens.saturating_sub(this_gens);
+            pop_size = pop_size.saturating_mul(2);
+            restart_counter = restart_counter.wrapping_add(1);
+        }
+
+        let best = best_seen.expect("at least one restart ran");
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            total_evaluations,
+            total_iterations,
+        )
+    }
+}
+
 fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     match (a.is_feasible(), b.is_feasible()) {
         (true, false) => true,

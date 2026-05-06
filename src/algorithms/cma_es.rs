@@ -366,6 +366,237 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl CmaEs {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per generation.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size >= 4,
+            "CmaEs population_size must be >= 4",
+        );
+        assert!(
+            self.config.initial_sigma > 0.0,
+            "CmaEs initial_sigma must be positive",
+        );
+        assert!(
+            self.config.eigen_decomposition_period >= 1,
+            "CmaEs eigen_decomposition_period must be >= 1",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "CmaEs only supports single-objective problems",
+        );
+        let direction = objectives.objectives[0].direction;
+
+        let n = self.bounds.bounds.len();
+        let n_f = n as f64;
+        let lambda = self.config.population_size;
+        let lambda_f = lambda as f64;
+        let mu = lambda / 2;
+        assert!(mu >= 1, "CmaEs derived mu (= lambda/2) must be >= 1");
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let raw_weights: Vec<f64> = (0..mu)
+            .map(|i| ((lambda_f + 1.0) / 2.0).ln() - ((i + 1) as f64).ln())
+            .collect();
+        let sum_w: f64 = raw_weights.iter().sum();
+        let weights: Vec<f64> = raw_weights.iter().map(|w| w / sum_w).collect();
+        let mu_eff = 1.0 / weights.iter().map(|w| w * w).sum::<f64>();
+
+        let c_sigma = (mu_eff + 2.0) / (n_f + mu_eff + 5.0);
+        let d_sigma = 1.0 + 2.0 * ((mu_eff - 1.0) / (n_f + 1.0)).sqrt().max(0.0) + c_sigma;
+        let c_c = (4.0 + mu_eff / n_f) / (n_f + 4.0 + 2.0 * mu_eff / n_f);
+        let c_1 = 2.0 / ((n_f + 1.3).powi(2) + mu_eff);
+        let c_mu = ((1.0 - c_1) * 2.0 * (mu_eff - 2.0 + 1.0 / mu_eff)
+            / ((n_f + 2.0).powi(2) + mu_eff))
+            .min(1.0 - c_1);
+        let chi_n = n_f.sqrt() * (1.0 - 1.0 / (4.0 * n_f) + 1.0 / (21.0 * n_f * n_f));
+
+        let mut mean: Vec<f64> = if let Some(provided) = self.config.initial_mean.clone() {
+            assert_eq!(
+                provided.len(),
+                self.bounds.bounds.len(),
+                "CmaEs initial_mean.len() must equal the bounds dimension",
+            );
+            provided
+                .into_iter()
+                .zip(self.bounds.bounds.iter())
+                .map(|(v, &(lo, hi))| v.clamp(lo, hi))
+                .collect()
+        } else {
+            self.bounds
+                .bounds
+                .iter()
+                .map(|&(lo, hi)| 0.5 * (lo + hi))
+                .collect()
+        };
+        let mut sigma = self.config.initial_sigma;
+        let mut c_matrix: Vec<Vec<f64>> = (0..n)
+            .map(|i| (0..n).map(|j| if i == j { 1.0 } else { 0.0 }).collect())
+            .collect();
+        let mut b: Vec<Vec<f64>> = c_matrix.to_vec();
+        let mut d: Vec<f64> = vec![1.0; n];
+        let mut p_sigma = vec![0.0_f64; n];
+        let mut p_c = vec![0.0_f64; n];
+        let mut evaluations = 0usize;
+
+        let normal = Normal::new(0.0, 1.0).expect("Normal::new(0, 1)");
+        let mut best_candidate_seen: Option<Candidate<Vec<f64>>> = None;
+
+        for generation in 0..self.config.generations {
+            if generation % self.config.eigen_decomposition_period == 0 {
+                #[allow(clippy::needless_range_loop)]
+                for i in 0..n {
+                    for j in (i + 1)..n {
+                        let avg = 0.5 * (c_matrix[i][j] + c_matrix[j][i]);
+                        c_matrix[i][j] = avg;
+                        c_matrix[j][i] = avg;
+                    }
+                }
+                let (eigenvalues, eigenvectors) = symmetric_eigen(&c_matrix, 1e-14, 100);
+                d = eigenvalues.iter().map(|&v| v.max(1e-20).sqrt()).collect();
+                b = (0..n)
+                    .map(|r| (0..n).map(|c| eigenvectors[c][r]).collect())
+                    .collect();
+            }
+
+            let mut z_samples: Vec<Vec<f64>> = Vec::with_capacity(lambda);
+            let mut x_samples: Vec<Vec<f64>> = Vec::with_capacity(lambda);
+            for _ in 0..lambda {
+                let z: Vec<f64> = (0..n).map(|_| normal.sample(&mut rng)).collect();
+                let bd_z: Vec<f64> = (0..n)
+                    .map(|i| (0..n).map(|j| b[i][j] * d[j] * z[j]).sum::<f64>())
+                    .collect();
+                let x: Vec<f64> = (0..n)
+                    .map(|i| {
+                        let v = mean[i] + sigma * bd_z[i];
+                        let (lo, hi) = self.bounds.bounds[i];
+                        v.clamp(lo, hi)
+                    })
+                    .collect();
+                z_samples.push(z);
+                x_samples.push(x);
+            }
+
+            let evaluated = evaluate_batch_async(problem, x_samples.clone(), concurrency).await;
+            evaluations += evaluated.len();
+
+            for c in &evaluated {
+                let beats_best = match &best_candidate_seen {
+                    None => true,
+                    Some(b) => better_than_so(&c.evaluation, &b.evaluation, direction),
+                };
+                if beats_best {
+                    best_candidate_seen = Some(c.clone());
+                }
+            }
+
+            let mut order: Vec<usize> = (0..lambda).collect();
+            order.sort_by(|&a, &b_| {
+                compare_so(
+                    &evaluated[a].evaluation,
+                    &evaluated[b_].evaluation,
+                    direction,
+                )
+            });
+
+            let old_mean = mean.clone();
+            let mut new_mean = vec![0.0_f64; n];
+            for k in 0..mu {
+                let xk = &x_samples[order[k]];
+                let wk = weights[k];
+                for i in 0..n {
+                    new_mean[i] += wk * xk[i];
+                }
+            }
+            mean = new_mean;
+
+            let mut z_weighted = vec![0.0_f64; n];
+            for k in 0..mu {
+                let zk = &z_samples[order[k]];
+                let wk = weights[k];
+                for i in 0..n {
+                    z_weighted[i] += wk * zk[i];
+                }
+            }
+
+            let factor_p_sigma = (c_sigma * (2.0 - c_sigma) * mu_eff).sqrt();
+            let bz: Vec<f64> = (0..n)
+                .map(|i| (0..n).map(|j| b[i][j] * z_weighted[j]).sum::<f64>())
+                .collect();
+            for i in 0..n {
+                p_sigma[i] = (1.0 - c_sigma) * p_sigma[i] + factor_p_sigma * bz[i];
+            }
+
+            let p_sigma_norm = p_sigma.iter().map(|x| x * x).sum::<f64>().sqrt();
+            sigma *= ((c_sigma / d_sigma) * (p_sigma_norm / chi_n - 1.0)).exp();
+
+            let h_sigma = if p_sigma_norm
+                / (1.0 - (1.0 - c_sigma).powi(2 * (generation as i32 + 1))).sqrt()
+                < (1.4 + 2.0 / (n_f + 1.0)) * chi_n
+            {
+                1.0
+            } else {
+                0.0
+            };
+
+            let factor_p_c = h_sigma * (c_c * (2.0 - c_c) * mu_eff).sqrt();
+            for i in 0..n {
+                p_c[i] = (1.0 - c_c) * p_c[i] + factor_p_c * (mean[i] - old_mean[i]) / sigma;
+            }
+
+            let delta_h = (1.0 - h_sigma) * c_c * (2.0 - c_c);
+            #[allow(clippy::needless_range_loop)]
+            for i in 0..n {
+                for j in 0..n {
+                    let mut update = (1.0 - c_1 - c_mu) * c_matrix[i][j]
+                        + c_1 * (p_c[i] * p_c[j] + delta_h * c_matrix[i][j]);
+                    let mut rank_mu_term = 0.0;
+                    for k in 0..mu {
+                        let xk = &x_samples[order[k]];
+                        let yi = (xk[i] - old_mean[i]) / sigma;
+                        let yj = (xk[j] - old_mean[j]) / sigma;
+                        rank_mu_term += weights[k] * yi * yj;
+                    }
+                    update += c_mu * rank_mu_term;
+                    c_matrix[i][j] = update;
+                }
+            }
+
+            for (i, m) in mean.iter_mut().enumerate() {
+                let (lo, hi) = self.bounds.bounds[i];
+                *m = m.clamp(lo, hi);
+            }
+        }
+
+        let best = best_candidate_seen.expect("at least one generation evaluated");
+        let final_pop = vec![best.clone()];
+        let front = vec![best.clone()];
+        let best_opt = best_candidate(&final_pop, &objectives);
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best_opt,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn compare_so(
     a: &crate::core::evaluation::Evaluation,
     b: &crate::core::evaluation::Evaluation,

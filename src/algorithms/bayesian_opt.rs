@@ -396,6 +396,150 @@ fn erf(x: f64) -> f64 {
     sign * y
 }
 
+#[cfg(feature = "async")]
+impl BayesianOpt {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations during the initial
+    /// uniform-sample design; the sequential BO loop runs one
+    /// evaluation per iteration regardless.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.initial_samples >= 2,
+            "BayesianOpt initial_samples must be >= 2",
+        );
+        assert!(
+            self.config.signal_variance > 0.0,
+            "BayesianOpt signal_variance must be > 0"
+        );
+        assert!(
+            self.config.noise_variance > 0.0,
+            "BayesianOpt noise_variance must be > 0"
+        );
+        assert!(
+            self.config.acquisition_samples >= 1,
+            "BayesianOpt acquisition_samples must be >= 1",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "BayesianOpt requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let dim = self.bounds.bounds.len();
+        if let Some(ls) = &self.config.length_scales {
+            assert_eq!(
+                ls.len(),
+                dim,
+                "BayesianOpt length_scales.len() must equal dim"
+            );
+        }
+        let length_scales: Vec<f64> = self.config.length_scales.clone().unwrap_or_else(|| {
+            self.bounds
+                .bounds
+                .iter()
+                .map(|&(lo, hi)| 0.2 * (hi - lo).max(1e-9))
+                .collect()
+        });
+        let mut rng = rng_from_seed(self.config.seed);
+
+        // Initial random design: sample all decisions first (consuming
+        // RNG in the same order as the sync `run`), then evaluate
+        // concurrently.
+        let mut decisions: Vec<Vec<f64>> =
+            Vec::with_capacity(self.config.initial_samples + self.config.iterations);
+        let mut targets: Vec<f64> = Vec::with_capacity(decisions.capacity());
+        let mut evaluations: Vec<Evaluation> = Vec::with_capacity(decisions.capacity());
+
+        let initial_decisions: Vec<Vec<f64>> = (0..self.config.initial_samples)
+            .map(|_| sample_uniform_in_bounds(&self.bounds, &mut rng))
+            .collect();
+        let initial_cands = evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        for c in initial_cands {
+            let t = oriented_target(&c.evaluation, direction);
+            decisions.push(c.decision);
+            targets.push(t);
+            evaluations.push(c.evaluation);
+        }
+
+        for _ in 0..self.config.iterations {
+            let posterior = match GpPosterior::fit(
+                &decisions,
+                &targets,
+                &length_scales,
+                self.config.signal_variance,
+                self.config.noise_variance,
+            ) {
+                Ok(p) => p,
+                Err(_) => {
+                    let x = sample_uniform_in_bounds(&self.bounds, &mut rng);
+                    let e = problem.evaluate_async(&x).await;
+                    targets.push(oriented_target(&e, direction));
+                    decisions.push(x);
+                    evaluations.push(e);
+                    continue;
+                }
+            };
+
+            let best_target = targets.iter().cloned().fold(f64::INFINITY, f64::min);
+
+            let mut best_x = sample_uniform_in_bounds(&self.bounds, &mut rng);
+            let mut best_ei = -f64::INFINITY;
+            for _ in 0..self.config.acquisition_samples {
+                let cand = sample_uniform_in_bounds(&self.bounds, &mut rng);
+                let (mu, sigma) = posterior.predict(&cand);
+                let ei = expected_improvement(mu, sigma, best_target);
+                if ei > best_ei {
+                    best_ei = ei;
+                    best_x = cand;
+                }
+            }
+
+            let e = problem.evaluate_async(&best_x).await;
+            targets.push(oriented_target(&e, direction));
+            decisions.push(best_x);
+            evaluations.push(e);
+        }
+
+        let final_pop: Vec<Candidate<Vec<f64>>> = decisions
+            .into_iter()
+            .zip(evaluations)
+            .map(|(d, e)| Candidate::new(d, e))
+            .collect();
+        let mut best_idx = 0;
+        for i in 1..final_pop.len() {
+            if better(
+                &final_pop[i].evaluation,
+                &final_pop[best_idx].evaluation,
+                direction,
+            ) {
+                best_idx = i;
+            }
+        }
+        let total_evaluations = final_pop.len();
+        let best = final_pop[best_idx].clone();
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            Some(best),
+            total_evaluations,
+            self.config.iterations + self.config.initial_samples,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

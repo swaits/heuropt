@@ -356,6 +356,129 @@ fn scott_bandwidths(decisions: &[Vec<f64>], support: &[usize], factor: f64) -> V
         .collect()
 }
 
+#[cfg(feature = "async")]
+impl Tpe {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations during the initial
+    /// uniform-sample design; the sequential TPE loop runs one
+    /// evaluation per iteration regardless.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.initial_samples >= 2,
+            "Tpe initial_samples must be >= 2"
+        );
+        assert!(
+            self.config.good_fraction > 0.0 && self.config.good_fraction < 1.0,
+            "Tpe good_fraction must be in (0, 1)",
+        );
+        assert!(
+            self.config.candidate_samples >= 1,
+            "Tpe candidate_samples must be >= 1",
+        );
+        assert!(
+            self.config.bandwidth_factor > 0.0,
+            "Tpe bandwidth_factor must be > 0"
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "Tpe requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let dim = self.bounds.bounds.len();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut decisions: Vec<Vec<f64>> = Vec::new();
+        let mut targets: Vec<f64> = Vec::new();
+        let mut evals: Vec<Evaluation> = Vec::new();
+
+        let initial_decisions: Vec<Vec<f64>> = (0..self.config.initial_samples)
+            .map(|_| sample_uniform_in_bounds(&self.bounds, &mut rng))
+            .collect();
+        let initial_cands = evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        for c in initial_cands {
+            targets.push(oriented_target(&c.evaluation, direction));
+            decisions.push(c.decision);
+            evals.push(c.evaluation);
+        }
+
+        for _ in 0..self.config.iterations {
+            let (good_idx, bad_idx) = split_good_bad(&targets, self.config.good_fraction);
+
+            let mut best_x: Option<Vec<f64>> = None;
+            let mut best_ratio = f64::NEG_INFINITY;
+            for _ in 0..self.config.candidate_samples {
+                let cand = sample_from_kde(
+                    &decisions,
+                    &good_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                    &mut rng,
+                );
+                let l = log_kde_density(
+                    &cand,
+                    &decisions,
+                    &good_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                );
+                let g = log_kde_density(
+                    &cand,
+                    &decisions,
+                    &bad_idx,
+                    &self.bounds,
+                    self.config.bandwidth_factor,
+                );
+                let ratio = l - g;
+                if ratio > best_ratio {
+                    best_ratio = ratio;
+                    best_x = Some(cand);
+                }
+            }
+            let x = best_x.expect("at least one candidate sampled");
+            let _ = dim;
+            let e = problem.evaluate_async(&x).await;
+            targets.push(oriented_target(&e, direction));
+            decisions.push(x);
+            evals.push(e);
+        }
+
+        let mut best_idx = 0;
+        for i in 1..evals.len() {
+            if better(&evals[i], &evals[best_idx], direction) {
+                best_idx = i;
+            }
+        }
+        let total_evals = evals.len();
+        let final_pop: Vec<Candidate<Vec<f64>>> = decisions
+            .into_iter()
+            .zip(evals)
+            .map(|(d, e)| Candidate::new(d, e))
+            .collect();
+        let best = final_pop[best_idx].clone();
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            Some(best),
+            total_evals,
+            self.config.iterations + self.config.initial_samples,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

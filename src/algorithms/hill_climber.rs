@@ -146,6 +146,84 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> HillClimber<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` is mostly inert here because HillClimber evaluates
+    /// one child per iteration; it's accepted for API parity with other
+    /// algorithms.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        let _ = concurrency;
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "HillClimber requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut initial = self.initializer.initialize(1, &mut rng);
+        assert!(
+            !initial.is_empty(),
+            "HillClimber initializer returned no decisions"
+        );
+        let mut current_decision = initial.remove(0);
+        let mut current_eval = problem.evaluate_async(&current_decision).await;
+        let mut evaluations = 1usize;
+
+        for _ in 0..self.config.iterations {
+            let parents = vec![current_decision.clone()];
+            let children = self.variation.vary(&parents, &mut rng);
+            assert!(
+                !children.is_empty(),
+                "HillClimber variation returned no children"
+            );
+            let child_decision = children.into_iter().next().unwrap();
+            let child_eval = problem.evaluate_async(&child_decision).await;
+            evaluations += 1;
+
+            let child_better = match (child_eval.is_feasible(), current_eval.is_feasible()) {
+                (true, false) => true,
+                (false, true) => false,
+                (false, false) => {
+                    child_eval.constraint_violation < current_eval.constraint_violation
+                }
+                (true, true) => match direction {
+                    Direction::Minimize => child_eval.objectives[0] < current_eval.objectives[0],
+                    Direction::Maximize => child_eval.objectives[0] > current_eval.objectives[0],
+                },
+            };
+            if child_better {
+                current_decision = child_decision;
+                current_eval = child_eval;
+            }
+        }
+
+        let best = Candidate::new(current_decision, current_eval);
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

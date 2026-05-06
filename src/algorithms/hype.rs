@@ -226,6 +226,131 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Hype<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "Hype population_size must be > 0"
+        );
+        assert!(self.config.mc_samples > 0, "Hype mc_samples must be > 0");
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        assert_eq!(
+            self.config.reference_point.len(),
+            objectives.len(),
+            "Hype reference_point.len() must equal number of objectives",
+        );
+        let reference = self.config.reference_point.clone();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        for _ in 0..self.config.generations {
+            let fitness = hype_fitness(
+                &population,
+                &objectives,
+                &reference,
+                self.config.mc_samples,
+                &mut rng,
+            );
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
+                let p1 = binary_tournament(&fitness, &mut rng);
+                let p2 = binary_tournament(&fitness, &mut rng);
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(!children.is_empty(), "Hype variation returned no children");
+                for child in children {
+                    if offspring_decisions.len() >= n {
+                        break;
+                    }
+                    offspring_decisions.push(child);
+                }
+            }
+
+            let offspring = evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += offspring.len();
+
+            let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
+            combined.extend(population);
+            combined.extend(offspring);
+
+            let fronts = non_dominated_sort(&combined, &objectives);
+            let mut keep_indices: Vec<usize> = Vec::with_capacity(n);
+            let mut splitting: &[usize] = &[];
+            for f in &fronts {
+                if keep_indices.len() + f.len() <= n {
+                    keep_indices.extend(f.iter().copied());
+                } else {
+                    splitting = f;
+                    break;
+                }
+                if keep_indices.len() == n {
+                    break;
+                }
+            }
+            if keep_indices.len() < n {
+                let pool: Vec<&Candidate<P::Decision>> =
+                    splitting.iter().map(|&i| &combined[i]).collect();
+                let contributions = estimate_contributions(
+                    &pool,
+                    &objectives,
+                    &reference,
+                    self.config.mc_samples,
+                    &mut rng,
+                );
+                let mut order: Vec<usize> = (0..splitting.len()).collect();
+                order.sort_by(|&a, &b| {
+                    contributions[b]
+                        .partial_cmp(&contributions[a])
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                for k in order.into_iter().take(n - keep_indices.len()) {
+                    keep_indices.push(splitting[k]);
+                }
+            }
+
+            population = keep_indices
+                .into_iter()
+                .map(|i| combined[i].clone())
+                .collect();
+        }
+
+        let front = pareto_front(&population, &objectives);
+        let best = best_candidate(&population, &objectives);
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn hype_fitness<D>(
     pool: &[Candidate<D>],
     objectives: &ObjectiveSpace,

@@ -220,6 +220,129 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl ParticleSwarm {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch (initial
+    /// swarm, per-generation positions, and the final evaluation pass).
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.swarm_size >= 1,
+            "ParticleSwarm swarm_size must be >= 1",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "ParticleSwarm requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let dim = self.bounds.bounds.len();
+        let n = self.config.swarm_size;
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let mut positions: Vec<Vec<f64>> = {
+            use crate::traits::Initializer as _;
+            self.bounds.initialize(n, &mut rng)
+        };
+        let mut velocities: Vec<Vec<f64>> = (0..n)
+            .map(|_| {
+                self.bounds
+                    .bounds
+                    .iter()
+                    .map(|&(lo, hi)| 0.1 * (hi - lo) * (rng.random::<f64>() * 2.0 - 1.0))
+                    .collect()
+            })
+            .collect();
+        let v_max: Vec<f64> = self.bounds.bounds.iter().map(|&(lo, hi)| hi - lo).collect();
+
+        let initial_pop = evaluate_batch_async(problem, positions.clone(), concurrency).await;
+        let mut evaluations = initial_pop.len();
+
+        let mut pbest_decisions: Vec<Vec<f64>> = positions.clone();
+        let mut pbest_evals: Vec<f64> = initial_pop
+            .iter()
+            .map(|c| c.evaluation.objectives[0])
+            .collect();
+
+        let mut gbest_idx = best_index(&pbest_evals, direction);
+        let mut gbest_decision = pbest_decisions[gbest_idx].clone();
+        let mut gbest_eval = pbest_evals[gbest_idx];
+
+        for _ in 0..self.config.generations {
+            for i in 0..n {
+                #[allow(clippy::needless_range_loop)]
+                for j in 0..dim {
+                    let r1: f64 = rng.random();
+                    let r2: f64 = rng.random();
+                    let cognitive_term =
+                        self.config.cognitive * r1 * (pbest_decisions[i][j] - positions[i][j]);
+                    let social_term =
+                        self.config.social * r2 * (gbest_decision[j] - positions[i][j]);
+                    let mut v =
+                        self.config.inertia * velocities[i][j] + cognitive_term + social_term;
+                    if v > v_max[j] {
+                        v = v_max[j];
+                    } else if v < -v_max[j] {
+                        v = -v_max[j];
+                    }
+                    velocities[i][j] = v;
+                    let (lo, hi) = self.bounds.bounds[j];
+                    positions[i][j] = (positions[i][j] + v).clamp(lo, hi);
+                }
+            }
+
+            let evaluated = evaluate_batch_async(problem, positions.clone(), concurrency).await;
+            evaluations += evaluated.len();
+
+            for (i, cand) in evaluated.iter().enumerate() {
+                let f = cand.evaluation.objectives[0];
+                let improves = match direction {
+                    Direction::Minimize => f < pbest_evals[i],
+                    Direction::Maximize => f > pbest_evals[i],
+                };
+                if improves {
+                    pbest_decisions[i] = positions[i].clone();
+                    pbest_evals[i] = f;
+                    gbest_idx = i;
+                    let beats_global = match direction {
+                        Direction::Minimize => f < gbest_eval,
+                        Direction::Maximize => f > gbest_eval,
+                    };
+                    if beats_global {
+                        gbest_decision = pbest_decisions[i].clone();
+                        gbest_eval = f;
+                    }
+                }
+            }
+        }
+        let _ = gbest_idx;
+
+        let final_pop = evaluate_batch_async(problem, positions, concurrency).await;
+        evaluations += final_pop.len();
+        let best = best_candidate(&final_pop, &objectives);
+        let front: Vec<Candidate<Vec<f64>>> = best.iter().cloned().collect();
+        OptimizationResult::new(
+            Population::new(final_pop),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn best_index(values: &[f64], direction: Direction) -> usize {
     let mut idx = 0;
     for i in 1..values.len() {

@@ -241,6 +241,119 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl AntColonyTsp {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per generation.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<usize>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<usize>>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(self.config.ants >= 1, "AntColonyTsp ants must be >= 1");
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "AntColonyTsp requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let n = self.distances.len();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let eta: Vec<Vec<f64>> = self
+            .distances
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|&d| if d > 0.0 { 1.0 / d } else { 0.0 })
+                    .collect()
+            })
+            .collect();
+
+        let mut pheromone: Vec<Vec<f64>> = vec![vec![self.config.initial_pheromone; n]; n];
+
+        let mut best_decision: Option<Vec<usize>> = None;
+        let mut best_eval: Option<crate::core::evaluation::Evaluation> = None;
+        let mut evaluations = 0usize;
+
+        for _ in 0..self.config.generations {
+            let mut tours: Vec<Vec<usize>> = Vec::with_capacity(self.config.ants);
+            for _ in 0..self.config.ants {
+                let start = rng.random_range(0..n);
+                let tour = build_tour(
+                    n,
+                    start,
+                    &pheromone,
+                    &eta,
+                    self.config.alpha,
+                    self.config.beta,
+                    &mut rng,
+                );
+                tours.push(tour);
+            }
+
+            let cands = evaluate_batch_async(problem, tours.clone(), concurrency).await;
+            evaluations += cands.len();
+            let tour_evals: Vec<crate::core::evaluation::Evaluation> =
+                cands.into_iter().map(|c| c.evaluation).collect();
+
+            for (tour, eval) in tours.iter().zip(tour_evals.iter()) {
+                let beats = match &best_eval {
+                    None => true,
+                    Some(b) => better_than_so(eval, b, direction),
+                };
+                if beats {
+                    best_decision = Some(tour.clone());
+                    best_eval = Some(eval.clone());
+                }
+            }
+
+            for row in pheromone.iter_mut() {
+                for v in row.iter_mut() {
+                    *v *= 1.0 - self.config.evaporation;
+                }
+            }
+
+            for (tour, eval) in tours.iter().zip(tour_evals.iter()) {
+                let length = eval
+                    .objectives
+                    .first()
+                    .copied()
+                    .unwrap_or(f64::INFINITY)
+                    .max(1e-12);
+                let deposit = self.config.deposit / length;
+                for w in tour.windows(2) {
+                    let (i, j) = (w[0], w[1]);
+                    pheromone[i][j] += deposit;
+                    pheromone[j][i] += deposit;
+                }
+                let (i, j) = (*tour.last().unwrap(), tour[0]);
+                pheromone[i][j] += deposit;
+                pheromone[j][i] += deposit;
+            }
+        }
+
+        let best = Candidate::new(best_decision.unwrap(), best_eval.unwrap());
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 fn build_tour(
     n: usize,
     start: usize,

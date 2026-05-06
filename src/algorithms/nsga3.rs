@@ -180,6 +180,92 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Nsga3<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "Nsga3 population_size must be greater than 0",
+        );
+        let n = self.config.population_size;
+        let objectives = problem.objectives();
+        let m = objectives.len();
+        let reference_points = das_dennis(m, self.config.reference_divisions);
+        assert!(
+            !reference_points.is_empty(),
+            "Nsga3 reference set is empty — check reference_divisions",
+        );
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n, &mut rng);
+        assert_eq!(
+            initial_decisions.len(),
+            n,
+            "NSGA-III initializer must return exactly population_size decisions",
+        );
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+
+        for _ in 0..self.config.generations {
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n);
+            while offspring_decisions.len() < n {
+                let p1 = rng.random_range(0..population.len());
+                let p2 = rng.random_range(0..population.len());
+                let parents = vec![
+                    population[p1].decision.clone(),
+                    population[p2].decision.clone(),
+                ];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(
+                    !children.is_empty(),
+                    "NSGA-III variation returned no children",
+                );
+                for child_decision in children {
+                    if offspring_decisions.len() >= n {
+                        break;
+                    }
+                    offspring_decisions.push(child_decision);
+                }
+            }
+            let offspring = evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += offspring.len();
+
+            let mut combined: Vec<Candidate<P::Decision>> = Vec::with_capacity(2 * n);
+            combined.extend(population);
+            combined.extend(offspring);
+            population =
+                environmental_selection(&combined, &objectives, &reference_points, n, &mut rng);
+        }
+
+        let front = pareto_front(&population, &objectives);
+        let best = best_candidate(&population, &objectives);
+        OptimizationResult::new(
+            Population::new(population),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 /// NSGA-III environmental selection: front-by-front + reference-point niching
 /// on the splitting front.
 fn environmental_selection<D: Clone>(

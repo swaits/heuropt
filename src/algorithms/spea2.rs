@@ -169,6 +169,91 @@ where
     }
 }
 
+#[cfg(feature = "async")]
+impl<I, V> Spea2<I, V> {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` bounds in-flight evaluations per batch.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<P::Decision>
+    where
+        P: crate::core::async_problem::AsyncProblem,
+        I: Initializer<P::Decision>,
+        V: Variation<P::Decision>,
+    {
+        use crate::algorithms::parallel_eval_async::evaluate_batch_async;
+
+        assert!(
+            self.config.population_size > 0,
+            "Spea2 population_size must be greater than 0",
+        );
+        assert!(
+            self.config.archive_size > 0,
+            "Spea2 archive_size must be greater than 0",
+        );
+        let n_pop = self.config.population_size;
+        let n_arc = self.config.archive_size;
+        let objectives = problem.objectives();
+        let mut rng = rng_from_seed(self.config.seed);
+
+        let initial_decisions = self.initializer.initialize(n_pop, &mut rng);
+        assert_eq!(
+            initial_decisions.len(),
+            n_pop,
+            "SPEA2 initializer must return exactly population_size decisions",
+        );
+        let mut population: Vec<Candidate<P::Decision>> =
+            evaluate_batch_async(problem, initial_decisions, concurrency).await;
+        let mut evaluations = population.len();
+        let mut archive: Vec<Candidate<P::Decision>> = Vec::new();
+
+        for _ in 0..self.config.generations {
+            let mut pool: Vec<Candidate<P::Decision>> =
+                Vec::with_capacity(population.len() + archive.len());
+            pool.append(&mut population);
+            pool.append(&mut archive);
+            let fitness = compute_fitness(&pool, &objectives);
+
+            archive = build_archive(&pool, &fitness, &objectives, n_arc);
+
+            let archive_fitness = compute_fitness(&archive, &objectives);
+            let mut offspring_decisions: Vec<P::Decision> = Vec::with_capacity(n_pop);
+            while offspring_decisions.len() < n_pop {
+                let p1 = binary_tournament(&archive_fitness, &mut rng);
+                let p2 = binary_tournament(&archive_fitness, &mut rng);
+                let parents = vec![archive[p1].decision.clone(), archive[p2].decision.clone()];
+                let children = self.variation.vary(&parents, &mut rng);
+                assert!(!children.is_empty(), "SPEA2 variation returned no children");
+                for child_decision in children {
+                    if offspring_decisions.len() >= n_pop {
+                        break;
+                    }
+                    offspring_decisions.push(child_decision);
+                }
+            }
+            let new_population =
+                evaluate_batch_async(problem, offspring_decisions, concurrency).await;
+            evaluations += new_population.len();
+            population = new_population;
+        }
+
+        let front = pareto_front(&archive, &objectives);
+        let best = best_candidate(&archive, &objectives);
+        OptimizationResult::new(
+            Population::new(archive),
+            front,
+            best,
+            evaluations,
+            self.config.generations,
+        )
+    }
+}
+
 /// SPEA2 fitness: `R(i) + D(i)`, where lower is better.
 ///
 /// `R(i)` is the sum of `S(j)` over all `j` that dominate `i`. `S(j)` is the

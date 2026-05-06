@@ -295,6 +295,161 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     compare(a, b, direction) == std::cmp::Ordering::Less
 }
 
+#[cfg(feature = "async")]
+impl NelderMead {
+    /// Async version of [`Optimizer::run`] — drives evaluations through
+    /// the user-chosen async runtime. Available only with the `async`
+    /// feature.
+    ///
+    /// `concurrency` is largely inert here because Nelder-Mead
+    /// evaluates one or two new vertices per iteration sequentially
+    /// (the next decision depends on the previous evaluation); it's
+    /// accepted for API parity with other algorithms.
+    pub async fn run_async<P>(
+        &mut self,
+        problem: &P,
+        concurrency: usize,
+    ) -> OptimizationResult<Vec<f64>>
+    where
+        P: crate::core::async_problem::AsyncProblem<Decision = Vec<f64>>,
+    {
+        let _ = concurrency;
+        assert!(
+            self.config.reflection > 0.0,
+            "NelderMead reflection must be > 0"
+        );
+        assert!(
+            self.config.expansion > 1.0,
+            "NelderMead expansion must be > 1",
+        );
+        assert!(
+            self.config.contraction > 0.0 && self.config.contraction < 1.0,
+            "NelderMead contraction must be in (0, 1)",
+        );
+        assert!(
+            self.config.shrinkage > 0.0 && self.config.shrinkage < 1.0,
+            "NelderMead shrinkage must be in (0, 1)",
+        );
+        assert!(
+            self.config.initial_step > 0.0,
+            "NelderMead initial_step must be > 0",
+        );
+        let objectives = problem.objectives();
+        assert!(
+            objectives.is_single_objective(),
+            "NelderMead requires exactly one objective",
+        );
+        let direction = objectives.objectives[0].direction;
+        let n = self.bounds.bounds.len();
+
+        let mut vertices: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
+        let start: Vec<f64> = self
+            .bounds
+            .bounds
+            .iter()
+            .map(|&(lo, hi)| 0.5 * (lo + hi))
+            .collect();
+        vertices.push(start.clone());
+        for j in 0..n {
+            let mut v = start.clone();
+            let (lo, hi) = self.bounds.bounds[j];
+            let step = self.config.initial_step.min(0.5 * (hi - lo));
+            v[j] = (v[j] + step).clamp(lo, hi);
+            vertices.push(v);
+        }
+        let mut evals: Vec<Evaluation> = Vec::with_capacity(vertices.len());
+        for v in &vertices {
+            evals.push(problem.evaluate_async(v).await);
+        }
+        let mut evaluations = evals.len();
+
+        for _ in 0..self.config.iterations {
+            let mut order: Vec<usize> = (0..vertices.len()).collect();
+            order.sort_by(|&a, &b| compare(&evals[a], &evals[b], direction));
+            let best_idx = order[0];
+            let worst_idx = order[order.len() - 1];
+            let second_worst_idx = order[order.len() - 2];
+
+            let mut centroid = vec![0.0_f64; n];
+            for &idx in &order[..order.len() - 1] {
+                for j in 0..n {
+                    centroid[j] += vertices[idx][j];
+                }
+            }
+            for c in centroid.iter_mut() {
+                *c /= (order.len() - 1) as f64;
+            }
+
+            let reflected = self.reflect(&centroid, &vertices[worst_idx], self.config.reflection);
+            let r_eval = problem.evaluate_async(&reflected).await;
+            evaluations += 1;
+
+            if better(&r_eval, &evals[best_idx], direction) {
+                let expanded = self.reflect(&centroid, &vertices[worst_idx], self.config.expansion);
+                let e_eval = problem.evaluate_async(&expanded).await;
+                evaluations += 1;
+                if better(&e_eval, &r_eval, direction) {
+                    vertices[worst_idx] = expanded;
+                    evals[worst_idx] = e_eval;
+                } else {
+                    vertices[worst_idx] = reflected;
+                    evals[worst_idx] = r_eval;
+                }
+            } else if better(&r_eval, &evals[second_worst_idx], direction) {
+                vertices[worst_idx] = reflected;
+                evals[worst_idx] = r_eval;
+            } else {
+                let contraction_target = if better(&r_eval, &evals[worst_idx], direction) {
+                    self.contract(&centroid, &reflected, self.config.contraction)
+                } else {
+                    self.contract(&centroid, &vertices[worst_idx], self.config.contraction)
+                };
+                let c_eval = problem.evaluate_async(&contraction_target).await;
+                evaluations += 1;
+                if better(&c_eval, &evals[worst_idx], direction) {
+                    vertices[worst_idx] = contraction_target;
+                    evals[worst_idx] = c_eval;
+                } else {
+                    let best_pt = vertices[best_idx].clone();
+                    for &idx in &order {
+                        if idx == best_idx {
+                            continue;
+                        }
+                        #[allow(clippy::needless_range_loop)]
+                        for j in 0..n {
+                            vertices[idx][j] = best_pt[j]
+                                + self.config.shrinkage * (vertices[idx][j] - best_pt[j]);
+                        }
+                        for (j, x) in vertices[idx].iter_mut().enumerate() {
+                            let (lo, hi) = self.bounds.bounds[j];
+                            *x = x.clamp(lo, hi);
+                        }
+                        evals[idx] = problem.evaluate_async(&vertices[idx]).await;
+                        evaluations += 1;
+                    }
+                }
+            }
+        }
+
+        let mut best_idx = 0;
+        for i in 1..vertices.len() {
+            if better(&evals[i], &evals[best_idx], direction) {
+                best_idx = i;
+            }
+        }
+        let best = Candidate::new(vertices[best_idx].clone(), evals[best_idx].clone());
+        let population = Population::new(vec![best.clone()]);
+        let front = vec![best.clone()];
+        OptimizationResult::new(
+            population,
+            front,
+            Some(best),
+            evaluations,
+            self.config.iterations,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

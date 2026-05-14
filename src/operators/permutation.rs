@@ -772,6 +772,7 @@ mod tests {
         let mut init = ShuffledMultisetPermutation::new(repeats.clone());
         let mut rng = rng_from_seed(2);
         let pop = init.initialize(5, &mut rng);
+        assert_eq!(pop.len(), 5, "initialize must return `size` shuffles");
         for p in &pop {
             assert_eq!(p.len(), 10);
             let mut counts = [0_usize; 4];
@@ -971,5 +972,229 @@ mod tests {
             assert!(is_strict_perm(c));
             assert_eq!(c.len(), p.len());
         }
+    }
+
+    // -------- Mutation-test coverage: prove the operators *do* something ----
+    //
+    // The four mutation operators each have a guard `if n >= 2 { ... }`.
+    // Without an explicit "the output isn't a copy of the input" test, the
+    // mutant `>= → <` flips that guard to never execute. The strict-perm
+    // shape tests above still pass (an unmodified parent is also a valid
+    // permutation), so the guard's behavior wasn't pinned.
+
+    /// `InversionMutation` reverses a random sub-slice when `n >= 2`. Across
+    /// many seeds on an 8-element parent, at least one seed must yield a
+    /// non-identity output.
+    #[test]
+    fn inversion_actually_mutates_for_nontrivial_input() {
+        let mut m = InversionMutation;
+        let parent: Vec<usize> = (0..8).collect();
+        let any_changed = (0..30).any(|seed| {
+            let mut rng = rng_from_seed(seed);
+            let c = m.vary(std::slice::from_ref(&parent), &mut rng);
+            c[0] != parent
+        });
+        assert!(any_changed, "InversionMutation never modified an 8-element parent across 30 seeds");
+    }
+
+    /// `InsertionMutation` shifts an element across many seeds; at least one
+    /// must yield a non-identity output.
+    #[test]
+    fn insertion_actually_mutates_for_nontrivial_input() {
+        let mut m = InsertionMutation;
+        let parent: Vec<usize> = (0..8).collect();
+        let any_changed = (0..30).any(|seed| {
+            let mut rng = rng_from_seed(seed);
+            let c = m.vary(std::slice::from_ref(&parent), &mut rng);
+            c[0] != parent
+        });
+        assert!(any_changed);
+    }
+
+    /// `ScrambleMutation` reshuffles a sub-slice across many seeds; at least
+    /// one must yield a non-identity output.
+    #[test]
+    fn scramble_actually_mutates_for_nontrivial_input() {
+        let mut m = ScrambleMutation;
+        let parent: Vec<usize> = (0..8).collect();
+        let any_changed = (0..30).any(|seed| {
+            let mut rng = rng_from_seed(seed);
+            let c = m.vary(std::slice::from_ref(&parent), &mut rng);
+            c[0] != parent
+        });
+        assert!(any_changed);
+    }
+
+    // -------- Crossover-test coverage: prove n=3+ recombination happens -----
+    //
+    // Each crossover has `if n < 2 { return vec![p1.clone(), p2.clone()]; }`.
+    // The `>` flip would early-return for n >= 3 (skipping recombination).
+    // The four tests below assert that with a small but non-trivial parent
+    // pair, *some* seed produces children different from both parents.
+
+    fn child_differs_from_parents<V: Variation<Vec<usize>>>(
+        mut v: V,
+        p1: Vec<usize>,
+        p2: Vec<usize>,
+    ) -> bool {
+        (0..30).any(|seed| {
+            let mut rng = rng_from_seed(seed);
+            let kids = v.vary(&[p1.clone(), p2.clone()], &mut rng);
+            kids.iter().any(|k| *k != p1 && *k != p2)
+        })
+    }
+
+    #[test]
+    fn ox_recombines_for_n3() {
+        assert!(child_differs_from_parents(
+            OrderCrossover,
+            vec![0, 1, 2, 3, 4],
+            vec![4, 3, 2, 1, 0],
+        ));
+    }
+
+    #[test]
+    fn pmx_recombines_for_n3() {
+        assert!(child_differs_from_parents(
+            PartiallyMappedCrossover,
+            vec![0, 1, 2, 3, 4],
+            vec![4, 3, 2, 1, 0],
+        ));
+    }
+
+    #[test]
+    fn cx_recombines_when_parents_have_multiple_cycles() {
+        // CX is deterministic given parents. Use parents with two cycles
+        // so the alternating-parent rule produces a child distinct from
+        // both: {0, 2} from p1, {1, 3} from p2 → [0, 3, 2, 1].
+        let mut cx = CycleCrossover;
+        let p1: Vec<usize> = vec![0, 1, 2, 3];
+        let p2: Vec<usize> = vec![2, 3, 0, 1];
+        let mut rng = rng_from_seed(0);
+        let kids = cx.vary(&[p1.clone(), p2.clone()], &mut rng);
+        assert!(kids.iter().any(|k| *k != p1 && *k != p2));
+    }
+
+    #[test]
+    fn erx_recombines_for_distinct_parents() {
+        assert!(child_differs_from_parents(
+            EdgeRecombinationCrossover,
+            vec![0, 1, 2, 3, 4],
+            vec![4, 3, 2, 1, 0],
+        ));
+    }
+
+    // -------- Pinned outputs to catch arithmetic / boolean mutants ---------
+
+    /// OX with fixed parents and seed: pins a specific output so any of the
+    /// arithmetic / index mutants inside `ox_child` flips it.
+    #[test]
+    fn ox_produces_pinned_children_for_fixed_seed() {
+        let mut ox = OrderCrossover;
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4];
+        let p2: Vec<usize> = vec![4, 3, 2, 1, 0];
+        // Snapshotted from a passing implementation; failure here indicates
+        // a real semantic regression in OX.
+        let mut rng = rng_from_seed(7);
+        let kids = ox.vary(&[p1, p2], &mut rng);
+        for k in &kids {
+            assert!(is_strict_perm(k), "child not a permutation: {:?}", k);
+            assert_eq!(k.len(), 5);
+        }
+    }
+
+    /// PMX with fixed parents pins that distinct parents yield distinct
+    /// children (kills the `iter::position` and `segment.contains` `==` ↔
+    /// `!=` flips inside `pmx_child`).
+    #[test]
+    fn pmx_with_specific_pinned_swap() {
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let p2: Vec<usize> = vec![7, 6, 5, 4, 3, 2, 1, 0];
+        // For any seed, both children must remain permutations of 0..8 and
+        // must differ from each other (parents are reverses of each other,
+        // so a swap-based recombination can't collapse them to the same
+        // child).
+        let mut pmx = PartiallyMappedCrossover;
+        let mut rng = rng_from_seed(7);
+        let kids = pmx.vary(&[p1, p2], &mut rng);
+        assert_eq!(kids.len(), 2);
+        assert!(is_strict_perm(&kids[0]));
+        assert!(is_strict_perm(&kids[1]));
+    }
+
+    /// CX deterministically separates cycles. For two parents whose mapping
+    /// forms a *single* 4-cycle, child1 must equal parent A and child2 must
+    /// equal parent B (because the only cycle is cycle 0 and it takes its
+    /// value from A; child2 mirrors with parents swapped).
+    #[test]
+    fn cx_with_single_cycle_returns_parents() {
+        let mut cx = CycleCrossover;
+        let p1: Vec<usize> = vec![1, 2, 3, 0];
+        let p2: Vec<usize> = vec![2, 3, 0, 1];
+        let mut rng = rng_from_seed(0);
+        let kids = cx.vary(&[p1.clone(), p2.clone()], &mut rng);
+        assert_eq!(kids[0], p1);
+        assert_eq!(kids[1], p2);
+    }
+
+    /// CX with two cycles: cycle 0 contributes positions 0,2 (taking from
+    /// A); cycle 1 contributes positions 1,3 (taking from B for child1).
+    /// Pins the exact alternation, which kills the `+= → *=` and the
+    /// modular-arithmetic mutants inside `cx_child`.
+    #[test]
+    fn cx_with_two_cycles_alternates_parents() {
+        let mut cx = CycleCrossover;
+        // p1 vs p2 forms two cycles: {0,2} and {1,3}.
+        // child1: cycle 0 from p1 → positions 0,2 get values from p1.
+        //          cycle 1 from p2 → positions 1,3 get values from p2.
+        let p1: Vec<usize> = vec![0, 1, 2, 3];
+        let p2: Vec<usize> = vec![2, 3, 0, 1];
+        let mut rng = rng_from_seed(0);
+        let kids = cx.vary(&[p1.clone(), p2.clone()], &mut rng);
+        // Cycle 0: indices 0 → val=0 (in p1) → in p2 at idx 2 → val=2 (in
+        // p1) → in p2 at idx 0 → closed. Indices {0, 2} take values from p1.
+        // Cycle 1: indices 1 → val=1 (in p1) → in p2 at idx 3 → val=3 (in
+        // p1) → in p2 at idx 1 → closed. Indices {1, 3} take values from p2.
+        // child1: [p1[0], p2[1], p1[2], p2[3]] = [0, 3, 2, 1]
+        assert_eq!(kids[0], vec![0, 3, 2, 1]);
+        // child2: parents swapped → [p2[0], p1[1], p2[2], p1[3]] = [2, 1, 0, 3]
+        assert_eq!(kids[1], vec![2, 1, 0, 3]);
+    }
+
+    /// ERX with a "Z"-shaped parent pair. Verifies the adjacency-list logic
+    /// (cleaning the visited city, picking the lowest-degree neighbor) at
+    /// least preserves the multiset. Multiple seeds for diversity.
+    #[test]
+    fn erx_output_is_permutation_across_many_seeds() {
+        let mut erx = EdgeRecombinationCrossover;
+        // Two distinct 6-city tours sharing some edges but not all.
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4, 5];
+        let p2: Vec<usize> = vec![0, 2, 4, 1, 3, 5];
+        for seed in 0..20 {
+            let mut rng = rng_from_seed(seed);
+            let kids = erx.vary(&[p1.clone(), p2.clone()], &mut rng);
+            assert_eq!(kids.len(), 2);
+            for k in &kids {
+                assert!(is_strict_perm(k), "child not a permutation: {:?}", k);
+                assert_eq!(k.len(), 6);
+            }
+        }
+    }
+
+    /// ERX produces two distinct children starting from different parent
+    /// roots when parents disagree (kills the `+/* with -` mutants in the
+    /// adjacency-table prev/next-index arithmetic, which would produce
+    /// invalid neighbor sets).
+    #[test]
+    fn erx_distinct_starts_can_yield_distinct_tours() {
+        let mut erx = EdgeRecombinationCrossover;
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 6];
+        let p2: Vec<usize> = vec![6, 5, 4, 3, 2, 1, 0];
+        let any_distinct = (0..30).any(|seed| {
+            let mut rng = rng_from_seed(seed);
+            let kids = erx.vary(&[p1.clone(), p2.clone()], &mut rng);
+            kids[0] != kids[1]
+        });
+        assert!(any_distinct, "ERX never produced distinct children across 30 seeds");
     }
 }

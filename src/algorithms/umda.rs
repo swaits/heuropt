@@ -449,4 +449,30 @@ mod tests {
         });
         let _ = opt.run(&DummyMo);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn compare_so_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert_eq!(compare_so(&feasible, &infeasible, Direction::Minimize), std::cmp::Ordering::Less);
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert_eq!(compare_so(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare_so(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert_eq!(compare_so(&v_lo, &v_hi, Direction::Minimize), std::cmp::Ordering::Less);
+    }
+
+    #[test]
+    fn better_than_so_is_strict_less() {
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better_than_so(&lo, &hi, Direction::Minimize));
+        assert!(!better_than_so(&hi, &lo, Direction::Minimize));
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better_than_so(&lo, &eq, Direction::Minimize));
+    }
 }

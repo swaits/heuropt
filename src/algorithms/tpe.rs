@@ -552,4 +552,56 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn oriented_target_flips_sign_and_penalizes() {
+        let e = Evaluation::new(vec![3.0]);
+        assert!((oriented_target(&e, Direction::Minimize) - 3.0).abs() < 1e-12);
+        assert!((oriented_target(&e, Direction::Maximize) + 3.0).abs() < 1e-12);
+        let mut bad = Evaluation::new(vec![1.0]);
+        bad.constraint_violation = 0.5;
+        assert!((oriented_target(&bad, Direction::Minimize) - 500_001.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn better_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert!(better(&feasible, &infeasible, Direction::Minimize));
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better(&lo, &hi, Direction::Minimize));
+        assert!(better(&hi, &lo, Direction::Maximize));
+    }
+
+    #[test]
+    fn split_good_bad_partitions_by_target_rank() {
+        // targets 5, 1, 3, 9, 7 → ranked 1<3<5<7<9 → indices 1,2,0,4,3.
+        let targets = [5.0, 1.0, 3.0, 9.0, 7.0];
+        let (good, bad) = split_good_bad(&targets, 0.4);
+        // 40% of 5 = 2 good.
+        assert_eq!(good.len(), 2);
+        assert_eq!(bad.len(), 3);
+        // The two smallest targets (1.0 at idx 1, 3.0 at idx 2) are "good".
+        assert!(good.contains(&1));
+        assert!(good.contains(&2));
+    }
+
+    #[test]
+    fn split_good_bad_clamps_to_at_least_one_each() {
+        let targets = [5.0, 1.0, 3.0];
+        // good_fraction 0.0 would round to 0 — must clamp to >= 1.
+        let (good, bad) = split_good_bad(&targets, 0.0);
+        assert!(!good.is_empty());
+        assert!(!bad.is_empty());
+        // good_fraction 1.0 would take everything — must leave >= 1 bad.
+        let (good2, bad2) = split_good_bad(&targets, 1.0);
+        assert!(!good2.is_empty());
+        assert!(!bad2.is_empty());
+    }
 }

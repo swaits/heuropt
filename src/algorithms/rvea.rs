@@ -556,4 +556,41 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn unit_normalize_produces_unit_vector() {
+        let v = unit_normalize(vec![3.0, 4.0]);
+        let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-12);
+        assert!((v[0] - 0.6).abs() < 1e-12);
+        assert!((v[1] - 0.8).abs() < 1e-12);
+    }
+
+    #[test]
+    fn unit_normalize_zero_vector_unchanged() {
+        // A (near-)zero vector is left as-is (no division by ~0).
+        let v = unit_normalize(vec![0.0, 0.0]);
+        assert_eq!(v, vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn closest_reference_picks_smallest_angle() {
+        // References along the two axes; a point near the x-axis associates
+        // with reference 0 at a small angle.
+        let refs = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let (idx, angle) = closest_reference(&[1.0, 0.0], &refs);
+        assert_eq!(idx, 0);
+        assert!(angle.abs() < 1e-9, "angle = {angle}");
+        let (idx2, _) = closest_reference(&[0.1, 1.0], &refs);
+        assert_eq!(idx2, 1);
+    }
+
+    #[test]
+    fn smallest_neighbor_angle_of_orthogonal_refs_is_pi_over_2() {
+        let refs = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let a = smallest_neighbor_angle(&refs);
+        assert!((a - std::f64::consts::FRAC_PI_2).abs() < 1e-9, "angle = {a}");
+    }
 }

@@ -601,4 +601,30 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn euclidean_distance_basics() {
+        // (0,0) to (3,4) = 5.
+        assert!((euclidean(&[0.0, 0.0], &[3.0, 4.0]) - 5.0).abs() < 1e-12);
+        // symmetric and zero-to-self.
+        assert!((euclidean(&[3.0, 4.0], &[0.0, 0.0]) - 5.0).abs() < 1e-12);
+        assert_eq!(euclidean(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0]), 0.0);
+    }
+
+    #[test]
+    fn binary_tournament_prefers_lower_fitness() {
+        // SPEA2 fitness is "lower is better" — index 1 here is the best.
+        use crate::core::rng::rng_from_seed;
+        let fitness = vec![5.0_f64, 0.5];
+        let mut wins1 = 0;
+        for seed in 0..200 {
+            let mut rng = rng_from_seed(seed);
+            if binary_tournament(&fitness, &mut rng) == 1 {
+                wins1 += 1;
+            }
+        }
+        assert!(wins1 > 130, "lower-fitness index won only {wins1}/200");
+    }
 }

@@ -407,4 +407,26 @@ mod tests {
         );
         let _ = opt.run(&Sphere1D);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn better_than_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert!(better_than(&feasible, &infeasible, Direction::Minimize));
+        assert!(!better_than(&infeasible, &feasible, Direction::Minimize));
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better_than(&lo, &hi, Direction::Minimize));
+        assert!(better_than(&hi, &lo, Direction::Maximize));
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better_than(&lo, &eq, Direction::Minimize));
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert!(better_than(&v_lo, &v_hi, Direction::Minimize));
+    }
 }

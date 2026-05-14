@@ -383,4 +383,40 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn better_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert!(better(&feasible, &infeasible, Direction::Minimize));
+        assert!(!better(&infeasible, &feasible, Direction::Minimize));
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better(&lo, &hi, Direction::Minimize));
+        assert!(better(&hi, &lo, Direction::Maximize));
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better(&lo, &eq, Direction::Minimize));
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert!(better(&v_lo, &v_hi, Direction::Minimize));
+    }
+
+    #[test]
+    fn best_index_finds_min_and_max() {
+        let evals = [
+            Evaluation::new(vec![3.0]),
+            Evaluation::new(vec![1.0]),
+            Evaluation::new(vec![4.0]),
+        ];
+        assert_eq!(best_index(&evals, Direction::Minimize), 1);
+        assert_eq!(best_index(&evals, Direction::Maximize), 2);
+        // tie keeps the first.
+        let flat = [Evaluation::new(vec![1.0]), Evaluation::new(vec![1.0])];
+        assert_eq!(best_index(&flat, Direction::Minimize), 0);
+    }
 }

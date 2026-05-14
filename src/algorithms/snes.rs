@@ -457,4 +457,46 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn nes_utilities_sum_to_zero_and_are_descending() {
+        // The NES utility weights are a shifted log-rank scheme; they sum
+        // to (approximately) zero and the first (best-ranked) is largest.
+        let u = nes_utilities(10);
+        assert_eq!(u.len(), 10);
+        let sum: f64 = u.iter().sum();
+        assert!(sum.abs() < 1e-9, "utilities sum = {sum}");
+        // Descending: best rank gets the most weight.
+        for w in u.windows(2) {
+            assert!(w[0] >= w[1] - 1e-12, "not descending: {:?}", u);
+        }
+        // The first utility is positive (it gets above-average weight).
+        assert!(u[0] > 0.0);
+    }
+
+    #[test]
+    fn compare_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert_eq!(compare(&feasible, &infeasible, Direction::Minimize), std::cmp::Ordering::Less);
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert_eq!(compare(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn better_is_strict_less() {
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better(&lo, &hi, Direction::Minimize));
+        assert!(!better(&hi, &lo, Direction::Minimize));
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better(&lo, &eq, Direction::Minimize));
+    }
 }

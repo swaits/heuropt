@@ -345,4 +345,32 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn worse_than_feasibility_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        // infeasible is worse than feasible regardless of objective.
+        assert!(worse_than(&infeasible, &feasible, Direction::Minimize));
+        assert!(!worse_than(&feasible, &infeasible, Direction::Minimize));
+        // two feasible, minimize: larger objective is worse.
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(worse_than(&hi, &lo, Direction::Minimize));
+        assert!(!worse_than(&lo, &hi, Direction::Minimize));
+        // maximize inverts.
+        assert!(worse_than(&lo, &hi, Direction::Maximize));
+        // equal → not worse.
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!worse_than(&lo, &eq, Direction::Minimize));
+        // two infeasible: larger violation is worse.
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert!(worse_than(&v_hi, &v_lo, Direction::Minimize));
+    }
 }

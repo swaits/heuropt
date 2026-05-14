@@ -463,4 +463,64 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn binary_tournament_prefers_lower_rank() {
+        use crate::core::candidate::Candidate;
+        use crate::core::evaluation::Evaluation;
+        use crate::core::rng::rng_from_seed;
+        // Entry 0: rank 0; entry 1: rank 1. Lower rank must win every time
+        // the two draws differ.
+        let entries = vec![
+            Nsga2Entry {
+                candidate: Candidate::new(0u32, Evaluation::new(vec![1.0, 1.0])),
+                rank: 0,
+                crowding_distance: 0.0,
+            },
+            Nsga2Entry {
+                candidate: Candidate::new(1u32, Evaluation::new(vec![2.0, 2.0])),
+                rank: 1,
+                crowding_distance: 100.0,
+            },
+        ];
+        let mut wins0 = 0;
+        for seed in 0..200 {
+            let mut rng = rng_from_seed(seed);
+            if binary_tournament(&entries, &mut rng) == 0 {
+                wins0 += 1;
+            }
+        }
+        // Rank dominates crowding distance — index 0 wins the clear majority.
+        assert!(wins0 > 130, "lower-rank index won only {wins0}/200");
+    }
+
+    #[test]
+    fn binary_tournament_prefers_higher_crowding_at_equal_rank() {
+        use crate::core::candidate::Candidate;
+        use crate::core::evaluation::Evaluation;
+        use crate::core::rng::rng_from_seed;
+        // Both rank 0; entry 0 has higher crowding distance → preferred.
+        let entries = vec![
+            Nsga2Entry {
+                candidate: Candidate::new(0u32, Evaluation::new(vec![1.0, 1.0])),
+                rank: 0,
+                crowding_distance: 10.0,
+            },
+            Nsga2Entry {
+                candidate: Candidate::new(1u32, Evaluation::new(vec![1.0, 1.0])),
+                rank: 0,
+                crowding_distance: 1.0,
+            },
+        ];
+        let mut wins0 = 0;
+        for seed in 0..200 {
+            let mut rng = rng_from_seed(seed);
+            if binary_tournament(&entries, &mut rng) == 0 {
+                wins0 += 1;
+            }
+        }
+        assert!(wins0 > 130, "higher-crowding index won only {wins0}/200");
+    }
 }

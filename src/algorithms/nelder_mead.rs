@@ -551,4 +551,32 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn compare_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![10.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert_eq!(compare(&feasible, &infeasible, Direction::Minimize), std::cmp::Ordering::Less);
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert_eq!(compare(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert_eq!(compare(&v_lo, &v_hi, Direction::Minimize), std::cmp::Ordering::Less);
+    }
+
+    #[test]
+    fn better_is_strict_less() {
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better(&lo, &hi, Direction::Minimize));
+        assert!(!better(&hi, &lo, Direction::Minimize));
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better(&lo, &eq, Direction::Minimize));
+    }
 }

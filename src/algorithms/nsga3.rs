@@ -555,6 +555,59 @@ impl<I, V> crate::traits::AlgorithmInfo for Nsga3<I, V> {
 }
 
 #[cfg(test)]
+mod helper_tests {
+    use super::*;
+
+    #[test]
+    fn solve_intercepts_axis_aligned_extremes() {
+        // Extremes (2, 0) and (0, 3): the plane through them on the
+        // canonical simplex has intercepts (2, 3).
+        let oriented = vec![vec![2.0, 0.0], vec![0.0, 3.0]];
+        let intercepts = solve_intercepts(&oriented, &[0, 1]).expect("solvable");
+        assert!((intercepts[0] - 2.0).abs() < 1e-9, "got {:?}", intercepts);
+        assert!((intercepts[1] - 3.0).abs() < 1e-9, "got {:?}", intercepts);
+    }
+
+    #[test]
+    fn solve_intercepts_singular_matrix_returns_none() {
+        // Two identical extremes → singular system → None.
+        let oriented = vec![vec![1.0, 1.0], vec![1.0, 1.0]];
+        assert!(solve_intercepts(&oriented, &[0, 1]).is_none());
+    }
+
+    #[test]
+    fn solve_intercepts_empty_extremes_returns_none() {
+        let oriented: Vec<Vec<f64>> = Vec::new();
+        assert!(solve_intercepts(&oriented, &[]).is_none());
+    }
+
+    #[test]
+    fn associate_picks_closest_reference_direction() {
+        // Two reference directions: the x-axis and the y-axis.
+        let refs = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        // A point near the x-axis associates with reference 0;
+        // a point near the y-axis associates with reference 1.
+        let normalized = vec![vec![1.0, 0.05], vec![0.05, 1.0]];
+        let (assoc, dist) = associate(&normalized, &refs, 2);
+        assert_eq!(assoc[0], 0);
+        assert_eq!(assoc[1], 1);
+        // Perpendicular distance from (1, 0.05) to the x-axis is 0.05.
+        assert!((dist[0] - 0.05).abs() < 1e-9, "dist0 = {}", dist[0]);
+        assert!((dist[1] - 0.05).abs() < 1e-9, "dist1 = {}", dist[1]);
+    }
+
+    #[test]
+    fn associate_point_on_reference_line_has_zero_distance() {
+        let refs = vec![vec![1.0, 0.0]];
+        // (3, 0) lies exactly on the x-axis direction → perp distance 0.
+        let normalized = vec![vec![3.0, 0.0]];
+        let (assoc, dist) = associate(&normalized, &refs, 2);
+        assert_eq!(assoc[0], 0);
+        assert!(dist[0].abs() < 1e-9, "dist = {}", dist[0]);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::operators::{

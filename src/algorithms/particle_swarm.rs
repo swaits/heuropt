@@ -418,4 +418,33 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::objective::Direction;
+
+    #[test]
+    fn best_index_minimize_picks_smallest() {
+        let v = [3.0, 1.0, 4.0, 1.5];
+        assert_eq!(best_index(&v, Direction::Minimize), 1);
+    }
+
+    #[test]
+    fn best_index_maximize_picks_largest() {
+        let v = [3.0, 1.0, 4.0, 1.5];
+        assert_eq!(best_index(&v, Direction::Maximize), 2);
+    }
+
+    #[test]
+    fn best_index_keeps_first_on_tie() {
+        // Strict comparison → the earliest index of a tied extreme wins.
+        let v = [1.0, 1.0, 1.0];
+        assert_eq!(best_index(&v, Direction::Minimize), 0);
+        assert_eq!(best_index(&v, Direction::Maximize), 0);
+    }
+
+    #[test]
+    fn best_index_single_element() {
+        assert_eq!(best_index(&[42.0], Direction::Minimize), 0);
+    }
 }

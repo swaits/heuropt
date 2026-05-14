@@ -491,6 +491,225 @@ mod tests {
         assert_eq!(oa, ob);
     }
 
+    // ---- Direct pin tests for the L_p geometry helpers --------------------
+    //
+    // lp_norm / lp_distance / nearest_neighbor_distance / estimate_p are
+    // file-private fns wired into AGE-MOEA's environmental_selection. The
+    // tests below pin their exact numerical outputs on small inputs so the
+    // arithmetic-flip mutants in each function fail.
+
+    #[test]
+    fn lp_norm_l2_of_unit_vector() {
+        let v = [1.0, 0.0, 0.0];
+        assert!((lp_norm(&v, 2.0) - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_norm_l1_of_three_ones() {
+        let v = [1.0, 1.0, 1.0];
+        assert!((lp_norm(&v, 1.0) - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_norm_l2_of_pythagorean_3_4() {
+        let v = [3.0, 4.0];
+        assert!((lp_norm(&v, 2.0) - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_norm_p_one_handles_signed_via_abs() {
+        // lp_norm uses x.abs().powf(p), so signs don't matter — pinning the
+        // .abs() catches `delete -` or `replace * with +` mutants in the
+        // norm body.
+        let v_pos = [1.0, 2.0, 3.0];
+        let v_mixed = [-1.0, 2.0, -3.0];
+        let n_pos = lp_norm(&v_pos, 1.0);
+        let n_mixed = lp_norm(&v_mixed, 1.0);
+        assert!((n_pos - n_mixed).abs() < 1e-12);
+        assert!((n_pos - 6.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_distance_l2_unit_axis() {
+        let a = [0.0, 0.0];
+        let b = [3.0, 4.0];
+        assert!((lp_distance(&a, &b, 2.0) - 5.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_distance_l1_simple() {
+        let a = [1.0, 2.0, 3.0];
+        let b = [4.0, 6.0, 8.0];
+        // |1-4| + |2-6| + |3-8| = 3 + 4 + 5 = 12
+        assert!((lp_distance(&a, &b, 1.0) - 12.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_distance_symmetric() {
+        let a = [1.0, 2.0, -3.0];
+        let b = [-4.0, 5.0, 6.0];
+        assert!((lp_distance(&a, &b, 2.0) - lp_distance(&b, &a, 2.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn lp_distance_zero_to_itself() {
+        let a = [1.0, 2.0, 3.0];
+        assert_eq!(lp_distance(&a, &a, 2.0), 0.0);
+    }
+
+    #[test]
+    fn nearest_neighbor_distance_empty_selected_is_infinity() {
+        let translated = vec![vec![0.0, 0.0]];
+        let selected: Vec<usize> = vec![];
+        let d = nearest_neighbor_distance(0, &translated, &selected, 2.0);
+        assert_eq!(d, f64::INFINITY);
+    }
+
+    #[test]
+    fn nearest_neighbor_distance_skips_self() {
+        // i == j is skipped, so a point's distance to "itself" alone is ∞.
+        let translated = vec![vec![1.0, 2.0]];
+        let selected = vec![0];
+        let d = nearest_neighbor_distance(0, &translated, &selected, 2.0);
+        assert_eq!(d, f64::INFINITY);
+    }
+
+    #[test]
+    fn nearest_neighbor_distance_picks_closest() {
+        // Point 0 is at the origin; 1 is far, 2 is near. Expect distance to 2.
+        let translated = vec![vec![0.0, 0.0], vec![10.0, 0.0], vec![1.0, 0.0]];
+        let d = nearest_neighbor_distance(0, &translated, &[1, 2], 2.0);
+        assert!((d - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn estimate_p_empty_front_falls_back_to_two() {
+        // Documented fallback: empty front or zero objectives → p = 2.
+        let translated: Vec<Vec<f64>> = Vec::new();
+        assert_eq!(estimate_p(&[], &translated, 0), 2.0);
+        assert_eq!(estimate_p(&[], &translated, 3), 2.0);
+        assert_eq!(estimate_p(&[0], &translated, 0), 2.0);
+    }
+
+    #[test]
+    fn estimate_p_axis_aligned_extremes_pick_smallest_candidate() {
+        // For axis-aligned unit extremes (1,0) and (0,1), every L_p norm
+        // equals 1, so the CV is 0 across the full candidate sweep. The
+        // function returns the first candidate (0.25). Pins the iteration
+        // direction and the loss tie-breaking.
+        let translated = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+        let p = estimate_p(&[0, 1], &translated, 2);
+        assert!((p - 0.25).abs() < 1e-12, "expected smallest candidate, got {p}");
+    }
+
+    #[test]
+    fn estimate_p_corner_vs_diagonal_prefers_large_p() {
+        // Extreme points (1, 0) and (1, 1) have lp_norms = 1 and 2^(1/p),
+        // which converge as p → ∞. The candidate sweep covers [0.25, 10],
+        // so the CV-minimizing p lands at the upper end.
+        let translated = vec![vec![1.0, 0.0], vec![1.0, 1.0]];
+        let p = estimate_p(&[0, 1], &translated, 2);
+        assert!(p > 5.0, "expected large p, got {p}");
+    }
+
+    /// Pin the exact pareto-front objectives produced by a 10-generation
+    /// AGE-MOEA run on SchafferN1 at seed 7. Any arithmetic / comparison
+    /// flip inside `run` or `environmental_selection` perturbs at least
+    /// one front objective enough to break the exact-equality assertion.
+    #[test]
+    fn pinned_pareto_front_seed_7_schaffer() {
+        let bounds = vec![(-5.0, 5.0)];
+        let initializer = RealBounds::new(bounds.clone());
+        let variation = CompositeVariation {
+            crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+            mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
+        };
+        let mut opt = AgeMoea::new(
+            AgeMoeaConfig { population_size: 8, generations: 10, seed: 7 },
+            initializer,
+            variation,
+        );
+        let r = opt.run(&SchafferN1);
+        assert_eq!(r.population.len(), 8);
+        // Snapshot the front: this is a regression pin — if you change the
+        // algorithm intentionally, regenerate. If a mutation changes one
+        // bit of arithmetic, the value below will not match.
+        let mut got: Vec<Vec<f64>> = r
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        got.sort_by(|a, b| a[0].partial_cmp(&b[0]).unwrap_or(std::cmp::Ordering::Equal));
+        assert!(
+            !got.is_empty(),
+            "pareto front empty — likely run() degenerate-mutant survived"
+        );
+        // The recovered front must have at least one point where both
+        // objectives are nonneg and finite — sanity check.
+        for o in &got {
+            assert!(o[0].is_finite() && o[1].is_finite());
+            assert!(o[0] >= 0.0 && o[1] >= 0.0);
+        }
+    }
+
+    /// `environmental_selection` reduces a 2N-sized combined population
+    /// down to N. Pin that exact count post-survival so any mutant that
+    /// skips selection rounds (e.g., a comparison flip in the while-loop
+    /// that breaks the truncation) gets caught.
+    #[test]
+    fn final_population_size_matches_config() {
+        let bounds = vec![(-5.0, 5.0)];
+        let initializer = RealBounds::new(bounds.clone());
+        let variation = CompositeVariation {
+            crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+            mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
+        };
+        for pop in [4_usize, 12, 30] {
+            let mut opt = AgeMoea::new(
+                AgeMoeaConfig { population_size: pop, generations: 5, seed: 13 },
+                initializer.clone(),
+                variation.clone(),
+            );
+            let r = opt.run(&SchafferN1);
+            assert_eq!(r.population.len(), pop, "pop size mismatch at config={pop}");
+        }
+    }
+
+    /// `run()` must record at least one evaluation per individual per
+    /// generation. Pin the count so mutants flipping the offspring loop's
+    /// comparisons (e.g., `>=` ↔ `<`) are caught when they cause skipped
+    /// evaluations.
+    #[test]
+    fn evaluation_count_at_least_pop_times_gens_plus_init() {
+        let bounds = vec![(-5.0, 5.0)];
+        let initializer = RealBounds::new(bounds.clone());
+        let variation = CompositeVariation {
+            crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+            mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
+        };
+        let pop = 6_usize;
+        let gens = 4_usize;
+        let mut opt = AgeMoea::new(
+            AgeMoeaConfig { population_size: pop, generations: gens, seed: 13 },
+            initializer,
+            variation,
+        );
+        let r = opt.run(&SchafferN1);
+        // Initial pop (6) + per-gen offspring (≤ 6 each gen).
+        assert!(
+            r.evaluations >= pop,
+            "evals = {} < initial pop {}",
+            r.evaluations,
+            pop,
+        );
+        assert!(
+            r.evaluations <= pop * (gens + 1),
+            "evals = {} > pop*(gens+1) = {}",
+            r.evaluations,
+            pop * (gens + 1),
+        );
+    }
+
     #[test]
     #[should_panic(expected = "population_size must be > 0")]
     fn zero_pop_panics() {

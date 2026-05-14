@@ -55,8 +55,19 @@ pub fn pareto_front<D: Clone>(
         oriented.extend_from_slice(&objectives.as_minimization(&c.evaluation.objectives));
     }
 
+    // `dominated[j]` is set the moment some candidate is found to dominate
+    // `j`. Whenever `i`'s scan finds `i` dominates `j`, mark `j` so the
+    // outer loop can skip `j` entirely when it reaches it. This never does
+    // more work than the plain scan — the marks only ever let us *skip* —
+    // and it stays bit-identical even under NaN-intransitive dominance:
+    // a mark is set only from a direct pairwise `pareto_compare` result,
+    // never inferred transitively.
+    let mut dominated: Vec<bool> = vec![false; n];
     let mut out = Vec::new();
     'outer: for i in 0..n {
+        if dominated[i] {
+            continue 'outer;
+        }
         let ai_feasible = feasible[i];
         let ai_violation = violation[i];
         let ai = &oriented[i * m..i * m + m];
@@ -64,13 +75,13 @@ pub fn pareto_front<D: Clone>(
             if i == j {
                 continue;
             }
-            // `i` is kept only if no `j` dominates it — i.e. no `j` for which
-            // `pareto_compare(a_i, a_j)` would be `DominatedBy`. This inlines
-            // exactly that one outcome of `pareto_compare`.
-            let dominated_by_j = match (ai_feasible, feasible[j]) {
-                (true, false) => false,
-                (false, true) => true,
-                (false, false) => ai_violation > violation[j],
+            // Inline both directions of `pareto_compare`: `j` dominating
+            // `i` excludes `i`; `i` dominating `j` lets us skip `j`'s own
+            // scan later.
+            let (i_dominates_j, j_dominates_i) = match (ai_feasible, feasible[j]) {
+                (true, false) => (true, false),
+                (false, true) => (false, true),
+                (false, false) => (ai_violation < violation[j], ai_violation > violation[j]),
                 (true, true) => {
                     let aj = &oriented[j * m..j * m + m];
                     let mut a_better_anywhere = false;
@@ -84,11 +95,17 @@ pub fn pareto_front<D: Clone>(
                             b_better_anywhere = true;
                         }
                     }
-                    b_better_anywhere && !a_better_anywhere
+                    (
+                        a_better_anywhere && !b_better_anywhere,
+                        b_better_anywhere && !a_better_anywhere,
+                    )
                 }
             };
-            if dominated_by_j {
+            if j_dominates_i {
                 continue 'outer;
+            }
+            if i_dominates_j {
+                dominated[j] = true;
             }
         }
         out.push(population[i].clone());

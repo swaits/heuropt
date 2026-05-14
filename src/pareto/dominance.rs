@@ -152,4 +152,35 @@ mod tests {
         let b = Evaluation::new(vec![2.0, 0.8]);
         assert_eq!(pareto_compare(&a, &b, &s), Dominance::Dominates);
     }
+
+    /// `a` better on one axis, worse on the other → NonDominated. Pins the
+    /// `av < bv` / `av > bv` comparisons in the per-objective scan.
+    #[test]
+    fn trade_off_is_non_dominated() {
+        let s = space_min2();
+        let a = Evaluation::new(vec![1.0, 5.0]);
+        let b = Evaluation::new(vec![5.0, 1.0]);
+        assert_eq!(pareto_compare(&a, &b, &s), Dominance::NonDominated);
+        assert_eq!(pareto_compare(&b, &a, &s), Dominance::NonDominated);
+    }
+
+    /// `a` better on one axis, equal on the other → Dominates. This is the
+    /// boundary case that distinguishes `<` from `<=` in the scan.
+    #[test]
+    fn better_on_one_equal_on_other_dominates() {
+        let s = space_min2();
+        let a = Evaluation::new(vec![1.0, 2.0]);
+        let b = Evaluation::new(vec![2.0, 2.0]);
+        assert_eq!(pareto_compare(&a, &b, &s), Dominance::Dominates);
+        assert_eq!(pareto_compare(&b, &a, &s), Dominance::DominatedBy);
+    }
+
+    /// Identical objectives → Equal (neither `<` nor `>` ever fires).
+    #[test]
+    fn identical_objectives_are_equal() {
+        let s = space_min2();
+        let a = Evaluation::new(vec![3.0, 3.0]);
+        let b = Evaluation::new(vec![3.0, 3.0]);
+        assert_eq!(pareto_compare(&a, &b, &s), Dominance::Equal);
+    }
 }

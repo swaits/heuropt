@@ -119,4 +119,36 @@ mod tests {
         let s_val = spacing(&pts, &s);
         assert!(s_val > 0.0);
     }
+
+    /// Pins the exact spacing for a front with *varying* nearest-neighbor
+    /// distances, exercising the `(a-b).abs()` sum, the `d < nearest`
+    /// comparison, and both `/ n` divisions in the mean/variance.
+    #[test]
+    fn varying_nn_distances_pinned() {
+        let s = space_min2();
+        // (0,10), (1,9), (10,0): L1 nearest distances are 2, 2, 18.
+        // mean = 22/3, variance = 1536/27, spacing = sqrt(1536/27).
+        let front = [
+            cand(vec![0.0, 10.0]),
+            cand(vec![1.0, 9.0]),
+            cand(vec![10.0, 0.0]),
+        ];
+        let got = spacing(&front, &s);
+        let expected = (1536.0_f64 / 27.0).sqrt();
+        assert!((got - expected).abs() < 1e-9, "got {got}, expected {expected}");
+    }
+
+    /// A perfectly even front has zero spacing — the variance term is 0.
+    /// Distinct from the doctest case in that it uses three points whose
+    /// nearest-neighbor L1 distances are all equal to 4.
+    #[test]
+    fn evenly_spaced_front_is_zero_spacing() {
+        let s = space_min2();
+        let front = [
+            cand(vec![0.0, 4.0]),
+            cand(vec![2.0, 2.0]),
+            cand(vec![4.0, 0.0]),
+        ];
+        assert!(spacing(&front, &s) < 1e-12);
+    }
 }

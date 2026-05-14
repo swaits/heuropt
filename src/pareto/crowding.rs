@@ -160,4 +160,33 @@ mod tests {
         assert!(d[2].is_infinite());
         assert!(d[1].is_finite());
     }
+
+    /// Crowding distance pins the exact interior contribution: for a 3-point
+    /// 2-objective front, the middle point's distance is the sum over both
+    /// objectives of (next - prev) / span. With evenly-spaced points the
+    /// value is exactly 2.0 (1.0 per objective).
+    #[test]
+    fn interior_point_distance_is_pinned() {
+        let s = space_min2();
+        // Front along the line f1 + f2 = 4: (0,4), (2,2), (4,0).
+        let pop = [cand(vec![0.0, 4.0]), cand(vec![2.0, 2.0]), cand(vec![4.0, 0.0])];
+        let d = crowding_distance(&pop, &[0, 1, 2], &s);
+        // Boundary points are infinite; the middle point gets
+        // (4-0)/4 + (4-0)/4 = 2.0 (objective 0 span 4, objective 1 span 4).
+        assert!(d[0].is_infinite());
+        assert!(d[2].is_infinite());
+        assert!((d[1] - 2.0).abs() < 1e-12, "interior distance = {}", d[1]);
+    }
+
+    /// An asymmetric front pins the per-objective `(next - prev) / span`
+    /// arithmetic: catches the `-` ↔ `+`/`/` and `/` ↔ `*` mutants.
+    #[test]
+    fn asymmetric_interior_distance_is_pinned() {
+        let s = space_min2();
+        // (0,10), (1,2), (10,0): objective-0 span = 10, objective-1 span = 10.
+        let pop = [cand(vec![0.0, 10.0]), cand(vec![1.0, 2.0]), cand(vec![10.0, 0.0])];
+        let d = crowding_distance(&pop, &[0, 1, 2], &s);
+        // middle point: obj0 (10-0)/10 = 1.0; obj1 (10-0)/10 = 1.0 → 2.0.
+        assert!((d[1] - 2.0).abs() < 1e-12, "got {}", d[1]);
+    }
 }

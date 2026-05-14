@@ -180,4 +180,18 @@ mod tests {
         ];
         assert!(best_candidate(&pop, &s).is_none());
     }
+
+    /// `best_candidate` keeps the *first* minimum on a tie — pins the strict
+    /// `v < best_min` (a `<=` mutant would keep the last tied candidate).
+    #[test]
+    fn best_candidate_keeps_first_on_tie() {
+        use crate::core::objective::Objective;
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [
+            Candidate::new(1u32, Evaluation::new(vec![1.0])),
+            Candidate::new(2u32, Evaluation::new(vec![1.0])),
+        ];
+        let best = best_candidate(&pop, &s).unwrap();
+        assert_eq!(best.decision, 1, "should keep the first of two tied minima");
+    }
 }

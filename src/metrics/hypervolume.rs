@@ -483,4 +483,107 @@ mod nd_tests {
         let hv_with = hypervolume_nd(&with_dominated, &s, &[2.0, 2.0, 2.0]);
         assert!((hv_base - hv_with).abs() < 1e-12, "{hv_base} vs {hv_with}");
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    /// `dominates(a, b)` is true iff `a` is ≤ `b` on every axis and strictly
+    /// better on at least one. Pin all the boundary cases so the `<` / `>`
+    /// comparison flips are caught.
+    #[test]
+    fn dominates_strict_and_boundary_cases() {
+        // a strictly dominates b on both axes.
+        assert!(dominates(&[1.0, 1.0], &[2.0, 2.0], 2));
+        // b does not dominate a (reverse).
+        assert!(!dominates(&[2.0, 2.0], &[1.0, 1.0], 2));
+        // Equal points: neither dominates (no strict improvement).
+        assert!(!dominates(&[1.0, 1.0], &[1.0, 1.0], 2));
+        // a better on axis 0, equal on axis 1 → a dominates b.
+        assert!(dominates(&[1.0, 2.0], &[2.0, 2.0], 2));
+        // a better on axis 0 but worse on axis 1 → no domination.
+        assert!(!dominates(&[1.0, 3.0], &[2.0, 2.0], 2));
+    }
+
+    /// `non_dominated_projection` drops dominated members and keeps the
+    /// rest. Pin the exact retained set.
+    #[test]
+    fn non_dominated_projection_drops_dominated() {
+        let pts = vec![
+            vec![1.0, 3.0], // non-dominated
+            vec![3.0, 1.0], // non-dominated
+            vec![2.0, 2.0], // non-dominated (trade-off)
+            vec![4.0, 4.0], // dominated by all three
+        ];
+        let nd = non_dominated_projection(&pts);
+        assert_eq!(nd.len(), 3);
+        assert!(!nd.contains(&vec![4.0, 4.0]));
+        assert!(nd.contains(&vec![1.0, 3.0]));
+        assert!(nd.contains(&vec![3.0, 1.0]));
+        assert!(nd.contains(&vec![2.0, 2.0]));
+    }
+
+    #[test]
+    fn non_dominated_projection_empty_input_is_empty() {
+        let pts: Vec<Vec<f64>> = Vec::new();
+        assert!(non_dominated_projection(&pts).is_empty());
+    }
+
+    #[test]
+    fn non_dominated_projection_all_nondominated_keeps_all() {
+        let pts = vec![vec![1.0, 3.0], vec![2.0, 2.0], vec![3.0, 1.0]];
+        let nd = non_dominated_projection(&pts);
+        assert_eq!(nd.len(), 3);
+    }
+
+    /// `hso_recursive` 1-D base case: HV is `reference - min_point`,
+    /// clamped at 0.
+    #[test]
+    fn hso_recursive_1d_base_case() {
+        let pts = vec![vec![0.5], vec![1.5], vec![0.2]];
+        // min is 0.2, reference is 2.0 → HV = 1.8
+        assert!((hso_recursive(&pts, &[2.0]) - 1.8).abs() < 1e-12);
+        // A point past the reference → clamped to 0 contribution; min still 0.2.
+        let pts2 = vec![vec![3.0]];
+        assert_eq!(hso_recursive(&pts2, &[2.0]), 0.0);
+    }
+
+    /// `hso_recursive` 2-D base case: classic staircase area.
+    #[test]
+    fn hso_recursive_2d_staircase() {
+        // Three points (1,3), (2,2), (3,1) against reference (4,4).
+        // Dominated area = 6 (same as the hypervolume_2d doctest).
+        let pts = vec![vec![1.0, 3.0], vec![2.0, 2.0], vec![3.0, 1.0]];
+        let hv = hso_recursive(&pts, &[4.0, 4.0]);
+        assert!((hv - 6.0).abs() < 1e-12, "hv = {hv}");
+    }
+
+    /// `hypervolume_nd_from_evaluations` returns 0 for an empty slice and a
+    /// positive value for a dominating point.
+    #[test]
+    fn hypervolume_nd_from_evaluations_empty_and_nonempty() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+        ]);
+        let empty: Vec<&Evaluation> = Vec::new();
+        assert_eq!(hypervolume_nd_from_evaluations(&empty, &s, &[2.0, 2.0]), 0.0);
+
+        let e = Evaluation::new(vec![1.0, 1.0]);
+        let evals = vec![&e];
+        let hv = hypervolume_nd_from_evaluations(&evals, &s, &[2.0, 2.0]);
+        // Single point (1,1) vs reference (2,2) → 1×1 = 1.
+        assert!((hv - 1.0).abs() < 1e-12, "hv = {hv}");
+    }
+
+    /// A point that does not strictly dominate the reference contributes 0.
+    #[test]
+    fn hypervolume_nd_from_evaluations_skips_non_dominating() {
+        let s = ObjectiveSpace::new(vec![
+            Objective::minimize("f1"),
+            Objective::minimize("f2"),
+        ]);
+        // (2, 1): axis 0 equals the reference → not strictly dominating.
+        let e = Evaluation::new(vec![2.0, 1.0]);
+        let evals = vec![&e];
+        assert_eq!(hypervolume_nd_from_evaluations(&evals, &s, &[2.0, 2.0]), 0.0);
+    }
 }

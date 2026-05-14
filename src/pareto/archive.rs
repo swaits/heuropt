@@ -265,4 +265,62 @@ mod tests {
         a.extend(vec![cand(1, vec![1.0, 4.0]), cand(2, vec![3.0, 2.0])]);
         assert_eq!(a.members().len(), 2);
     }
+
+    /// `truncate` keeps the archive untouched when it is already at or
+    /// below `max_size`, and trims it when over. Pins the `>` boundary.
+    #[test]
+    fn truncate_boundary_behavior() {
+        let mut a = ParetoArchive::<u32>::new(space_min2());
+        // Three mutually non-dominated members.
+        a.insert(cand(1, vec![1.0, 3.0]));
+        a.insert(cand(2, vec![2.0, 2.0]));
+        a.insert(cand(3, vec![3.0, 1.0]));
+        assert_eq!(a.members().len(), 3);
+        // max_size == len → no-op (kills `>` → `>=`).
+        a.truncate(3);
+        assert_eq!(a.members().len(), 3);
+        // max_size > len → no-op.
+        a.truncate(10);
+        assert_eq!(a.members().len(), 3);
+        // max_size < len → trims.
+        a.truncate(2);
+        assert_eq!(a.members().len(), 2);
+    }
+
+    /// A trade-off candidate (better on one axis, worse on the other) is
+    /// neither dominated nor dominating — it must be *added* alongside the
+    /// existing member. Pins the per-axis `<` / `>` scan in both
+    /// `member_dominates_or_equals` and `candidate_dominates_member`.
+    #[test]
+    fn trade_off_candidate_is_kept_alongside() {
+        let mut a = ParetoArchive::<u32>::new(space_min2());
+        a.insert(cand(1, vec![1.0, 5.0]));
+        a.insert(cand(2, vec![5.0, 1.0])); // trade-off — must be kept
+        assert_eq!(a.members().len(), 2);
+    }
+
+    /// An equal-objectives candidate is rejected (a member dominates-or-
+    /// equals it). Pins the Equal branch — distinguishes `<=` from `<` in
+    /// `candidate_dominates_member` and the `<=` in
+    /// `member_dominates_or_equals`'s infeasible branch.
+    #[test]
+    fn equal_candidate_is_rejected() {
+        let mut a = ParetoArchive::<u32>::new(space_min2());
+        a.insert(cand(1, vec![2.0, 2.0]));
+        a.insert(cand(2, vec![2.0, 2.0])); // identical objectives → rejected
+        assert_eq!(a.members().len(), 1);
+        assert_eq!(a.members()[0].decision, 1);
+    }
+
+    /// Two infeasible candidates: the one with smaller constraint violation
+    /// wins. Pins the `<` / `<=` in the infeasible branches.
+    #[test]
+    fn infeasible_candidate_with_smaller_violation_evicts_larger() {
+        let mut a = ParetoArchive::<u32>::new(space_min2());
+        a.insert(Candidate::new(1u32, Evaluation::constrained(vec![0.0, 0.0], 1.0)));
+        // Smaller violation → dominates the existing infeasible member.
+        a.insert(Candidate::new(2u32, Evaluation::constrained(vec![9.0, 9.0], 0.5)));
+        assert_eq!(a.members().len(), 1);
+        assert_eq!(a.members()[0].decision, 2);
+    }
 }

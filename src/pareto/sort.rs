@@ -227,4 +227,39 @@ mod tests {
         assert_eq!(f1, vec![3]);
         assert_eq!(f2, vec![4]);
     }
+
+    /// Three mutually non-dominated points all land in front 0; a fourth
+    /// point dominated by all three lands in front 1. Pins the `<` / `>`
+    /// comparisons in the inline dominance check.
+    #[test]
+    fn three_nondominated_then_one_dominated() {
+        let s = space_min2();
+        let pop = [
+            cand(vec![1.0, 3.0]),
+            cand(vec![2.0, 2.0]),
+            cand(vec![3.0, 1.0]),
+            cand(vec![5.0, 5.0]), // dominated by all three
+        ];
+        let fronts = non_dominated_sort(&pop, &s);
+        assert_eq!(fronts.len(), 2);
+        assert_eq!(fronts[0].len(), 3);
+        assert_eq!(fronts[1], vec![3]);
+    }
+
+    /// A strict chain a ▷ b ▷ c produces three singleton fronts. Pins the
+    /// front-peeling `while` loop and the `&&` guard at line 127.
+    #[test]
+    fn strict_chain_produces_three_singleton_fronts() {
+        let s = space_min2();
+        let pop = [
+            cand(vec![1.0, 1.0]), // dominates everything
+            cand(vec![2.0, 2.0]),
+            cand(vec![3.0, 3.0]),
+        ];
+        let fronts = non_dominated_sort(&pop, &s);
+        assert_eq!(fronts.len(), 3);
+        assert_eq!(fronts[0], vec![0]);
+        assert_eq!(fronts[1], vec![1]);
+        assert_eq!(fronts[2], vec![2]);
+    }
 }

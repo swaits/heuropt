@@ -269,4 +269,105 @@ mod tests {
         let mut rng = rng_from_seed(0);
         let _ = stochastic_ranking_select(&pop, &s, 1.5, 1, &mut rng);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    fn constrained(d: u32, obj: f64, cv: f64) -> Candidate<u32> {
+        Candidate::new(d, Evaluation::constrained(vec![obj], cv))
+    }
+
+    #[test]
+    fn challenger_wins_feasibility_first() {
+        // Feasible challenger beats infeasible best, regardless of objective.
+        let feasible = cand_min(1, 100.0);
+        let infeasible = constrained(2, 0.0, 1.0);
+        assert!(challenger_wins(&feasible, &infeasible, Direction::Minimize));
+        assert!(!challenger_wins(&infeasible, &feasible, Direction::Minimize));
+    }
+
+    #[test]
+    fn challenger_wins_two_infeasible_compares_violation() {
+        let less_violating = constrained(1, 0.0, 0.5);
+        let more_violating = constrained(2, 0.0, 1.0);
+        assert!(challenger_wins(&less_violating, &more_violating, Direction::Minimize));
+        assert!(!challenger_wins(&more_violating, &less_violating, Direction::Minimize));
+    }
+
+    #[test]
+    fn challenger_wins_two_feasible_under_min_and_max() {
+        let lower = cand_min(1, 1.0);
+        let higher = cand_min(2, 2.0);
+        assert!(challenger_wins(&lower, &higher, Direction::Minimize));
+        assert!(!challenger_wins(&higher, &lower, Direction::Minimize));
+        assert!(challenger_wins(&higher, &lower, Direction::Maximize));
+        assert!(!challenger_wins(&lower, &higher, Direction::Maximize));
+    }
+
+    #[test]
+    fn challenger_wins_equal_objectives_does_not_win() {
+        // Strict comparison: equal objectives → challenger does NOT win.
+        let a = cand_min(1, 1.0);
+        let b = cand_min(2, 1.0);
+        assert!(!challenger_wins(&a, &b, Direction::Minimize));
+        assert!(!challenger_wins(&a, &b, Direction::Maximize));
+    }
+
+    #[test]
+    fn better_by_objective_min_and_max() {
+        let a = Evaluation::new(vec![1.0]);
+        let b = Evaluation::new(vec![2.0]);
+        assert!(better_by_objective(&a, &b, Direction::Minimize));
+        assert!(!better_by_objective(&b, &a, Direction::Minimize));
+        assert!(better_by_objective(&b, &a, Direction::Maximize));
+        assert!(!better_by_objective(&a, &b, Direction::Maximize));
+        // Equal → not strictly better.
+        let c = Evaluation::new(vec![1.0]);
+        assert!(!better_by_objective(&a, &c, Direction::Minimize));
+    }
+
+    #[test]
+    fn better_by_feasibility_all_four_branches() {
+        let feasible_a = Evaluation::new(vec![10.0]);
+        let infeasible_b = Evaluation::constrained(vec![0.0], 1.0);
+        // feasible vs infeasible
+        assert!(better_by_feasibility(&feasible_a, &infeasible_b, Direction::Minimize));
+        assert!(!better_by_feasibility(&infeasible_b, &feasible_a, Direction::Minimize));
+        // two infeasible: smaller violation wins
+        let low_cv = Evaluation::constrained(vec![0.0], 0.3);
+        let high_cv = Evaluation::constrained(vec![0.0], 0.9);
+        assert!(better_by_feasibility(&low_cv, &high_cv, Direction::Minimize));
+        assert!(!better_by_feasibility(&high_cv, &low_cv, Direction::Minimize));
+        // two feasible: delegates to better_by_objective
+        let feasible_lower = Evaluation::new(vec![1.0]);
+        let feasible_higher = Evaluation::new(vec![2.0]);
+        assert!(better_by_feasibility(&feasible_lower, &feasible_higher, Direction::Minimize));
+    }
+
+    #[test]
+    fn stochastic_ranking_select_pf_zero_is_pure_feasibility_order() {
+        // pf = 0 → always compare by feasibility. The feasible candidate
+        // must rank first regardless of objective value.
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [
+            constrained(1, 0.0, 2.0),  // infeasible, great objective
+            cand_min(2, 100.0),         // feasible, terrible objective
+        ];
+        let mut rng = rng_from_seed(7);
+        let picks = stochastic_ranking_select(&pop, &s, 0.0, 1, &mut rng);
+        // With pf=0, feasibility dominates → candidate 2 ranked first.
+        assert_eq!(picks, vec![2]);
+    }
+
+    #[test]
+    fn stochastic_ranking_select_count_wraps_modulo_population() {
+        // count > population size wraps around via `order[k % n]`.
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
+        let pop = [cand_min(1, 1.0), cand_min(2, 2.0)];
+        let mut rng = rng_from_seed(0);
+        let picks = stochastic_ranking_select(&pop, &s, 0.0, 5, &mut rng);
+        assert_eq!(picks.len(), 5);
+        // Best (candidate 1) is at index 0; index 2 wraps to it again.
+        assert_eq!(picks[0], 1);
+        assert_eq!(picks[2], 1);
+    }
 }

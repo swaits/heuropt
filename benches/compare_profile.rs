@@ -22,6 +22,7 @@
 
 use std::hint::black_box;
 
+use gungraun::Callgrind;
 use gungraun::prelude::*;
 
 #[path = "../examples/_shared/compare_workload.rs"]
@@ -37,4 +38,11 @@ library_benchmark_group!(
     benchmarks = full_compare_workload
 );
 
-main!(library_benchmark_groups = compare_group);
+// `--cache-sim=no`: the campaign ranks functions on instruction count
+// (`Ir`) only, so callgrind's cache simulation is pure overhead here —
+// disabling it roughly halves each profiling run.
+main!(
+    config = LibraryBenchmarkConfig::default()
+        .tool(Callgrind::with_args(["--cache-sim=no"])),
+    library_benchmark_groups = compare_group
+);

@@ -1,7 +1,7 @@
 //! Pareto dominance enum and pairwise dominance comparison.
 
 use crate::core::evaluation::Evaluation;
-use crate::core::objective::ObjectiveSpace;
+use crate::core::objective::{Direction, ObjectiveSpace};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -62,15 +62,27 @@ pub fn pareto_compare(a: &Evaluation, b: &Evaluation, objectives: &ObjectiveSpac
         (true, true) => {}
     }
 
-    let am = objectives.as_minimization(&a.objectives);
-    let bm = objectives.as_minimization(&b.objectives);
-
+    // Compare in minimization orientation *without* materializing the two
+    // oriented `Vec<f64>`s that `as_minimization` would allocate.
+    // `pareto_compare` is called O(n²) times across the multi-objective
+    // algorithms, so a per-call heap-allocation pair dominates the whole
+    // program. For a Maximize objective, "a beats b" is just `av > bv` —
+    // bit-identical to `-av < -bv` after orientation.
     let mut a_better_anywhere = false;
     let mut b_better_anywhere = false;
-    for (av, bv) in am.iter().zip(bm.iter()) {
-        if av < bv {
+    for ((obj, &av), &bv) in objectives
+        .objectives
+        .iter()
+        .zip(a.objectives.iter())
+        .zip(b.objectives.iter())
+    {
+        let (a_better, b_better) = match obj.direction {
+            Direction::Minimize => (av < bv, av > bv),
+            Direction::Maximize => (av > bv, av < bv),
+        };
+        if a_better {
             a_better_anywhere = true;
-        } else if av > bv {
+        } else if b_better {
             b_better_anywhere = true;
         }
     }

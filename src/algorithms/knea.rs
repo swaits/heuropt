@@ -393,4 +393,32 @@ mod tests {
             .collect();
         assert_eq!(oa, ob);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn perpendicular_distance_to_simplex_hyperplane() {
+        // Two extremes (1,0) and (0,1) define the line x + y = 1.
+        // The point (1,1) has signed distance |2 - 1| / sqrt(2) = 1/sqrt(2).
+        let oriented = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 1.0]];
+        let d = perpendicular_distance(&oriented[2], &[0, 1], &oriented);
+        assert!((d - 1.0 / 2.0_f64.sqrt()).abs() < 1e-12, "d = {d}");
+    }
+
+    #[test]
+    fn perpendicular_distance_zero_on_hyperplane() {
+        // (0.5, 0.5) lies exactly on x + y = 1 → distance 0.
+        let oriented = vec![vec![1.0, 0.0], vec![0.0, 1.0], vec![0.5, 0.5]];
+        let d = perpendicular_distance(&oriented[2], &[0, 1], &oriented);
+        assert!(d.abs() < 1e-12, "d = {d}");
+    }
+
+    #[test]
+    fn perpendicular_distance_degenerate_too_few_extremes() {
+        // Only one extreme for a 2-D point → falls back to L2 from that
+        // extreme. (1,1) to (0,0) = sqrt(2).
+        let oriented = vec![vec![0.0, 0.0], vec![1.0, 1.0]];
+        let d = perpendicular_distance(&oriented[1], &[0], &oriented);
+        assert!((d - 2.0_f64.sqrt()).abs() < 1e-12, "d = {d}");
+    }
 }

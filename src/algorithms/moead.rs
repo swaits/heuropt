@@ -452,4 +452,38 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn tchebycheff_is_max_weighted_deviation() {
+        // ideal = (0, 0), weights = (1, 1): g = max(|f0|, |f1|).
+        let g = tchebycheff(&[3.0, 5.0], &[1.0, 1.0], &[0.0, 0.0]);
+        assert!((g - 5.0).abs() < 1e-12);
+        // weights skew which axis dominates.
+        let g2 = tchebycheff(&[3.0, 5.0], &[10.0, 1.0], &[0.0, 0.0]);
+        assert!((g2 - 30.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn tchebycheff_uses_distance_from_ideal() {
+        // ideal = (2, 2): deviations are |3-2|=1, |5-2|=3 → g = 3.
+        let g = tchebycheff(&[3.0, 5.0], &[1.0, 1.0], &[2.0, 2.0]);
+        assert!((g - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn tchebycheff_zero_at_ideal() {
+        let g = tchebycheff(&[2.0, 2.0], &[1.0, 1.0], &[2.0, 2.0]);
+        assert!(g.abs() < 1e-12);
+    }
+
+    #[test]
+    fn weight_distance_is_euclidean() {
+        // (0,0) to (3,4) = 5.
+        assert!((weight_distance(&[0.0, 0.0], &[3.0, 4.0]) - 5.0).abs() < 1e-12);
+        // symmetric and zero-to-self.
+        assert!((weight_distance(&[3.0, 4.0], &[0.0, 0.0]) - 5.0).abs() < 1e-12);
+        assert_eq!(weight_distance(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0]), 0.0);
+    }
 }

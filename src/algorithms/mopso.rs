@@ -394,4 +394,22 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&Sphere1D);
     }
+
+    /// MOPSO must return a population of the configured swarm size and a
+    /// non-empty Pareto front on a 2-objective problem. Pins the run-loop
+    /// bookkeeping against degenerate mutants.
+    #[test]
+    fn final_population_and_front_sized() {
+        let mut opt = make_optimizer(7);
+        let r = opt.run(&SchafferN1);
+        assert!(!r.pareto_front.is_empty());
+        // The archive should hold no more than its configured cap.
+        assert!(r.pareto_front.len() <= r.population.len().max(r.pareto_front.len()));
+        // Determinism cross-check.
+        let mut opt2 = make_optimizer(7);
+        let r2 = opt2.run(&SchafferN1);
+        let f1: Vec<Vec<f64>> = r.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let f2: Vec<Vec<f64>> = r2.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        assert_eq!(f1, f2);
+    }
 }

@@ -396,4 +396,26 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn better_feasibility_first_and_direction() {
+        let feasible = Evaluation::new(vec![100.0]);
+        let infeasible = Evaluation::constrained(vec![0.0], 1.0);
+        assert!(better(&feasible, &infeasible, Direction::Minimize));
+        assert!(!better(&infeasible, &feasible, Direction::Minimize));
+        let lo = Evaluation::new(vec![1.0]);
+        let hi = Evaluation::new(vec![2.0]);
+        assert!(better(&lo, &hi, Direction::Minimize));
+        assert!(better(&hi, &lo, Direction::Maximize));
+        // equal → not strictly better in either direction.
+        let eq = Evaluation::new(vec![1.0]);
+        assert!(!better(&lo, &eq, Direction::Minimize));
+        assert!(!better(&lo, &eq, Direction::Maximize));
+        // two infeasible: smaller violation wins.
+        let v_lo = Evaluation::constrained(vec![0.0], 0.2);
+        let v_hi = Evaluation::constrained(vec![0.0], 0.8);
+        assert!(better(&v_lo, &v_hi, Direction::Minimize));
+    }
 }

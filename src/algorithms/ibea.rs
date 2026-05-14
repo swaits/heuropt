@@ -474,4 +474,55 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::candidate::Candidate;
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::{Objective, ObjectiveSpace};
+
+    fn ibea_space() -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+    }
+    fn ibea_cand(o: Vec<f64>) -> Candidate<u32> {
+        Candidate::new(0, Evaluation::new(o))
+    }
+
+    #[test]
+    fn compute_fitness_empty_pool_is_empty() {
+        let pool: Vec<Candidate<u32>> = Vec::new();
+        assert!(compute_fitness(&pool, &ibea_space(), 0.05).is_empty());
+    }
+
+    #[test]
+    fn compute_fitness_dominating_point_has_higher_fitness() {
+        // (1,1) dominates (2,2). IBEA fitness (sum of -exp(-I/scale)) is
+        // less negative — i.e. larger — for the dominating point.
+        let pool = vec![ibea_cand(vec![1.0, 1.0]), ibea_cand(vec![2.0, 2.0])];
+        let fit = compute_fitness(&pool, &ibea_space(), 0.05);
+        assert_eq!(fit.len(), 2);
+        assert!(fit[0] > fit[1], "dominating point should score higher: {fit:?}");
+    }
+
+    #[test]
+    fn compute_fitness_symmetric_tradeoff_pair_is_equal() {
+        // (1,3) and (3,1) are a symmetric trade-off — equal fitness.
+        let pool = vec![ibea_cand(vec![1.0, 3.0]), ibea_cand(vec![3.0, 1.0])];
+        let fit = compute_fitness(&pool, &ibea_space(), 0.05);
+        assert!((fit[0] - fit[1]).abs() < 1e-9, "{fit:?}");
+    }
+
+    #[test]
+    fn binary_tournament_prefers_higher_fitness() {
+        use crate::core::rng::rng_from_seed;
+        let fitness = vec![-10.0_f64, -1.0]; // index 1 is fitter
+        let mut wins1 = 0;
+        for seed in 0..200 {
+            let mut rng = rng_from_seed(seed);
+            if binary_tournament(&fitness, &mut rng) == 1 {
+                wins1 += 1;
+            }
+        }
+        assert!(wins1 > 130, "fitter index won only {wins1}/200");
+    }
 }

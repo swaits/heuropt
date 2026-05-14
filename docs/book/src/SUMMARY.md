@@ -16,6 +16,7 @@
   - [Tune a model with expensive evaluations](./cookbook/expensive-evaluations.md)
   - [Compare two algorithms on your problem](./cookbook/compare.md)
   - [Optimize a permutation (TSP-style)](./cookbook/permutation.md)
+  - [Multi-objective combinatorial problems](./cookbook/multi-objective-combinatorial.md)
   - [Constrain your search with `Repair`](./cookbook/constraints.md)
   - [Pick one answer off a Pareto front](./cookbook/pick-one.md)
   - [Explore your results in a webapp](./cookbook/explorer.md)

@@ -103,9 +103,19 @@ optimizer or with the problem).
 | `Vec<bool>` | [UMDA][Umda] | Per-bit marginal EDA. Independent-bit assumption. |
 | `Vec<bool>` | [GA][GeneticAlgorithm] + [`BitFlipMutation`] | When bit interactions matter. |
 | `Vec<usize>` (permutation) | [Ant Colony][AntColonyTsp] | TSP-style with a distance matrix. |
-| `Vec<usize>` (permutation) | [Simulated Annealing][SimulatedAnnealing] + [`SwapMutation`] | Generic discrete baseline. |
+| `Vec<usize>` (permutation) | [GA][GeneticAlgorithm] + [`ShuffledPermutation`] + [`OrderCrossover`] + [`InversionMutation`] | Generic permutation GA; use [`EdgeRecombinationCrossover`] for TSP-shaped instances. |
+| `Vec<usize>` (JSS multiset) | [GA][GeneticAlgorithm] + [`ShuffledMultisetPermutation`] + local POX + [`InversionMutation`] | Operation-string encoding; see [Optimize a permutation](./cookbook/permutation.md). |
+| `Vec<usize>` (permutation) | [Simulated Annealing][SimulatedAnnealing] + [`SwapMutation`] | One-decision baseline. |
 | `Vec<usize>` or custom | [Tabu Search][TabuSearch] | You supply the neighbor function. |
 | Custom struct | [Simulated Annealing][SimulatedAnnealing] / [Hill Climber][HillClimber] | With your own `Variation` impl. |
+
+heuropt's permutation operator toolkit covers four crossovers
+([`OrderCrossover`], [`PartiallyMappedCrossover`], [`CycleCrossover`],
+[`EdgeRecombinationCrossover`]) and four mutations ([`SwapMutation`],
+[`InversionMutation`], [`InsertionMutation`], [`ScrambleMutation`]),
+plus two initializers for strict and multiset permutations. See
+[Optimize a permutation](./cookbook/permutation.md) for the full
+picker.
 
 ## Step 2 — multi-objective (2 or 3)
 
@@ -114,6 +124,12 @@ optimizer or with the problem).
 [NSGA-II][Nsga2] is the canonical Pareto-based EA. Fast, well-understood,
 maintains diversity via crowding distance. On the harness it lands
 on the Pareto front of every test problem.
+
+NSGA-II is generic over the decision type — drop in
+[`ShuffledPermutation`] + a permutation crossover and it solves
+bi-objective TSP; drop in a binary initializer and [`BitFlipMutation`]
+and it solves bi-objective knapsack. See
+[Multi-objective combinatorial problems](./cookbook/multi-objective-combinatorial.md).
 
 ### Real-valued, smooth front, want best convergence
 
@@ -244,7 +260,10 @@ method on every algorithm in the catalog. See the
 | Disconnected / non-convex front | [IBEA][Ibea] |
 | Many-objective default (curved front) | [NSGA-III][Nsga3] |
 | Many-objective linear / simplex front | [GrEA][Grea] |
-| Permutation problem | [Ant Colony][AntColonyTsp] |
+| Permutation problem (TSP with distance matrix) | [Ant Colony][AntColonyTsp] |
+| Generic permutation problem | [GA][GeneticAlgorithm] + permutation toolkit |
+| Bi-objective combinatorial (TSP / scheduling / knapsack) | [NSGA-II][Nsga2] + matching encoding operators |
+| 3-objective combinatorial | [NSGA-III][Nsga3] + matching encoding operators |
 | Binary problem | [UMDA][Umda] |
 | Custom decision type | [Simulated Annealing][SimulatedAnnealing] + your `Variation` |
 | Sanity baseline | [Random Search][RandomSearch] |
@@ -268,6 +287,15 @@ method on every algorithm in the catalog. See the
 [`BitFlipMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.BitFlipMutation.html
 [AntColonyTsp]: https://docs.rs/heuropt/latest/heuropt/algorithms/ant_colony_tsp/struct.AntColonyTsp.html
 [`SwapMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.SwapMutation.html
+[`InversionMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.InversionMutation.html
+[`InsertionMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.InsertionMutation.html
+[`ScrambleMutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.ScrambleMutation.html
+[`OrderCrossover`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.OrderCrossover.html
+[`PartiallyMappedCrossover`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.PartiallyMappedCrossover.html
+[`CycleCrossover`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.CycleCrossover.html
+[`EdgeRecombinationCrossover`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.EdgeRecombinationCrossover.html
+[`ShuffledPermutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.ShuffledPermutation.html
+[`ShuffledMultisetPermutation`]: https://docs.rs/heuropt/latest/heuropt/operators/struct.ShuffledMultisetPermutation.html
 [TabuSearch]: https://docs.rs/heuropt/latest/heuropt/algorithms/tabu_search/struct.TabuSearch.html
 [Nsga2]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga2/struct.Nsga2.html
 [Nsga3]: https://docs.rs/heuropt/latest/heuropt/algorithms/nsga3/struct.Nsga3.html

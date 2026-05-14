@@ -19,7 +19,11 @@ project.
 - [Compare two algorithms on your problem](./cookbook/compare.md) —
   multi-seed harness pattern straight from `examples/compare.rs`.
 - [Optimize a permutation (TSP-style)](./cookbook/permutation.md) —
-  Ant Colony with a distance matrix.
+  the permutation operator toolkit (OX / PMX / CX / ERX + Inversion /
+  Insertion / Scramble), plus Ant Colony for distance-matrix TSP.
+- [Multi-objective combinatorial problems](./cookbook/multi-objective-combinatorial.md)
+  — bi-objective TSP, bi-objective knapsack (`Vec<bool>`), and
+  3-objective JSS via NSGA-II / NSGA-III.
 - [Constrain your search with `Repair`](./cookbook/constraints.md) —
   bounds, simplex projection, custom repair.
 - [Pick one answer off a Pareto front](./cookbook/pick-one.md) — the

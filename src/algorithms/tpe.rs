@@ -143,31 +143,19 @@ where
             // Split into good vs bad observations.
             let (good_idx, bad_idx) = split_good_bad(&targets, self.config.good_fraction);
 
+            // The good / bad supports are fixed for this iteration, so their
+            // Scott's-rule bandwidths are too — derive them once instead of
+            // recomputing inside every sample / density call.
+            let good_bw = scott_bandwidths(&decisions, &good_idx, self.config.bandwidth_factor);
+            let bad_bw = scott_bandwidths(&decisions, &bad_idx, self.config.bandwidth_factor);
+
             // Sample candidates from the good KDE.
             let mut best_x: Option<Vec<f64>> = None;
             let mut best_ratio = f64::NEG_INFINITY;
             for _ in 0..self.config.candidate_samples {
-                let cand = sample_from_kde(
-                    &decisions,
-                    &good_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                    &mut rng,
-                );
-                let l = log_kde_density(
-                    &cand,
-                    &decisions,
-                    &good_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                );
-                let g = log_kde_density(
-                    &cand,
-                    &decisions,
-                    &bad_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                );
+                let cand = sample_from_kde(&decisions, &good_idx, &self.bounds, &good_bw, &mut rng);
+                let l = log_kde_density(&cand, &decisions, &good_idx, &self.bounds, &good_bw);
+                let g = log_kde_density(&cand, &decisions, &bad_idx, &self.bounds, &bad_bw);
                 let ratio = l - g;
                 if ratio > best_ratio {
                     best_ratio = ratio;
@@ -271,14 +259,13 @@ fn sample_from_kde(
     decisions: &[Vec<f64>],
     support: &[usize],
     bounds: &RealBounds,
-    bandwidth_factor: f64,
+    bandwidths: &[f64],
     rng: &mut Rng,
 ) -> Vec<f64> {
     if support.is_empty() {
         return sample_uniform_in_bounds(bounds, rng);
     }
     let dim = bounds.bounds.len();
-    let bandwidths = scott_bandwidths(decisions, support, bandwidth_factor);
 
     let pick = support[rng.random_range(0..support.len())];
     let center = &decisions[pick];
@@ -292,19 +279,20 @@ fn sample_from_kde(
     x
 }
 
-/// Per-axis log-density at `x` of the KDE built on `support`.
+/// Per-axis log-density at `x` of the KDE built on `support`, given the
+/// precomputed per-axis `bandwidths`.
 fn log_kde_density(
     x: &[f64],
     decisions: &[Vec<f64>],
     support: &[usize],
     bounds: &RealBounds,
-    bandwidth_factor: f64,
+    bandwidths: &[f64],
 ) -> f64 {
     if support.is_empty() {
         return f64::NEG_INFINITY;
     }
     let dim = bounds.bounds.len();
-    let bandwidths = scott_bandwidths(decisions, support, bandwidth_factor);
+    let sqrt_2pi = (2.0 * std::f64::consts::PI).sqrt();
 
     // Sum of per-axis log-densities, with the kernel a product of 1-D
     // Gaussians. Using log-sum-exp for numerical stability would be more
@@ -314,10 +302,11 @@ fn log_kde_density(
     let mut total = 0.0;
     for j in 0..dim {
         let h = bandwidths[j].max(1e-12);
+        let norm = h * sqrt_2pi;
         let mut s = 0.0;
         for &i in support {
             let z = (x[j] - decisions[i][j]) / h;
-            s += (-0.5 * z * z).exp() / (h * (2.0 * std::f64::consts::PI).sqrt());
+            s += (-0.5 * z * z).exp() / norm;
         }
         let mean_density = s / support.len() as f64;
         total += mean_density.max(1e-300).ln();
@@ -417,30 +406,17 @@ impl Tpe {
         for _ in 0..self.config.iterations {
             let (good_idx, bad_idx) = split_good_bad(&targets, self.config.good_fraction);
 
+            // Bandwidths depend only on the (fixed-for-this-iteration)
+            // supports — compute once, not once per sample / density call.
+            let good_bw = scott_bandwidths(&decisions, &good_idx, self.config.bandwidth_factor);
+            let bad_bw = scott_bandwidths(&decisions, &bad_idx, self.config.bandwidth_factor);
+
             let mut best_x: Option<Vec<f64>> = None;
             let mut best_ratio = f64::NEG_INFINITY;
             for _ in 0..self.config.candidate_samples {
-                let cand = sample_from_kde(
-                    &decisions,
-                    &good_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                    &mut rng,
-                );
-                let l = log_kde_density(
-                    &cand,
-                    &decisions,
-                    &good_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                );
-                let g = log_kde_density(
-                    &cand,
-                    &decisions,
-                    &bad_idx,
-                    &self.bounds,
-                    self.config.bandwidth_factor,
-                );
+                let cand = sample_from_kde(&decisions, &good_idx, &self.bounds, &good_bw, &mut rng);
+                let l = log_kde_density(&cand, &decisions, &good_idx, &self.bounds, &good_bw);
+                let g = log_kde_density(&cand, &decisions, &bad_idx, &self.bounds, &bad_bw);
                 let ratio = l - g;
                 if ratio > best_ratio {
                     best_ratio = ratio;

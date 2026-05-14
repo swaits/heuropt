@@ -55,33 +55,35 @@ pub fn crowding_distance<D>(
         .map(|&idx| objectives.as_minimization(&population[idx].evaluation.objectives))
         .collect();
 
+    // Reused across objectives: (objective-k value, front position). Sorting
+    // these tuples directly keeps the hot comparator a single `f64` compare
+    // instead of chasing two `Vec<Vec<f64>>` indirections per comparison.
+    let mut keyed: Vec<(f64, usize)> = Vec::with_capacity(n);
+
     #[allow(clippy::needless_range_loop)] // `k` indexes into nested vectors below.
     for k in 0..m {
-        // Sort indices into `front` by objective k.
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by(|&a, &b| {
-            oriented[a][k]
-                .partial_cmp(&oriented[b][k])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        keyed.clear();
+        keyed.extend((0..n).map(|i| (oriented[i][k], i)));
+        keyed.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-        distance[order[0]] = f64::INFINITY;
-        distance[order[n - 1]] = f64::INFINITY;
+        let first = keyed[0].1;
+        let last = keyed[n - 1].1;
+        distance[first] = f64::INFINITY;
+        distance[last] = f64::INFINITY;
 
-        let f_min = oriented[order[0]][k];
-        let f_max = oriented[order[n - 1]][k];
-        let span = f_max - f_min;
+        let span = keyed[n - 1].0 - keyed[0].0;
         if span == 0.0 {
             continue;
         }
 
         for i in 1..n - 1 {
-            if distance[order[i]] == f64::INFINITY {
+            let idx = keyed[i].1;
+            if distance[idx] == f64::INFINITY {
                 continue;
             }
-            let prev = oriented[order[i - 1]][k];
-            let next = oriented[order[i + 1]][k];
-            distance[order[i]] += (next - prev) / span;
+            let prev = keyed[i - 1].0;
+            let next = keyed[i + 1].0;
+            distance[idx] += (next - prev) / span;
         }
     }
 

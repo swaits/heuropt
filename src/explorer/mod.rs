@@ -575,4 +575,324 @@ mod tests {
         assert_eq!(values[1], serde_json::Value::Null);
         assert_eq!(values[2].as_f64(), Some(2.0));
     }
+
+    // ---- Exhaustive coverage to kill cargo-mutants survivors ---------------
+
+    /// `ToDecisionValues for Vec<f64>` returns a slot-for-slot float-or-null
+    /// vector. Pins the exact JSON output rather than just length, killing
+    /// the "replace body with vec![]" / "vec![Default::default()]" mutants.
+    #[test]
+    fn vec_f64_to_decision_values_exact_output() {
+        let v: Vec<f64> = vec![0.5, -1.25, 2.0];
+        let got = v.to_decision_values();
+        assert_eq!(got.len(), 3);
+        assert_eq!(got[0].as_f64(), Some(0.5));
+        assert_eq!(got[1].as_f64(), Some(-1.25));
+        assert_eq!(got[2].as_f64(), Some(2.0));
+    }
+
+    /// Pins the exact JSON output for `Vec<i64>`. There was no test for this
+    /// impl at all before.
+    #[test]
+    fn vec_i64_to_decision_values_exact_output() {
+        let v: Vec<i64> = vec![-3, 0, 7];
+        let got = v.to_decision_values();
+        assert_eq!(got.len(), 3);
+        assert_eq!(got[0], serde_json::Value::Number(serde_json::Number::from(-3i64)));
+        assert_eq!(got[1], serde_json::Value::Number(serde_json::Number::from(0i64)));
+        assert_eq!(got[2], serde_json::Value::Number(serde_json::Number::from(7i64)));
+    }
+
+    /// Pins the *exact* booleans, not just the count.
+    #[test]
+    fn vec_bool_to_decision_values_exact_output() {
+        let v: Vec<bool> = vec![true, false, true, false];
+        let got = v.to_decision_values();
+        assert_eq!(
+            got,
+            vec![
+                serde_json::Value::Bool(true),
+                serde_json::Value::Bool(false),
+                serde_json::Value::Bool(true),
+                serde_json::Value::Bool(false),
+            ],
+        );
+    }
+
+    /// Pins the exact usize-as-u64 numbers, not just the count.
+    #[test]
+    fn vec_usize_to_decision_values_exact_output() {
+        let v: Vec<usize> = vec![0, 5, 42, 7];
+        let got = v.to_decision_values();
+        assert_eq!(
+            got,
+            vec![
+                serde_json::Value::Number(serde_json::Number::from(0u64)),
+                serde_json::Value::Number(serde_json::Number::from(5u64)),
+                serde_json::Value::Number(serde_json::Number::from(42u64)),
+                serde_json::Value::Number(serde_json::Number::from(7u64)),
+            ],
+        );
+    }
+
+    /// `from_result` must set the `evaluations` and `generations` fields of
+    /// `RunMeta` from the result, not leave them at default zero. Kills the
+    /// "delete field evaluations / generations" mutants.
+    #[test]
+    fn from_result_propagates_evaluation_and_generation_counts() {
+        let problem = SingleObjMin;
+        let cands = vec![Candidate::new(vec![1.0], Evaluation::new(vec![1.0]))];
+        let result =
+            OptimizationResult::new(Population::new(cands.clone()), cands, None, 137, 9);
+        let export = ExplorerExport::from_result(&problem, &result);
+        assert_eq!(export.run.evaluations, 137);
+        assert_eq!(export.run.generations, 9);
+    }
+
+    /// `with_problem_name` must set `run.problem_name`, not return a default.
+    #[test]
+    fn with_problem_name_sets_field_and_preserves_other_state() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result)
+            .with_problem_name("Toy Problem");
+        assert_eq!(export.run.problem_name.as_deref(), Some("Toy Problem"));
+        // The candidates and objectives should still be intact, proving the
+        // chained builder isn't replacing the whole struct.
+        assert_eq!(export.candidates.len(), 1);
+        assert_eq!(export.objectives.len(), 1);
+    }
+
+    /// `with_wall_clock` must set `run.wall_clock_seconds`.
+    #[test]
+    fn with_wall_clock_sets_field_and_preserves_other_state() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result).with_wall_clock(2.5);
+        assert_eq!(export.run.wall_clock_seconds, Some(2.5));
+        assert_eq!(export.candidates.len(), 1);
+    }
+
+    /// `with_timestamp` must set `run.timestamp`.
+    #[test]
+    fn with_timestamp_sets_field_and_preserves_other_state() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result)
+            .with_timestamp("2025-01-01T00:00:00Z");
+        assert_eq!(export.run.timestamp.as_deref(), Some("2025-01-01T00:00:00Z"));
+        assert_eq!(export.candidates.len(), 1);
+    }
+
+    /// `to_json` must serialize the full export, not a fixed string. Look for
+    /// specific markers — `schema_version`, `candidates`, the problem name
+    /// — that pin the JSON output enough to kill `Ok(String::new())` and
+    /// `Ok("xyzzy".into())` mutants.
+    #[test]
+    fn to_json_emits_full_export_with_expected_fields() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result)
+            .with_algorithm_info(&DummyAlgo)
+            .with_problem_name("MyProblem");
+        let json = export.to_json().unwrap();
+        assert!(json.contains("\"schema_version\""), "json: {json}");
+        assert!(json.contains("\"candidates\""), "json: {json}");
+        assert!(json.contains("\"MyProblem\""), "json: {json}");
+        assert!(json.contains("\"DummyAlgo\""), "json: {json}");
+    }
+
+    /// `to_writer` must produce non-empty JSON output matching `to_json`.
+    /// Kills `Ok(())` mutants which would write nothing.
+    #[test]
+    fn to_writer_emits_full_export() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result)
+            .with_problem_name("MyProblem");
+        let mut buf: Vec<u8> = Vec::new();
+        export.to_writer(&mut buf).unwrap();
+        assert!(!buf.is_empty());
+        let json = String::from_utf8(buf).unwrap();
+        assert!(json.contains("\"MyProblem\""));
+        assert_eq!(json, export.to_json().unwrap());
+    }
+
+    /// `to_file` writes to disk; round-trip the bytes back through serde to
+    /// confirm a real (non-empty, parseable) export landed.
+    #[test]
+    fn to_file_writes_parseable_json() {
+        use std::io::Read;
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let export = ExplorerExport::from_result(&problem, &result)
+            .with_problem_name("OnDisk");
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "heuropt-explorer-test-{}.json",
+            std::process::id()
+        ));
+        export.to_file(&path).unwrap();
+        let mut s = String::new();
+        std::fs::File::open(&path).unwrap().read_to_string(&mut s).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let back: ExplorerExport = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.run.problem_name.as_deref(), Some("OnDisk"));
+    }
+
+    /// Free `to_json` convenience must do the same thing as the chained
+    /// builder. Kills "replace with Ok(String::new())" / "Ok(\"xyzzy\")".
+    #[test]
+    fn free_to_json_includes_algorithm_info() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let json = super::to_json(&problem, &DummyAlgo, &result).unwrap();
+        assert!(json.contains("\"DummyAlgo\""), "json: {json}");
+        assert!(json.contains("\"schema_version\""), "json: {json}");
+    }
+
+    /// Free `to_writer` convenience writes the same bytes as `to_json`.
+    #[test]
+    fn free_to_writer_writes_bytes() {
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let mut buf: Vec<u8> = Vec::new();
+        super::to_writer(&mut buf, &problem, &DummyAlgo, &result).unwrap();
+        let json = String::from_utf8(buf).unwrap();
+        assert!(json.contains("\"DummyAlgo\""));
+        let expected = super::to_json(&problem, &DummyAlgo, &result).unwrap();
+        assert_eq!(json, expected);
+    }
+
+    /// Free `to_file` convenience round-trips through a tmp file.
+    #[test]
+    fn free_to_file_writes_parseable_json() {
+        use std::io::Read;
+        let problem = SingleObjMin;
+        let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "heuropt-explorer-test-free-{}.json",
+            std::process::id()
+        ));
+        super::to_file(&path, &problem, &DummyAlgo, &result).unwrap();
+        let mut s = String::new();
+        std::fs::File::open(&path).unwrap().read_to_string(&mut s).unwrap();
+        let _ = std::fs::remove_file(&path);
+        let back: ExplorerExport = serde_json::from_str(&s).unwrap();
+        assert_eq!(back.run.algorithm.as_deref(), Some("DummyAlgo"));
+    }
+
+    /// `pad_decision_schema` should extend the schema only when `schema.len()
+    /// < decision_arity`. Tests all three boundary cases (less / equal /
+    /// greater) to pin the `<` comparison so mutants `< → ==`, `< → >`,
+    /// `< → <=` all fail.
+    #[test]
+    fn pad_decision_schema_extends_when_short() {
+        let in_schema = vec![DecisionVariable::new("alpha")];
+        let out = pad_decision_schema(in_schema, 3);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0].name, "alpha");
+        assert_eq!(out[1].name, "x[1]");
+        assert_eq!(out[2].name, "x[2]");
+    }
+
+    #[test]
+    fn pad_decision_schema_unchanged_at_exact_length() {
+        let in_schema = vec![
+            DecisionVariable::new("alpha"),
+            DecisionVariable::new("beta"),
+        ];
+        let out = pad_decision_schema(in_schema, 2);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].name, "alpha");
+        assert_eq!(out[1].name, "beta");
+    }
+
+    #[test]
+    fn pad_decision_schema_unchanged_when_longer_than_arity() {
+        // schema is longer than the arity — pad should be a no-op.
+        let in_schema = vec![
+            DecisionVariable::new("alpha"),
+            DecisionVariable::new("beta"),
+            DecisionVariable::new("gamma"),
+        ];
+        let out = pad_decision_schema(in_schema, 2);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[2].name, "gamma");
+    }
+
+    /// `candidate_to_export`'s `front_rank == 0` controls `in_pareto_front`.
+    /// Test the boundary directly with synthetic candidates so the export
+    /// builder cannot accidentally mask the bug.
+    #[test]
+    fn candidate_to_export_front_rank_zero_is_in_pareto_front() {
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], Evaluation::new(vec![1.0]));
+        let exported = candidate_to_export(&c, 0, 1);
+        assert!(exported.in_pareto_front);
+        assert_eq!(exported.front_rank, 0);
+    }
+
+    #[test]
+    fn candidate_to_export_front_rank_one_is_not_in_pareto_front() {
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], Evaluation::new(vec![1.0]));
+        let exported = candidate_to_export(&c, 1, 1);
+        assert!(!exported.in_pareto_front);
+        assert_eq!(exported.front_rank, 1);
+    }
+
+    /// `feasible` flips at `constraint_violation <= 0.0` boundary. Tests
+    /// the equality case (0.0 is feasible) plus both sides.
+    #[test]
+    fn candidate_to_export_feasibility_at_zero_violation() {
+        let mut ev = Evaluation::new(vec![1.0]);
+        ev.constraint_violation = 0.0;
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], ev);
+        let exported = candidate_to_export(&c, 0, 1);
+        assert!(exported.feasible);
+    }
+
+    #[test]
+    fn candidate_to_export_feasibility_negative_violation() {
+        let mut ev = Evaluation::new(vec![1.0]);
+        ev.constraint_violation = -0.1;
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], ev);
+        let exported = candidate_to_export(&c, 0, 1);
+        assert!(exported.feasible);
+    }
+
+    #[test]
+    fn candidate_to_export_infeasibility_positive_violation() {
+        let mut ev = Evaluation::new(vec![1.0]);
+        ev.constraint_violation = 0.5;
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], ev);
+        let exported = candidate_to_export(&c, 0, 1);
+        assert!(!exported.feasible);
+        assert_eq!(exported.constraint_violation, 0.5);
+    }
+
+    /// Defensive branch: if a buggy algorithm returns a mismatched
+    /// objectives length, candidate_to_export pads or truncates to `n_obj`
+    /// rather than passing the wrong-length vector through. Tests both
+    /// the pad (too few objectives) and truncate (too many) cases.
+    #[test]
+    fn candidate_to_export_pads_short_objectives_with_nan() {
+        let c: Candidate<Vec<f64>> =
+            Candidate::new(vec![1.0], Evaluation::new(vec![1.0]));
+        let exported = candidate_to_export(&c, 0, 3);
+        assert_eq!(exported.objectives.len(), 3);
+        assert_eq!(exported.objectives[0], 1.0);
+        assert!(exported.objectives[1].is_nan());
+        assert!(exported.objectives[2].is_nan());
+    }
+
+    #[test]
+    fn candidate_to_export_truncates_long_objectives() {
+        let c: Candidate<Vec<f64>> =
+            Candidate::new(vec![1.0], Evaluation::new(vec![1.0, 2.0, 3.0]));
+        let exported = candidate_to_export(&c, 0, 2);
+        assert_eq!(exported.objectives.len(), 2);
+        assert_eq!(exported.objectives[0], 1.0);
+        assert_eq!(exported.objectives[1], 2.0);
+    }
 }

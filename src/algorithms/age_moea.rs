@@ -306,12 +306,17 @@ fn environmental_selection<D: Clone>(
     // once per (remaining, pick) pair instead of per (remaining, all-keep).
     let mut keep = selected.clone();
     let mut remaining: Vec<usize> = splitting.clone();
-    let prox: Vec<f64> = (0..combined.len())
-        .map(|i| lp_norm(&translated[i], p))
-        .collect();
-    let mut nearest: Vec<f64> = (0..combined.len())
-        .map(|i| nearest_neighbor_distance(i, &translated, &keep, p))
-        .collect();
+    // `prox` and `nearest` are only ever read for splitting-front members
+    // (the `remaining` set) — the scoring loop never touches the entries
+    // for `selected` or discarded members. Filling only the `remaining`
+    // entries skips `lp_norm` / `lp_distance` work on the rest of
+    // `combined`; bit-identical, since those entries were never used.
+    let mut prox: Vec<f64> = vec![0.0; combined.len()];
+    let mut nearest: Vec<f64> = vec![f64::INFINITY; combined.len()];
+    for &i in &remaining {
+        prox[i] = lp_norm(&translated[i], p);
+        nearest[i] = nearest_neighbor_distance(i, &translated, &keep, p);
+    }
     while keep.len() < n {
         // Pick the remaining candidate with the largest score.
         let mut best_idx: Option<usize> = None;

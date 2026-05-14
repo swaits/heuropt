@@ -35,6 +35,22 @@
 #   - TIMEOUT mutants here are loop-bound mutations that make an
 #     offspring-collection loop non-terminating; cargo-mutants reports
 #     those *as detected*, in their own category separate from MISSED.
+#
+# Performance notes (2026-05 profiling campaign — compare_profile
+# whole-program callgrind Ir 357.06B -> 165.31B, -53.7%):
+#   - `benches/compare_profile.rs` profiles the whole `compare` example
+#     workload under callgrind via gungraun; it drove the seven perf
+#     commits of this campaign. (It's in `exclude_globs` below — a
+#     bench harness, not behavior to mutate.)
+#   - Every perf commit was bit-identical: all the tests/algorithm_-
+#     properties.rs snapshots stayed green. But the round-4
+#     `pareto::front::pareto_front` change adds a `dominated` bitset
+#     that is *pure* skip-bookkeeping — the `dominated[j] = true` write
+#     and the `if dominated[i]` early `continue` are optimization-only.
+#     Deleting either leaves the returned front bit-identical (just
+#     slower), so a mutation run will (correctly) report those as
+#     MISSED. They are genuine equivalent mutants, not test gaps —
+#     don't try to pin them with new tests.
 
 # Files to skip mutating. We skip:
 #   - examples (illustrative, not core algorithm correctness)

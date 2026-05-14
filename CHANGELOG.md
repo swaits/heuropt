@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-05-14
+
+Theme: a full permutation-operator toolkit, plus two sweeping
+performance passes. The first is a micro-benchmark-guided pass over
+the combinatorial operators and the Pareto/metrics machinery; the
+second is a whole-program profiling campaign that roughly halved the
+instruction count of the `compare` example workload. Every
+performance change is bit-identical — verified against per-algorithm
+exact-output snapshot tests — so results are unchanged, only faster.
+
+No public-API breaks. The release is purely additive: new permutation
+operators, plus internal-only performance work.
+
+### Added
+
+- A full permutation crossover/mutation toolkit in
+  `heuropt::operators`, all re-exported from the prelude:
+  `OrderCrossover` (OX), `PartiallyMappedCrossover` (PMX),
+  `CycleCrossover` (CX), and `EdgeRecombinationCrossover` (ERX)
+  crossovers, and `InversionMutation`, `InsertionMutation`, and
+  `ScrambleMutation` mutations — joining the pre-existing
+  `SwapMutation`. The mutations preserve both strict permutations and
+  multisets.
+- Combinatorial problems in the `compare` example: a bi-objective
+  ring TSP, a 3-objective FT06 job-shop schedule, and a bi-objective
+  knapsack — plus standalone Ulysses16 TSP and FT06 JSS benchmark
+  examples and a bi-objective TSP crossover-comparison demo.
+- Many-objective problems in the `compare` example: DTLZ at 4, 8, and
+  10 objectives.
+- `benches/compare_profile.rs` — a gungraun/callgrind benchmark that
+  profiles the entire `compare` workload as one unit; the harness
+  behind this release's profiling campaign.
+- A permutation-toolkit and multi-objective-combinatorial cookbook
+  chapter in the mdbook.
+
+### Performance
+
+All changes below are bit-identical — outputs are byte-for-byte
+unchanged, verified by the per-algorithm snapshot tests.
+
+- **Whole-program profiling campaign.** Profiling the full `compare`
+  workload under callgrind cut its instruction count from 357.06B to
+  165.31B (−53.7%):
+  - `pareto_compare` is now allocation-free — it no longer
+    materializes two minimization-oriented `Vec<f64>`s per call. This
+    alone was −38%, the single biggest win.
+  - `pareto_front` precomputes its oriented buffers once and skips
+    candidates already known to be dominated.
+  - `ibea` pre-exponentiates its indicator matrix, turning the
+    survival loop's `exp` sweep into plain additions.
+  - `hype` reuses its per-Monte-Carlo-sample scratch buffer instead
+    of reallocating it thousands of times per call.
+  - `age_moea` scores only the splitting front rather than the whole
+    combined population.
+- **Combinatorial-operator pass.** `CycleCrossover`,
+  `PartiallyMappedCrossover`, and `OrderCrossover` are now O(n) via
+  position-index tables; `EdgeRecombinationCrossover` removes edges
+  in O(degree) per step.
+- **Pareto / metrics pass.** `non_dominated_sort` halves its
+  dominance comparisons and reads from a flattened objective buffer;
+  `crowding_distance` sorts without `Vec<Vec<f64>>` indirection;
+  `hypervolume_nd` no longer re-sorts prefixes per slice.
+- **Algorithm hot paths.** `ant_colony_tsp` hoists `powf` out of its
+  tour-building loop; `tpe` computes KDE bandwidths once per
+  iteration instead of once per call; `bayesian_opt` reuses scratch
+  buffers in the expected-improvement acquisition loop.
+
+### Changed
+
+- Documentation now recommends MOEA/D as the default multi- and
+  many-objective algorithm, with disconnected-front and sequencing
+  guidance corrected against fresh `compare` results.
+- The `compare` example's result tables are realigned and sorted,
+  and its workload now lives in a reusable module shared with the
+  profiling benchmark.
+
+### Internal
+
+- A large mutation-testing-driven test-hardening pass: per-algorithm
+  exact-output snapshots and pinned helper-function tests across the
+  whole algorithm catalog and operator set, raising the cargo-mutants
+  catch rate from ~74% to ~85%. See `.cargo/mutants.toml` for the
+  campaign notes and the residual equivalent-mutant categories.
+
+[0.11.0]: https://github.com/swaits/heuropt/releases/tag/v0.11.0
+
 ## [0.10.0] — 2026-05-06
 
 Theme: every algorithm now returns its **canonical name** as it

@@ -21,7 +21,7 @@ Docs: [user guide](https://swaits.github.io/heuropt/) · [API reference](https:/
 
 ```toml
 [dependencies]
-heuropt = "0.10"
+heuropt = "0.11"
 
 # Optional features:
 # - "serde":     derive Serialize/Deserialize on the core data types.
@@ -30,7 +30,7 @@ heuropt = "0.10"
 # - "async":     AsyncProblem / AsyncPartialProblem traits and a
 #                run_async(&problem, concurrency).await method on
 #                every algorithm — for IO-bound evaluations.
-# heuropt = { version = "0.10", features = ["serde", "parallel", "async"] }
+# heuropt = { version = "0.11", features = ["serde", "parallel", "async"] }
 ```
 
 ## Define a problem and run an optimizer

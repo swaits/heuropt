@@ -12,6 +12,9 @@
 use std::f64::consts::PI;
 use std::time::Instant;
 
+use rand::Rng as _;
+
+use heuropt::core::rng::Rng;
 use heuropt::metrics::{hypervolume::hypervolume_2d, spacing::spacing};
 use heuropt::prelude::*;
 
@@ -281,6 +284,47 @@ fn mean_std(values: &[f64]) -> (f64, f64) {
     let mean = values.iter().sum::<f64>() / n;
     let var = values.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n;
     (mean, var.sqrt())
+}
+
+/// Print an aligned text table: column 0 left-justified, the rest
+/// right-justified. Column widths are derived from the actual cell
+/// contents (header *and* every row), so the separator and all rows line
+/// up no matter how the value magnitudes vary.
+///
+/// All cells must be ASCII — width is measured with `str::len`, so a
+/// multi-byte character (e.g. `±`, `ε`) would silently break alignment on
+/// terminals that render it at a different column width. Callers format
+/// `mean +/- std` rather than `mean ± std` for exactly this reason.
+fn print_table(header: &[&str], rows: &[Vec<String>]) {
+    let ncols = header.len();
+    let mut widths: Vec<usize> = header.iter().map(|h| h.len()).collect();
+    for row in rows {
+        for c in 0..ncols {
+            widths[c] = widths[c].max(row[c].len());
+        }
+    }
+    let fmt_row = |cells: &[String]| -> String {
+        let mut out = String::new();
+        for c in 0..ncols {
+            if c > 0 {
+                out.push_str("  ");
+            }
+            let w = widths[c];
+            if c == 0 {
+                out.push_str(&format!("{:<w$}", cells[c]));
+            } else {
+                out.push_str(&format!("{:>w$}", cells[c]));
+            }
+        }
+        out
+    };
+    let header_owned: Vec<String> = header.iter().map(|s| s.to_string()).collect();
+    let header_line = fmt_row(&header_owned);
+    println!("{header_line}");
+    println!("{}", "-".repeat(header_line.len()));
+    for row in rows {
+        println!("{}", fmt_row(row));
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1659,13 +1703,12 @@ fn mean_distance_to_dtlz1_front(front: &[Candidate<Vec<f64>>]) -> f64 {
 
 fn run_zdt1_comparison() {
     println!("== ZDT1 (dim={ZDT1_DIM}, {ZDT1_BUDGET} evals/run × {SEEDS} seeds) ==");
-    println!("metric arrows: hypervolume↑ (higher better), others↓ (lower better)");
+    println!("Zitzler-Deb-Thiele 2-objective benchmark: {ZDT1_DIM} real variables, one smooth");
+    println!("convex Pareto front f2 = 1 - sqrt(f1). Hard because 29 of 30 variables must");
+    println!("collapse to 0 before the front is even reachable, and only then can the");
+    println!("population spread along it. Optimum: mean L2 -> 0 (the front is known exactly).");
+    println!("sorted best-first by hypervolume (higher better; spacing / mean L2 lower better)");
     println!();
-    println!(
-        "{:<14} {:>16} {:>14} {:>14} {:>10} {:>10}",
-        "algorithm", "hypervolume", "spacing", "mean L2", "front", "ms",
-    );
-    println!("{}", "-".repeat(82));
 
     let zdt1 = Zdt1 { dim: ZDT1_DIM };
     let zdt1_objs = zdt1.objectives();
@@ -1677,7 +1720,7 @@ fn run_zdt1_comparison() {
         ("MOPSO", zdt1_mopso),
         ("SPEA2", zdt1_spea2),
         ("PESA-II", zdt1_pesa2),
-        ("ε-MOEA", zdt1_epsilon_moea),
+        ("eps-MOEA", zdt1_epsilon_moea),
         ("IBEA", zdt1_ibea),
         ("HypE", zdt1_hype),
         ("SMS-EMOA", zdt1_sms_emoa),
@@ -1687,6 +1730,7 @@ fn run_zdt1_comparison() {
         ("MOEA/D", zdt1_moead),
     ];
 
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
         let hv: Vec<f64> = runs
@@ -1707,28 +1751,43 @@ fn run_zdt1_comparison() {
         let (fs_m, _) = mean_std(&fs);
         let (ms_m, _) = mean_std(&ms);
 
-        println!(
-            "{:<14} {:>16} {:>14} {:>14} {:>10} {:>10}",
-            name,
-            format!("{hv_m:.4}±{hv_s:.4}"),
-            format!("{sp_m:.4}±{sp_s:.4}"),
-            format!("{l2_m:.4}±{l2_s:.4}"),
-            format!("{fs_m:.0}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            hv_m,
+            vec![
+                name.to_string(),
+                format!("{hv_m:.4}+/-{hv_s:.4}"),
+                format!("{sp_m:.4}+/-{sp_s:.4}"),
+                format!("{l2_m:.4}+/-{l2_s:.4}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    // Higher hypervolume is better.
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(
+        &[
+            "algorithm",
+            "hypervolume",
+            "spacing",
+            "mean L2",
+            "front",
+            "ms",
+        ],
+        &table,
+    );
 }
 
 fn run_dtlz2_comparison() {
     println!();
     println!("== DTLZ2 (3-obj, dim={DTLZ2_DIM}, {DTLZ2_BUDGET} evals/run × {SEEDS} seeds) ==");
-    println!("Pareto front: unit sphere octant (Σf²=1, all f≥0); 'mean dist' is |‖f‖−1|");
+    println!("Deb-Thiele-Laumanns-Zitzler 3-objective; the Pareto front is the unit-sphere");
+    println!("octant (Σf² = 1, all f >= 0) -- a curved 2-D surface embedded in 3-D objective");
+    println!("space. Hard because crowding/spacing must work in a higher dimension.");
+    println!("'mean dist' = |‖f‖ - 1|, so 0 means perfectly on the sphere (the known optimum).");
+    println!("sorted best-first by mean dist (lower is better)");
     println!();
-    println!(
-        "{:<14} {:>16} {:>14} {:>10} {:>10}",
-        "algorithm", "mean dist↓", "spacing↓", "front", "ms",
-    );
-    println!("{}", "-".repeat(70));
 
     let dtlz2 = dtlz2_problem();
     let dtlz2_objs = dtlz2.objectives();
@@ -1740,7 +1799,7 @@ fn run_dtlz2_comparison() {
         ("NSGA-II", dtlz2_nsga2),
         ("SPEA2", dtlz2_spea2),
         ("PESA-II", dtlz2_pesa2),
-        ("ε-MOEA", dtlz2_epsilon_moea),
+        ("eps-MOEA", dtlz2_epsilon_moea),
         ("IBEA", dtlz2_ibea),
         ("HypE", dtlz2_hype),
         ("SMS-EMOA", dtlz2_sms_emoa),
@@ -1749,6 +1808,7 @@ fn run_dtlz2_comparison() {
         ("MOEA/D", dtlz2_moead),
     ];
 
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
         let dist: Vec<f64> = runs
@@ -1767,24 +1827,39 @@ fn run_dtlz2_comparison() {
         let (fs_m, _) = mean_std(&fs);
         let (ms_m, _) = mean_std(&ms);
 
-        println!(
-            "{:<14} {:>16} {:>14} {:>10} {:>10}",
-            name,
-            format!("{d_m:.4}±{d_s:.4}"),
-            format!("{sp_m:.4}±{sp_s:.4}"),
-            format!("{fs_m:.0}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            d_m,
+            vec![
+                name.to_string(),
+                format!("{d_m:.4}+/-{d_s:.4}"),
+                format!("{sp_m:.4}+/-{sp_s:.4}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    // Lower mean distance to the true front is better.
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(
+        &["algorithm", "mean dist", "spacing", "front", "ms"],
+        &table,
+    );
 }
 
 fn run_rastrigin_comparison() {
     println!();
     println!("== Rastrigin (dim={RASTRIGIN_DIM}, {RASTRIGIN_BUDGET} evals/run × {SEEDS} seeds) ==");
-    println!("global minimum: f = 0  (lower is better)");
+    println!(
+        "Highly multimodal trap: f = 10n + Σ(x_i² - 10·cos(2π·x_i)), {RASTRIGIN_DIM} dimensions."
+    );
+    println!(
+        "Hard because a near-quadratic global bowl is overlaid with ~10^{RASTRIGIN_DIM} regularly"
+    );
+    println!("spaced local minima -- any greedy step lands in the nearest dimple.");
+    println!("Global optimum: f = 0 at the origin.");
+    println!("sorted best-first (lower is better)");
     println!();
-    println!("{:<14} {:>20} {:>10}", "algorithm", "best f", "ms");
-    println!("{}", "-".repeat(48));
 
     type Runner = fn(u64) -> SoRun;
     let runners: &[(&str, Runner)] = &[
@@ -1801,6 +1876,7 @@ fn run_rastrigin_comparison() {
         ("IPOP-CMA-ES", rastrigin_ipop_cma_es),
     ];
 
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
         let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
@@ -1809,22 +1885,31 @@ fn run_rastrigin_comparison() {
         let (b_m, b_s) = mean_std(&best);
         let (ms_m, _) = mean_std(&ms);
 
-        println!(
-            "{:<14} {:>20} {:>10}",
-            name,
-            format!("{b_m:.4e} ± {b_s:.2e}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            b_m,
+            vec![
+                name.to_string(),
+                format!("{b_m:.4e} +/- {b_s:.2e}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    // Lower best f is better.
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "best f", "ms"], &table);
 }
 
 fn run_rosenbrock_comparison() {
     println!();
     println!("== Rosenbrock (dim={ROSENBROCK_DIM}, {ROSENBROCK_BUDGET} evals × {SEEDS} seeds) ==");
-    println!("smooth non-convex valley; global minimum f = 0 at all-ones");
+    println!(
+        "Rosenbrock's banana valley: f = Σ(100·(x_{{i+1}} - x_i²)² + (1 - x_i)²), {ROSENBROCK_DIM} dims."
+    );
+    println!("Hard because the minimum sits in a long, bent, near-flat valley -- easy to enter,");
+    println!("very slow to crawl along to the tip. Global optimum: f = 0 at the all-ones point.");
+    println!("sorted best-first (lower is better)");
     println!();
-    println!("{:<14} {:>20} {:>10}", "algorithm", "best f", "ms");
-    println!("{}", "-".repeat(48));
     type Runner = fn(u64) -> SoRun;
     let runners: &[(&str, Runner)] = &[
         ("DE", rosenbrock_de),
@@ -1835,28 +1920,38 @@ fn run_rosenbrock_comparison() {
         ("Nelder-Mead", rosenbrock_nelder_mead),
         ("BO (60 evals)", rosenbrock_bo),
     ];
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
         let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
         let (b_m, b_s) = mean_std(&best);
         let (ms_m, _) = mean_std(&ms);
-        println!(
-            "{:<14} {:>20} {:>10}",
-            name,
-            format!("{b_m:.4e} ± {b_s:.2e}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            b_m,
+            vec![
+                name.to_string(),
+                format!("{b_m:.4e} +/- {b_s:.2e}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "best f", "ms"], &table);
 }
 
 fn run_ackley_comparison() {
     println!();
     println!("== Ackley (dim={ACKLEY_DIM}, {ACKLEY_BUDGET} evals × {SEEDS} seeds) ==");
-    println!("smoother multimodal landscape than Rastrigin; global minimum f = 0 at origin");
+    println!("Ackley's function: a near-flat outer plateau with shallow ripples surrounding a");
+    println!(
+        "single deep, narrow global basin, {ACKLEY_DIM} dimensions. Hard because the gradient is"
+    );
+    println!("almost zero far from the optimum, giving local search little to follow.");
+    println!("Global optimum: f = 0 at the origin.");
+    println!("sorted best-first (lower is better)");
     println!();
-    println!("{:<14} {:>20} {:>10}", "algorithm", "best f", "ms");
-    println!("{}", "-".repeat(48));
     type Runner = fn(u64) -> SoRun;
     let runners: &[(&str, Runner)] = &[
         ("DE", ackley_de),
@@ -1865,31 +1960,36 @@ fn run_ackley_comparison() {
         ("TLBO", ackley_tlbo),
         ("BO (60 evals)", ackley_bo),
     ];
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
         let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
         let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
         let (b_m, b_s) = mean_std(&best);
         let (ms_m, _) = mean_std(&ms);
-        println!(
-            "{:<14} {:>20} {:>10}",
-            name,
-            format!("{b_m:.4e} ± {b_s:.2e}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            b_m,
+            vec![
+                name.to_string(),
+                format!("{b_m:.4e} +/- {b_s:.2e}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "best f", "ms"], &table);
 }
 
 fn run_zdt3_comparison() {
     println!();
     println!("== ZDT3 (dim={ZDT3_DIM}, {ZDT3_BUDGET} evals × {SEEDS} seeds) ==");
-    println!("disconnected Pareto front (not contiguous); spread across gaps matters");
+    println!("Zitzler-Deb-Thiele 2-objective with a DISCONNECTED front: five separate arcs");
+    println!("rather than one curve. Hard because an algorithm has to discover and populate");
+    println!("every arc while not stranding solutions in the dominated gaps between them.");
+    println!("Optimum: cover all five arcs; scored by hypervolume vs [11, 11].");
+    println!("sorted best-first by hypervolume (higher better; spacing lower better)");
     println!();
-    println!(
-        "{:<14} {:>16} {:>14} {:>10} {:>10}",
-        "algorithm", "hypervolume↑", "spacing↓", "front", "ms",
-    );
-    println!("{}", "-".repeat(70));
     let problem = zdt3_problem();
     let objs = problem.objectives();
     type Runner = fn(u64) -> MoRun;
@@ -1899,6 +1999,7 @@ fn run_zdt3_comparison() {
         ("IBEA", zdt3_ibea),
         ("AGE-MOEA", zdt3_age_moea),
     ];
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
         let hv: Vec<f64> = runs
@@ -1912,27 +2013,34 @@ fn run_zdt3_comparison() {
         let (sp_m, sp_s) = mean_std(&sp);
         let (fs_m, _) = mean_std(&fs);
         let (ms_m, _) = mean_std(&ms);
-        println!(
-            "{:<14} {:>16} {:>14} {:>10} {:>10}",
-            name,
-            format!("{hv_m:.4}±{hv_s:.4}"),
-            format!("{sp_m:.4}±{sp_s:.4}"),
-            format!("{fs_m:.0}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            hv_m,
+            vec![
+                name.to_string(),
+                format!("{hv_m:.4}+/-{hv_s:.4}"),
+                format!("{sp_m:.4}+/-{sp_s:.4}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(
+        &["algorithm", "hypervolume", "spacing", "front", "ms"],
+        &table,
+    );
 }
 
 fn run_dtlz1_comparison() {
     println!();
     println!("== DTLZ1 (3-obj, dim={DTLZ1_DIM}, {DTLZ1_BUDGET} evals × {SEEDS} seeds) ==");
-    println!("Pareto front: linear simplex Σf=0.5 in the positive octant");
+    println!("Deb-Thiele-Laumanns-Zitzler 3-objective; the Pareto front is the linear simplex");
+    println!("Σf = 0.5 in the positive octant. Hard because a deceptive multimodal 'g' term");
+    println!("riddles the approach with a huge number of local fronts -- only fully-converged");
+    println!("runs land on the simplex. Optimum: mean dist -> 0.");
+    println!("sorted best-first by mean dist (lower is better)");
     println!();
-    println!(
-        "{:<14} {:>16} {:>14} {:>10} {:>10}",
-        "algorithm", "mean dist↓", "spacing↓", "front", "ms",
-    );
-    println!("{}", "-".repeat(70));
     let problem = dtlz1_problem();
     let objs = problem.objectives();
     type Runner = fn(u64) -> MoRun;
@@ -1942,6 +2050,7 @@ fn run_dtlz1_comparison() {
         ("AGE-MOEA", dtlz1_age_moea),
         ("GrEA", dtlz1_grea),
     ];
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {
         let runs: Vec<MoRun> = (0..SEEDS).map(runner).collect();
         let dist: Vec<f64> = runs
@@ -1955,15 +2064,763 @@ fn run_dtlz1_comparison() {
         let (sp_m, sp_s) = mean_std(&sp);
         let (fs_m, _) = mean_std(&fs);
         let (ms_m, _) = mean_std(&ms);
-        println!(
-            "{:<14} {:>16} {:>14} {:>10} {:>10}",
-            name,
-            format!("{d_m:.4}±{d_s:.4}"),
-            format!("{sp_m:.4}±{sp_s:.4}"),
-            format!("{fs_m:.0}"),
-            format!("{ms_m:.0}"),
-        );
+        rows.push((
+            d_m,
+            vec![
+                name.to_string(),
+                format!("{d_m:.4}+/-{d_s:.4}"),
+                format!("{sp_m:.4}+/-{sp_s:.4}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
     }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(
+        &["algorithm", "mean dist", "spacing", "front", "ms"],
+        &table,
+    );
+}
+
+// =============================================================================
+// Combinatorial / sequencing problems
+//
+// These use a different decision encoding — `Vec<usize>` permutations and
+// `Vec<bool>` bitstrings — than the continuous problems above, so the
+// applicable-algorithm roster differs: the real-vector methods (CMA-ES, DE,
+// PSO, …) cannot run here, while permutation-native methods (Ant Colony,
+// Tabu Search) and the EDA-style ones can.
+// =============================================================================
+
+const TSP_CITIES: usize = 15;
+const TSP_BUDGET: usize = 8_000;
+const JSS_BUDGET: usize = 8_000;
+const KNAPSACK_BUDGET: usize = 20_000;
+
+// ---- Single-objective TSP: a regular polygon on the unit circle -------------
+
+/// `TSP_CITIES` points equally spaced on the unit circle. The optimal tour
+/// just visits them in angular order; its length is the regular-polygon
+/// perimeter `2·n·sin(π/n)`, which gives an exact known-best baseline.
+struct RingTsp {
+    distances: Vec<Vec<f64>>,
+}
+impl RingTsp {
+    fn new() -> Self {
+        let pts: Vec<(f64, f64)> = (0..TSP_CITIES)
+            .map(|i| {
+                let a = 2.0 * PI * (i as f64) / (TSP_CITIES as f64);
+                (a.cos(), a.sin())
+            })
+            .collect();
+        let distances = (0..TSP_CITIES)
+            .map(|i| {
+                (0..TSP_CITIES)
+                    .map(|j| {
+                        let (xi, yi) = pts[i];
+                        let (xj, yj) = pts[j];
+                        ((xi - xj).powi(2) + (yi - yj).powi(2)).sqrt()
+                    })
+                    .collect()
+            })
+            .collect();
+        Self { distances }
+    }
+    /// Known optimal tour length — the regular-polygon perimeter.
+    fn optimal_length() -> f64 {
+        2.0 * TSP_CITIES as f64 * (PI / TSP_CITIES as f64).sin()
+    }
+}
+impl Problem for RingTsp {
+    type Decision = Vec<usize>;
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("tour_length")])
+    }
+    fn evaluate(&self, tour: &Vec<usize>) -> Evaluation {
+        let n = tour.len();
+        let mut total = 0.0;
+        for i in 0..n {
+            total += self.distances[tour[i]][tour[(i + 1) % n]];
+        }
+        Evaluation::new(vec![total])
+    }
+}
+
+fn tsp_random(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    let mut opt = RandomSearch::new(
+        RandomSearchConfig {
+            iterations: TSP_BUDGET,
+            batch_size: 1,
+            seed,
+        },
+        ShuffledPermutation { n: TSP_CITIES },
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn tsp_hill_climber(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    let mut opt = HillClimber::new(
+        HillClimberConfig {
+            iterations: TSP_BUDGET,
+            seed,
+        },
+        ShuffledPermutation { n: TSP_CITIES },
+        InversionMutation,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn tsp_simulated_annealing(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    let mut opt = SimulatedAnnealing::new(
+        SimulatedAnnealingConfig {
+            iterations: TSP_BUDGET,
+            initial_temperature: 1.0,
+            final_temperature: 1e-3,
+            seed,
+        },
+        ShuffledPermutation { n: TSP_CITIES },
+        InversionMutation,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn tsp_tabu_search(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    // Each step considers 16 inversion (2-opt-style) neighbours.
+    let neighbors = |tour: &Vec<usize>, rng: &mut Rng| {
+        let mut m = InversionMutation;
+        (0..16)
+            .map(|_| m.vary(std::slice::from_ref(tour), rng).pop().unwrap())
+            .collect()
+    };
+    let mut opt = TabuSearch::new(
+        TabuSearchConfig {
+            iterations: TSP_BUDGET / 16,
+            tabu_tenure: 20,
+            seed,
+        },
+        ShuffledPermutation { n: TSP_CITIES },
+        neighbors,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn tsp_genetic_algorithm(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    let mut opt = GeneticAlgorithm::new(
+        GeneticAlgorithmConfig {
+            population_size: 80,
+            generations: TSP_BUDGET / 80,
+            tournament_size: 3,
+            elitism: 2,
+            seed,
+        },
+        ShuffledPermutation { n: TSP_CITIES },
+        CompositeVariation {
+            crossover: OrderCrossover,
+            mutation: InversionMutation,
+        },
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn tsp_ant_colony(seed: u64) -> SoRun {
+    let problem = RingTsp::new();
+    let distances = problem.distances.clone();
+    let mut opt = AntColonyTsp::new(
+        AntColonyTspConfig {
+            ants: 20,
+            generations: TSP_BUDGET / 20,
+            alpha: 1.0,
+            beta: 3.0,
+            evaporation: 0.5,
+            deposit: 1.0,
+            initial_pheromone: 1.0,
+            seed,
+        },
+        distances,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+// ---- Single-objective job-shop scheduling: Fisher & Thompson FT06 -----------
+
+const JSS_JOBS: usize = 6;
+const JSS_MACHINES: usize = 6;
+
+/// FT06 routing — machine id of the k-th operation of job j.
+const FT06_MACHINE: [[usize; JSS_MACHINES]; JSS_JOBS] = [
+    [2, 0, 1, 3, 5, 4],
+    [1, 2, 4, 5, 0, 3],
+    [2, 3, 5, 0, 1, 4],
+    [1, 0, 2, 3, 4, 5],
+    [2, 1, 4, 5, 0, 3],
+    [1, 3, 5, 0, 4, 2],
+];
+/// FT06 processing times — duration of the k-th operation of job j.
+const FT06_TIME: [[f64; JSS_MACHINES]; JSS_JOBS] = [
+    [1.0, 3.0, 6.0, 7.0, 3.0, 6.0],
+    [8.0, 5.0, 10.0, 10.0, 10.0, 4.0],
+    [5.0, 4.0, 8.0, 9.0, 1.0, 7.0],
+    [5.0, 5.0, 5.0, 3.0, 8.0, 9.0],
+    [9.0, 3.0, 5.0, 4.0, 3.0, 1.0],
+    [3.0, 3.0, 9.0, 10.0, 4.0, 1.0],
+];
+/// FT06's optimal makespan is a long-settled benchmark value.
+const FT06_OPTIMAL_MAKESPAN: f64 = 55.0;
+
+/// FT06 job-shop, makespan objective. Operation-string encoding: a length-36
+/// multiset where job id `j` appears `JSS_MACHINES` times; the k-th
+/// occurrence of `j` is its k-th operation.
+struct Ft06Makespan;
+impl Problem for Ft06Makespan {
+    type Decision = Vec<usize>;
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("makespan")])
+    }
+    fn evaluate(&self, schedule: &Vec<usize>) -> Evaluation {
+        let mut job_next = [0_usize; JSS_JOBS];
+        let mut job_clock = [0.0_f64; JSS_JOBS];
+        let mut machine_clock = [0.0_f64; JSS_MACHINES];
+        for &job in schedule {
+            let k = job_next[job];
+            let m = FT06_MACHINE[job][k];
+            let t = FT06_TIME[job][k];
+            let start = job_clock[job].max(machine_clock[m]);
+            let end = start + t;
+            job_clock[job] = end;
+            machine_clock[m] = end;
+            job_next[job] = k + 1;
+        }
+        let makespan = machine_clock.iter().cloned().fold(0.0_f64, f64::max);
+        Evaluation::new(vec![makespan])
+    }
+}
+
+/// Precedence-Order Crossover — multiset-preserving recombination for the
+/// operation-string encoding (the strict-permutation crossovers would
+/// corrupt the multiset).
+#[derive(Debug, Clone, Copy, Default)]
+struct PrecedenceOrderCrossover;
+impl Variation<Vec<usize>> for PrecedenceOrderCrossover {
+    fn vary(&mut self, parents: &[Vec<usize>], rng: &mut Rng) -> Vec<Vec<usize>> {
+        assert!(parents.len() >= 2, "POX requires 2 parents");
+        let (p1, p2) = (&parents[0], &parents[1]);
+        let mut in_j1 = [false; JSS_JOBS];
+        loop {
+            for slot in &mut in_j1 {
+                *slot = rng.random_bool(0.5);
+            }
+            let c = in_j1.iter().filter(|&&b| b).count();
+            if c > 0 && c < JSS_JOBS {
+                break;
+            }
+        }
+        vec![pox_child(p1, p2, &in_j1), pox_child(p2, p1, &in_j1)]
+    }
+}
+fn pox_child(donor: &[usize], filler: &[usize], in_donor_set: &[bool]) -> Vec<usize> {
+    let n = donor.len();
+    let mut child = vec![usize::MAX; n];
+    for k in 0..n {
+        if in_donor_set[donor[k]] {
+            child[k] = donor[k];
+        }
+    }
+    let mut fill_idx = 0;
+    for &v in filler {
+        if !in_donor_set[v] {
+            while fill_idx < n && child[fill_idx] != usize::MAX {
+                fill_idx += 1;
+            }
+            child[fill_idx] = v;
+            fill_idx += 1;
+        }
+    }
+    child
+}
+
+fn jss_initializer() -> ShuffledMultisetPermutation {
+    ShuffledMultisetPermutation::new(vec![JSS_MACHINES; JSS_JOBS])
+}
+
+fn jss_random(seed: u64) -> SoRun {
+    let mut opt = RandomSearch::new(
+        RandomSearchConfig {
+            iterations: JSS_BUDGET,
+            batch_size: 1,
+            seed,
+        },
+        jss_initializer(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&Ft06Makespan);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn jss_hill_climber(seed: u64) -> SoRun {
+    let mut opt = HillClimber::new(
+        HillClimberConfig {
+            iterations: JSS_BUDGET,
+            seed,
+        },
+        jss_initializer(),
+        InsertionMutation,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&Ft06Makespan);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn jss_simulated_annealing(seed: u64) -> SoRun {
+    let mut opt = SimulatedAnnealing::new(
+        SimulatedAnnealingConfig {
+            iterations: JSS_BUDGET,
+            initial_temperature: 5.0,
+            final_temperature: 1e-2,
+            seed,
+        },
+        jss_initializer(),
+        InsertionMutation,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&Ft06Makespan);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn jss_tabu_search(seed: u64) -> SoRun {
+    let neighbors = |schedule: &Vec<usize>, rng: &mut Rng| {
+        let mut m = InsertionMutation;
+        (0..16)
+            .map(|_| m.vary(std::slice::from_ref(schedule), rng).pop().unwrap())
+            .collect()
+    };
+    let mut opt = TabuSearch::new(
+        TabuSearchConfig {
+            iterations: JSS_BUDGET / 16,
+            tabu_tenure: 20,
+            seed,
+        },
+        jss_initializer(),
+        neighbors,
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&Ft06Makespan);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn jss_genetic_algorithm(seed: u64) -> SoRun {
+    let mut opt = GeneticAlgorithm::new(
+        GeneticAlgorithmConfig {
+            population_size: 80,
+            generations: JSS_BUDGET / 80,
+            tournament_size: 3,
+            elitism: 2,
+            seed,
+        },
+        jss_initializer(),
+        CompositeVariation {
+            crossover: PrecedenceOrderCrossover,
+            mutation: InsertionMutation,
+        },
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&Ft06Makespan);
+    SoRun {
+        best_value: result.best.unwrap().evaluation.objectives[0],
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+// ---- Bi-objective 0/1 knapsack: Zitzler & Thiele style ----------------------
+
+const KNAPSACK_N: usize = 30;
+const KP_PROFIT_A: [f64; KNAPSACK_N] = [
+    61.0, 17.0, 92.0, 49.0, 73.0, 28.0, 84.0, 36.0, 55.0, 78.0, 23.0, 91.0, 12.0, 67.0, 45.0, 58.0,
+    33.0, 71.0, 14.0, 26.0, 87.0, 42.0, 19.0, 65.0, 30.0, 51.0, 79.0, 22.0, 47.0, 88.0,
+];
+const KP_PROFIT_B: [f64; KNAPSACK_N] = [
+    24.0, 81.0, 16.0, 67.0, 29.0, 73.0, 41.0, 60.0, 52.0, 19.0, 77.0, 34.0, 95.0, 22.0, 71.0, 88.0,
+    56.0, 27.0, 64.0, 90.0, 18.0, 43.0, 79.0, 31.0, 85.0, 25.0, 38.0, 92.0, 70.0, 13.0,
+];
+const KP_WEIGHT: [f64; KNAPSACK_N] = [
+    35.0, 58.0, 22.0, 71.0, 14.0, 86.0, 31.0, 53.0, 78.0, 19.0, 44.0, 16.0, 67.0, 88.0, 25.0, 51.0,
+    33.0, 74.0, 12.0, 47.0, 63.0, 28.0, 91.0, 36.0, 55.0, 17.0, 82.0, 41.0, 24.0, 68.0,
+];
+/// Hypervolume reference point for the knapsack front. Both objectives are
+/// maximized, so in the minimization-oriented frame any positive profit is
+/// below 0 — `[0, 0]` is dominated by every feasible solution.
+const KNAPSACK_REFERENCE: [f64; 2] = [0.0, 0.0];
+
+/// Bi-objective 0/1 knapsack: two profit vectors, one shared capacity.
+/// Weight overruns are penalized in both objectives so the Pareto front is
+/// composed of feasible solutions.
+struct BiKnapsack {
+    capacity: f64,
+}
+impl BiKnapsack {
+    fn new() -> Self {
+        Self {
+            capacity: 0.5 * KP_WEIGHT.iter().sum::<f64>(),
+        }
+    }
+}
+impl Problem for BiKnapsack {
+    type Decision = Vec<bool>;
+    fn objectives(&self) -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![
+            Objective::maximize("profit_a"),
+            Objective::maximize("profit_b"),
+        ])
+    }
+    fn evaluate(&self, take: &Vec<bool>) -> Evaluation {
+        let (mut pa, mut pb, mut w) = (0.0, 0.0, 0.0);
+        for (i, &t) in take.iter().enumerate() {
+            if t {
+                pa += KP_PROFIT_A[i];
+                pb += KP_PROFIT_B[i];
+                w += KP_WEIGHT[i];
+            }
+        }
+        let penalty = 1000.0 * (w - self.capacity).max(0.0);
+        Evaluation::new(vec![pa - penalty, pb - penalty])
+    }
+}
+
+/// Random binary initializer — each bit 50/50 independently.
+#[derive(Debug, Clone, Copy)]
+struct RandomBinary {
+    n: usize,
+}
+impl Initializer<Vec<bool>> for RandomBinary {
+    fn initialize(&mut self, size: usize, rng: &mut Rng) -> Vec<Vec<bool>> {
+        (0..size)
+            .map(|_| (0..self.n).map(|_| rng.random_bool(0.5)).collect())
+            .collect()
+    }
+}
+
+/// One-point crossover for binary chromosomes.
+#[derive(Debug, Clone, Copy, Default)]
+struct OnePointCrossoverBool;
+impl Variation<Vec<bool>> for OnePointCrossoverBool {
+    fn vary(&mut self, parents: &[Vec<bool>], rng: &mut Rng) -> Vec<Vec<bool>> {
+        assert!(
+            parents.len() >= 2,
+            "OnePointCrossoverBool requires 2 parents"
+        );
+        let (p1, p2) = (&parents[0], &parents[1]);
+        let n = p1.len();
+        if n < 2 {
+            return vec![p1.clone(), p2.clone()];
+        }
+        let cut = rng.random_range(1..n);
+        let mut c1 = Vec::with_capacity(n);
+        let mut c2 = Vec::with_capacity(n);
+        c1.extend_from_slice(&p1[..cut]);
+        c1.extend_from_slice(&p2[cut..]);
+        c2.extend_from_slice(&p2[..cut]);
+        c2.extend_from_slice(&p1[cut..]);
+        vec![c1, c2]
+    }
+}
+
+fn knap_binary_variation() -> CompositeVariation<OnePointCrossoverBool, BitFlipMutation> {
+    CompositeVariation {
+        crossover: OnePointCrossoverBool,
+        mutation: BitFlipMutation {
+            probability: 1.0 / KNAPSACK_N as f64,
+        },
+    }
+}
+
+/// One run's knapsack metrics. The bi-objective front lives over `Vec<bool>`
+/// decisions, so `MoRun` (which fixes `Vec<f64>`) does not fit — we keep
+/// only the aggregate quality numbers.
+#[derive(Clone)]
+struct KnapRun {
+    hypervolume: f64,
+    front_size: usize,
+    wall_ms: u128,
+}
+
+fn knap_run(front: &[Candidate<Vec<bool>>], problem: &BiKnapsack, wall_ms: u128) -> KnapRun {
+    KnapRun {
+        hypervolume: hypervolume_2d(front, &problem.objectives(), KNAPSACK_REFERENCE),
+        front_size: front.len(),
+        wall_ms,
+    }
+}
+
+fn knapsack_random(seed: u64) -> KnapRun {
+    let problem = BiKnapsack::new();
+    let mut opt = RandomSearch::new(
+        RandomSearchConfig {
+            iterations: KNAPSACK_BUDGET,
+            batch_size: 1,
+            seed,
+        },
+        RandomBinary { n: KNAPSACK_N },
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    let ms = t0.elapsed().as_millis();
+    knap_run(&result.pareto_front, &problem, ms)
+}
+
+fn knapsack_nsga2(seed: u64) -> KnapRun {
+    let problem = BiKnapsack::new();
+    let mut opt = Nsga2::new(
+        Nsga2Config {
+            population_size: 100,
+            generations: KNAPSACK_BUDGET / 100,
+            seed,
+        },
+        RandomBinary { n: KNAPSACK_N },
+        knap_binary_variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    let ms = t0.elapsed().as_millis();
+    knap_run(&result.pareto_front, &problem, ms)
+}
+
+fn knapsack_spea2(seed: u64) -> KnapRun {
+    let problem = BiKnapsack::new();
+    let mut opt = Spea2::new(
+        Spea2Config {
+            population_size: 100,
+            archive_size: 100,
+            generations: KNAPSACK_BUDGET / 100,
+            seed,
+        },
+        RandomBinary { n: KNAPSACK_N },
+        knap_binary_variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    let ms = t0.elapsed().as_millis();
+    knap_run(&result.pareto_front, &problem, ms)
+}
+
+fn knapsack_nsga3(seed: u64) -> KnapRun {
+    let problem = BiKnapsack::new();
+    let mut opt = Nsga3::new(
+        Nsga3Config {
+            population_size: 100,
+            generations: KNAPSACK_BUDGET / 100,
+            reference_divisions: 20,
+            seed,
+        },
+        RandomBinary { n: KNAPSACK_N },
+        knap_binary_variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    let ms = t0.elapsed().as_millis();
+    knap_run(&result.pareto_front, &problem, ms)
+}
+
+fn knapsack_ibea(seed: u64) -> KnapRun {
+    let problem = BiKnapsack::new();
+    let mut opt = Ibea::new(
+        IbeaConfig {
+            population_size: 100,
+            generations: KNAPSACK_BUDGET / 100,
+            kappa: 0.05,
+            seed,
+        },
+        RandomBinary { n: KNAPSACK_N },
+        knap_binary_variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    let ms = t0.elapsed().as_millis();
+    knap_run(&result.pareto_front, &problem, ms)
+}
+
+// ---- Combinatorial comparison runners --------------------------------------
+
+fn run_tsp_comparison() {
+    println!();
+    println!("== TSP ring-{TSP_CITIES} ({TSP_BUDGET} evals/run × {SEEDS} seeds) ==");
+    println!(
+        "{TSP_CITIES} equally-spaced cities on the unit circle; minimize the closed tour length."
+    );
+    println!(
+        "The space is ({TSP_CITIES}-1)!/2 distinct tours, but cities in convex position have no"
+    );
+    println!("2-opt local optima -- so this instance cleanly separates methods with good");
+    println!("neighbourhood moves (inversion = 2-opt) from blind recombination / sampling.");
+    println!(
+        "Known optimum (the polygon perimeter): {:.4}",
+        RingTsp::optimal_length()
+    );
+    println!("sorted best-first by tour length (lower is better)");
+    println!();
+
+    type Runner = fn(u64) -> SoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", tsp_random),
+        ("HillClimber", tsp_hill_climber),
+        ("SimulatedAnneal", tsp_simulated_annealing),
+        ("TabuSearch", tsp_tabu_search),
+        ("GA", tsp_genetic_algorithm),
+        ("AntColony", tsp_ant_colony),
+    ];
+
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
+    for (name, runner) in runners {
+        let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
+        let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+        let (b_m, b_s) = mean_std(&best);
+        let (ms_m, _) = mean_std(&ms);
+        rows.push((
+            b_m,
+            vec![
+                name.to_string(),
+                format!("{b_m:.4}+/-{b_s:.4}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
+    }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "tour length", "ms"], &table);
+}
+
+fn run_jss_comparison() {
+    println!();
+    println!("== JSS FT06 ({JSS_BUDGET} evals/run × {SEEDS} seeds) ==");
+    println!("Fisher & Thompson 1963 6-job × 6-machine job-shop; minimize makespan.");
+    println!("Hard because every job has a fixed machine order, so swapping two");
+    println!(
+        "operations can ripple delays across the whole schedule. Known optimum: {FT06_OPTIMAL_MAKESPAN:.0}"
+    );
+    println!("sorted best-first by makespan (lower is better)");
+    println!();
+
+    type Runner = fn(u64) -> SoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", jss_random),
+        ("HillClimber", jss_hill_climber),
+        ("SimulatedAnneal", jss_simulated_annealing),
+        ("TabuSearch", jss_tabu_search),
+        ("GA", jss_genetic_algorithm),
+    ];
+
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
+    for (name, runner) in runners {
+        let runs: Vec<SoRun> = (0..SEEDS).map(runner).collect();
+        let best: Vec<f64> = runs.iter().map(|r| r.best_value).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+        let (b_m, b_s) = mean_std(&best);
+        let (ms_m, _) = mean_std(&ms);
+        rows.push((
+            b_m,
+            vec![
+                name.to_string(),
+                format!("{b_m:.4}+/-{b_s:.4}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
+    }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "makespan", "ms"], &table);
+}
+
+fn run_knapsack_comparison() {
+    println!();
+    println!(
+        "== Knapsack ({KNAPSACK_N} items, bi-objective, {KNAPSACK_BUDGET} evals/run × {SEEDS} seeds) =="
+    );
+    println!("Zitzler-Thiele style 0/1 knapsack: two profit vectors, one capacity");
+    println!("(half the total weight). Hard because the two profit objectives");
+    println!("conflict and the capacity constraint carves feasible regions out of");
+    println!("the 2^{KNAPSACK_N} bitstrings. No closed-form optimum; scored by hypervolume");
+    println!("vs reference {KNAPSACK_REFERENCE:?} (higher is better).");
+    println!("sorted best-first by hypervolume");
+    println!();
+
+    type Runner = fn(u64) -> KnapRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", knapsack_random),
+        ("NSGA-II", knapsack_nsga2),
+        ("SPEA2", knapsack_spea2),
+        ("NSGA-III", knapsack_nsga3),
+        ("IBEA", knapsack_ibea),
+    ];
+
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
+    for (name, runner) in runners {
+        let runs: Vec<KnapRun> = (0..SEEDS).map(runner).collect();
+        let hv: Vec<f64> = runs.iter().map(|r| r.hypervolume).collect();
+        let fs: Vec<f64> = runs.iter().map(|r| r.front_size as f64).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+        let (hv_m, hv_s) = mean_std(&hv);
+        let (fs_m, _) = mean_std(&fs);
+        let (ms_m, _) = mean_std(&ms);
+        rows.push((
+            hv_m,
+            vec![
+                name.to_string(),
+                format!("{hv_m:.1}+/-{hv_s:.1}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
+    }
+    rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "hypervolume", "front", "ms"], &table);
 }
 
 fn main() {
@@ -1974,4 +2831,7 @@ fn main() {
     run_rastrigin_comparison();
     run_rosenbrock_comparison();
     run_ackley_comparison();
+    run_tsp_comparison();
+    run_jss_comparison();
+    run_knapsack_comparison();
 }

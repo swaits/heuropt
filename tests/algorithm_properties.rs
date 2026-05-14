@@ -1307,3 +1307,751 @@ fn umda_algorithm_info_is_correct() {
     assert_eq!(opt.full_name(), "Univariate Marginal Distribution Algorithm");
     assert_eq!(opt.seed(), Some(42));
 }
+
+// -----------------------------------------------------------------------------
+// run_async ↔ run parity sweep
+// -----------------------------------------------------------------------------
+//
+// Every algorithm exposes both `run` and `run_async` (the latter behind the
+// `async` feature). Before this sweep, nothing exercised `run_async`, so a
+// `cargo mutants` run survived essentially every mutation to its body —
+// "replace run_async with OptimizationResult::new()", every comparison flip,
+// every += → -= inside the async loop. This sweep asserts that with the
+// same Config + seed + problem, the async runner produces *identical*
+// best.evaluation.objectives as the sync runner. The two implementations
+// share the algorithmic logic; only the evaluation dispatch differs.
+//
+// Hyperband uses AsyncPartialProblem (multi-fidelity) instead of
+// AsyncProblem, so it gets its own test fixture below.
+
+#[cfg(feature = "async")]
+mod async_parity {
+    use super::*;
+    use heuropt::core::async_problem::{AsyncPartialProblem, AsyncProblem};
+    use heuropt::core::partial_problem::PartialProblem;
+
+    // ---- Async-capable test fixtures ----------------------------------------
+
+    impl AsyncProblem for Sphere1D {
+        type Decision = Vec<f64>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as Problem>::objectives(self)
+        }
+        async fn evaluate_async(&self, x: &Vec<f64>) -> Evaluation {
+            <Self as Problem>::evaluate(self, x)
+        }
+    }
+
+    impl AsyncProblem for SchafferN1 {
+        type Decision = Vec<f64>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as Problem>::objectives(self)
+        }
+        async fn evaluate_async(&self, x: &Vec<f64>) -> Evaluation {
+            <Self as Problem>::evaluate(self, x)
+        }
+    }
+
+    impl AsyncProblem for OneMax {
+        type Decision = Vec<bool>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as Problem>::objectives(self)
+        }
+        async fn evaluate_async(&self, x: &Vec<bool>) -> Evaluation {
+            <Self as Problem>::evaluate(self, x)
+        }
+    }
+
+    /// Tiny TSP fixture for AntColonyTsp parity (the algorithm requires
+    /// a Vec<usize> decision type).
+    struct TinyTsp {
+        dist: Vec<Vec<f64>>,
+    }
+    impl TinyTsp {
+        fn new() -> Self {
+            // 4-city symmetric Euclidean distances; small enough for ACO to
+            // converge identically across sync/async.
+            Self {
+                dist: vec![
+                    vec![0.0, 1.0, 2.0, 3.0],
+                    vec![1.0, 0.0, 4.0, 5.0],
+                    vec![2.0, 4.0, 0.0, 6.0],
+                    vec![3.0, 5.0, 6.0, 0.0],
+                ],
+            }
+        }
+        fn length(&self, tour: &[usize]) -> f64 {
+            let n = tour.len();
+            let mut total = 0.0;
+            for i in 0..n {
+                total += self.dist[tour[i]][tour[(i + 1) % n]];
+            }
+            total
+        }
+    }
+    impl Problem for TinyTsp {
+        type Decision = Vec<usize>;
+        fn objectives(&self) -> ObjectiveSpace {
+            ObjectiveSpace::new(vec![Objective::minimize("length")])
+        }
+        fn evaluate(&self, t: &Vec<usize>) -> Evaluation {
+            Evaluation::new(vec![self.length(t)])
+        }
+    }
+    impl AsyncProblem for TinyTsp {
+        type Decision = Vec<usize>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as Problem>::objectives(self)
+        }
+        async fn evaluate_async(&self, t: &Vec<usize>) -> Evaluation {
+            <Self as Problem>::evaluate(self, t)
+        }
+    }
+
+    /// Trivial integer problem for TabuSearch — minimize |x|.
+    struct AbsInt;
+    impl Problem for AbsInt {
+        type Decision = Vec<i32>;
+        fn objectives(&self) -> ObjectiveSpace {
+            ObjectiveSpace::new(vec![Objective::minimize("absx")])
+        }
+        fn evaluate(&self, x: &Vec<i32>) -> Evaluation {
+            Evaluation::new(vec![x[0].unsigned_abs() as f64])
+        }
+    }
+    impl AsyncProblem for AbsInt {
+        type Decision = Vec<i32>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as Problem>::objectives(self)
+        }
+        async fn evaluate_async(&self, x: &Vec<i32>) -> Evaluation {
+            <Self as Problem>::evaluate(self, x)
+        }
+    }
+
+    /// Multi-fidelity wrapper for Hyperband — ignores the budget (problem
+    /// is noise-free) and returns Sphere1D's evaluation.
+    struct Sphere1DPartial;
+    impl PartialProblem for Sphere1DPartial {
+        type Decision = Vec<f64>;
+        fn objectives(&self) -> ObjectiveSpace {
+            ObjectiveSpace::new(vec![Objective::minimize("f")])
+        }
+        fn evaluate_at_budget(&self, x: &Vec<f64>, _budget: f64) -> Evaluation {
+            Evaluation::new(vec![x[0] * x[0]])
+        }
+    }
+    impl AsyncPartialProblem for Sphere1DPartial {
+        type Decision = Vec<f64>;
+        fn objectives(&self) -> ObjectiveSpace {
+            <Self as PartialProblem>::objectives(self)
+        }
+        async fn evaluate_at_budget_async(
+            &self,
+            x: &Vec<f64>,
+            budget: f64,
+        ) -> Evaluation {
+            <Self as PartialProblem>::evaluate_at_budget(self, x, budget)
+        }
+    }
+
+    fn objectives_of<D>(r: &OptimizationResult<D>) -> Vec<f64> {
+        r.best
+            .as_ref()
+            .map(|c| c.evaluation.objectives.clone())
+            .unwrap_or_default()
+    }
+
+    // ---- Per-algorithm parity tests -----------------------------------------
+
+    #[tokio::test]
+    async fn random_search_async_matches_sync() {
+        let cfg = RandomSearchConfig { iterations: 8, batch_size: 1, seed: 42 };
+        let mut a = RandomSearch::new(cfg.clone(), so_bounds());
+        let mut b = RandomSearch::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn hill_climber_async_matches_sync() {
+        let cfg = HillClimberConfig { iterations: 8, seed: 42 };
+        let mut a = HillClimber::new(cfg.clone(), so_bounds(), GaussianMutation { sigma: 0.1 });
+        let mut b = HillClimber::new(cfg, so_bounds(), GaussianMutation { sigma: 0.1 });
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn one_plus_one_es_async_matches_sync() {
+        let cfg = OnePlusOneEsConfig {
+            iterations: 8,
+            initial_sigma: 0.5,
+            adaptation_period: 4,
+            step_increase: 1.5,
+            seed: 42,
+        };
+        let mut a = OnePlusOneEs::new(cfg.clone(), so_bounds());
+        let mut b = OnePlusOneEs::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn simulated_annealing_async_matches_sync() {
+        let cfg = SimulatedAnnealingConfig {
+            iterations: 8,
+            initial_temperature: 1.0,
+            final_temperature: 0.1,
+            seed: 42,
+        };
+        let mut a = SimulatedAnnealing::new(
+            cfg.clone(),
+            so_bounds(),
+            GaussianMutation { sigma: 0.1 },
+        );
+        let mut b = SimulatedAnnealing::new(cfg, so_bounds(), GaussianMutation { sigma: 0.1 });
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn genetic_algorithm_async_matches_sync() {
+        let bounds = vec![(-3.0_f64, 3.0)];
+        let cfg = GeneticAlgorithmConfig {
+            population_size: 6,
+            generations: 3,
+            tournament_size: 2,
+            elitism: 1,
+            seed: 42,
+        };
+        let make = || {
+            GeneticAlgorithm::new(
+                cfg.clone(),
+                RealBounds::new(bounds.clone()),
+                CompositeVariation {
+                    crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+                    mutation: PolynomialMutation::new(bounds.clone(), 20.0, 1.0),
+                },
+            )
+        };
+        let r_sync = make().run(&Sphere1D);
+        let r_async = make().run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn particle_swarm_async_matches_sync() {
+        let cfg = ParticleSwarmConfig {
+            swarm_size: 6,
+            generations: 3,
+            inertia: 0.5,
+            cognitive: 1.0,
+            social: 1.0,
+            seed: 42,
+        };
+        let mut a = ParticleSwarm::new(cfg.clone(), so_bounds());
+        let mut b = ParticleSwarm::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn differential_evolution_async_matches_sync() {
+        let cfg = DifferentialEvolutionConfig {
+            population_size: 6,
+            generations: 3,
+            differential_weight: 0.5,
+            crossover_probability: 0.9,
+            seed: 42,
+        };
+        let mut a = DifferentialEvolution::new(cfg.clone(), so_bounds());
+        let mut b = DifferentialEvolution::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn cma_es_async_matches_sync() {
+        let cfg = CmaEsConfig {
+            population_size: 6,
+            generations: 3,
+            initial_sigma: 0.5,
+            eigen_decomposition_period: 1,
+            initial_mean: None,
+            seed: 42,
+        };
+        let mut a = CmaEs::new(cfg.clone(), so_bounds());
+        let mut b = CmaEs::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn ipop_cma_es_async_matches_sync() {
+        let cfg = IpopCmaEsConfig {
+            initial_population_size: 4,
+            total_generations: 6,
+            initial_sigma: 0.5,
+            eigen_decomposition_period: 1,
+            stall_generations: None,
+            seed: 42,
+        };
+        let mut a = IpopCmaEs::new(cfg.clone(), so_bounds());
+        let mut b = IpopCmaEs::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn separable_nes_async_matches_sync() {
+        let cfg = SeparableNesConfig {
+            population_size: 6,
+            generations: 3,
+            initial_sigma: 0.5,
+            mean_learning_rate: 1.0,
+            sigma_learning_rate: Some(0.1),
+            seed: 42,
+        };
+        let mut a = SeparableNes::new(cfg.clone(), so_bounds());
+        let mut b = SeparableNes::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn tlbo_async_matches_sync() {
+        let cfg = TlboConfig { population_size: 6, generations: 3, seed: 42 };
+        let mut a = Tlbo::new(cfg.clone(), so_bounds());
+        let mut b = Tlbo::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn nelder_mead_async_matches_sync() {
+        let cfg = NelderMeadConfig { iterations: 8, ..NelderMeadConfig::default() };
+        let mut a = NelderMead::new(cfg.clone(), so_bounds());
+        let mut b = NelderMead::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn bayesian_opt_async_matches_sync() {
+        let cfg = BayesianOptConfig {
+            initial_samples: 3,
+            iterations: 2,
+            length_scales: None,
+            signal_variance: 1.0,
+            noise_variance: 1e-3,
+            acquisition_samples: 8,
+            seed: 42,
+        };
+        let mut a = BayesianOpt::new(cfg.clone(), so_bounds());
+        let mut b = BayesianOpt::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn tpe_async_matches_sync() {
+        let cfg = TpeConfig {
+            initial_samples: 3,
+            iterations: 2,
+            good_fraction: 0.25,
+            candidate_samples: 8,
+            bandwidth_factor: 0.1,
+            seed: 42,
+        };
+        let mut a = Tpe::new(cfg.clone(), so_bounds());
+        let mut b = Tpe::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1D);
+        let r_async = b.run_async(&Sphere1D, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    // --- Multi-objective: best-comparison falls back to pareto front size ----
+    //
+    // For multi-objective algorithms, `best` is only meaningful as
+    // `best_by_some_scalarization`. We compare the sorted Pareto-front
+    // objective tuples instead.
+
+    fn front_objectives<D>(r: &OptimizationResult<D>) -> Vec<Vec<f64>> {
+        let mut front: Vec<Vec<f64>> = r
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        front.sort_by(|a, b| {
+            for (x, y) in a.iter().zip(b.iter()) {
+                match x.partial_cmp(y) {
+                    Some(std::cmp::Ordering::Equal) => continue,
+                    Some(ord) => return ord,
+                    None => return std::cmp::Ordering::Equal,
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        front
+    }
+
+    #[tokio::test]
+    async fn nsga2_async_matches_sync() {
+        let make = || {
+            Nsga2::new(
+                Nsga2Config { population_size: 8, generations: 3, seed: 42 },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn nsga3_async_matches_sync() {
+        let make = || {
+            Nsga3::new(
+                Nsga3Config {
+                    population_size: 8,
+                    generations: 3,
+                    reference_divisions: 4,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn spea2_async_matches_sync() {
+        let make = || {
+            Spea2::new(
+                Spea2Config {
+                    population_size: 8,
+                    archive_size: 4,
+                    generations: 3,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn moead_async_matches_sync() {
+        let make = || {
+            Moead::new(
+                MoeadConfig {
+                    generations: 3,
+                    reference_divisions: 4,
+                    neighborhood_size: 2,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn mopso_async_matches_sync() {
+        let make = || {
+            Mopso::new(
+                MopsoConfig {
+                    swarm_size: 6,
+                    generations: 3,
+                    archive_size: 4,
+                    inertia: 0.5,
+                    cognitive: 1.0,
+                    social: 1.0,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn ibea_async_matches_sync() {
+        let make = || {
+            Ibea::new(
+                IbeaConfig {
+                    population_size: 8,
+                    generations: 3,
+                    kappa: 0.05,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn sms_emoa_async_matches_sync() {
+        let make = || {
+            SmsEmoa::new(
+                SmsEmoaConfig {
+                    population_size: 8,
+                    generations: 3,
+                    reference_point: vec![100.0, 100.0],
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn hype_async_matches_sync() {
+        let make = || {
+            Hype::new(
+                HypeConfig {
+                    population_size: 8,
+                    generations: 3,
+                    reference_point: vec![10.0, 10.0],
+                    mc_samples: 4,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn pesa_ii_async_matches_sync() {
+        let make = || {
+            PesaII::new(
+                PesaIIConfig {
+                    population_size: 8,
+                    archive_size: 4,
+                    generations: 3,
+                    grid_divisions: 4,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn epsilon_moea_async_matches_sync() {
+        let make = || {
+            EpsilonMoea::new(
+                EpsilonMoeaConfig {
+                    population_size: 8,
+                    evaluations: 12,
+                    epsilon: vec![0.1, 0.1],
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn age_moea_async_matches_sync() {
+        let make = || {
+            AgeMoea::new(
+                AgeMoeaConfig { population_size: 8, generations: 3, seed: 42 },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn grea_async_matches_sync() {
+        let make = || {
+            Grea::new(
+                GreaConfig {
+                    population_size: 8,
+                    generations: 3,
+                    grid_divisions: 4,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn knea_async_matches_sync() {
+        let make = || {
+            Knea::new(
+                KneaConfig { population_size: 8, generations: 3, seed: 42 },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn rvea_async_matches_sync() {
+        let make = || {
+            Rvea::new(
+                RveaConfig {
+                    population_size: 8,
+                    generations: 3,
+                    reference_divisions: 4,
+                    alpha: 2.0,
+                    seed: 42,
+                },
+                RealBounds::new(mo_bounds()),
+                mo_variation(),
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    #[tokio::test]
+    async fn paes_async_matches_sync() {
+        let make = || {
+            Paes::new(
+                PaesConfig { iterations: 6, archive_size: 4, seed: 42 },
+                RealBounds::new(mo_bounds()),
+                GaussianMutation { sigma: 0.1 },
+            )
+        };
+        let r_sync = make().run(&SchafferN1);
+        let r_async = make().run_async(&SchafferN1, 2).await;
+        assert_eq!(front_objectives(&r_sync), front_objectives(&r_async));
+    }
+
+    // --- Binary, integer, permutation, multi-fidelity ----------------------
+
+    #[tokio::test]
+    async fn umda_async_matches_sync() {
+        let cfg = UmdaConfig {
+            bits: 4,
+            population_size: 6,
+            selected_size: 3,
+            generations: 3,
+            seed: 42,
+        };
+        let mut a = Umda::new(cfg.clone());
+        let mut b = Umda::new(cfg);
+        let problem = OneMax { bits: 4 };
+        let r_sync = a.run(&problem);
+        let r_async = b.run_async(&problem, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn ant_colony_tsp_async_matches_sync() {
+        let problem = TinyTsp::new();
+        let cfg = AntColonyTspConfig {
+            ants: 4,
+            generations: 3,
+            alpha: 1.0,
+            beta: 2.0,
+            evaporation: 0.5,
+            deposit: 1.0,
+            initial_pheromone: 1.0,
+            seed: 42,
+        };
+        let mut a = AntColonyTsp::new(cfg.clone(), problem.dist.clone());
+        let mut b = AntColonyTsp::new(cfg, problem.dist.clone());
+        let r_sync = a.run(&problem);
+        let r_async = b.run_async(&problem, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn tabu_search_async_matches_sync() {
+        struct StartAt5;
+        impl Initializer<Vec<i32>> for StartAt5 {
+            fn initialize(
+                &mut self,
+                _size: usize,
+                _rng: &mut heuropt::core::rng::Rng,
+            ) -> Vec<Vec<i32>> {
+                vec![vec![5]]
+            }
+        }
+        let neighbors = |x: &Vec<i32>, _rng: &mut heuropt::core::rng::Rng| {
+            vec![vec![x[0] - 1], vec![x[0] + 1]]
+        };
+        let cfg = TabuSearchConfig { iterations: 8, tabu_tenure: 3, seed: 42 };
+        let mut a = TabuSearch::new(cfg.clone(), StartAt5, neighbors);
+        let mut b = TabuSearch::new(cfg, StartAt5, neighbors);
+        let r_sync = a.run(&AbsInt);
+        let r_async = b.run_async(&AbsInt, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+
+    #[tokio::test]
+    async fn hyperband_async_matches_sync() {
+        let cfg = HyperbandConfig {
+            max_budget: 9.0,
+            eta: 3.0,
+            max_brackets: 2,
+            seed: 42,
+        };
+        let mut a: Hyperband<RealBounds, Vec<f64>> = Hyperband::new(cfg.clone(), so_bounds());
+        let mut b: Hyperband<RealBounds, Vec<f64>> = Hyperband::new(cfg, so_bounds());
+        let r_sync = a.run(&Sphere1DPartial);
+        let r_async = b.run_async(&Sphere1DPartial, 2).await;
+        assert_eq!(objectives_of(&r_sync), objectives_of(&r_async));
+    }
+}

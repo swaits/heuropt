@@ -507,4 +507,64 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::Objective;
+
+    fn space2() -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+    }
+
+    #[test]
+    fn box_coords_floors_each_axis() {
+        let s = space2();
+        let e = Evaluation::new(vec![2.7, 5.2]);
+        // floor(2.7 / 1.0) = 2, floor(5.2 / 2.0) = floor(2.6) = 2
+        let coords = box_coords(&e, &s, &[1.0, 2.0]);
+        assert_eq!(coords, vec![2, 2]);
+    }
+
+    #[test]
+    fn box_coords_zero_lands_in_box_zero() {
+        let s = space2();
+        let e = Evaluation::new(vec![0.0, 0.999]);
+        let coords = box_coords(&e, &s, &[1.0, 1.0]);
+        assert_eq!(coords, vec![0, 0]);
+    }
+
+    #[test]
+    fn corner_distance_is_euclidean_to_box_corner() {
+        let s = space2();
+        // Point (2.5, 5.5), box (2, 2), epsilon (1, 2):
+        // corner = (2*1, 2*2) = (2, 4). delta = (0.5, 1.5).
+        // distance = sqrt(0.25 + 2.25) = sqrt(2.5).
+        let e = Evaluation::new(vec![2.5, 5.5]);
+        let d = corner_distance(&e, &s, &[1.0, 2.0], &[2, 2]);
+        assert!((d - 2.5_f64.sqrt()).abs() < 1e-12, "d = {d}");
+    }
+
+    #[test]
+    fn corner_distance_zero_at_exact_corner() {
+        let s = space2();
+        // Point exactly at the box corner → distance 0.
+        let e = Evaluation::new(vec![2.0, 4.0]);
+        let d = corner_distance(&e, &s, &[1.0, 2.0], &[2, 2]);
+        assert!(d.abs() < 1e-12, "d = {d}");
+    }
+
+    #[test]
+    fn box_dominates_strict_and_boundary() {
+        // a strictly less on both axes → dominates.
+        assert!(box_dominates(&[1, 1], &[2, 2]));
+        // reverse → does not dominate.
+        assert!(!box_dominates(&[2, 2], &[1, 1]));
+        // equal boxes → no strict improvement → no domination.
+        assert!(!box_dominates(&[1, 1], &[1, 1]));
+        // less on one axis, equal on the other → dominates.
+        assert!(box_dominates(&[1, 2], &[2, 2]));
+        // less on one, greater on the other → no domination.
+        assert!(!box_dominates(&[1, 3], &[2, 2]));
+    }
 }

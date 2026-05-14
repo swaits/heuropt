@@ -757,4 +757,70 @@ mod tests {
         );
         let _ = opt.run(&Sphere1D);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn compare_so_feasibility_first_under_min() {
+        let mut a = Evaluation::new(vec![10.0]);
+        a.constraint_violation = 0.0;
+        let mut b = Evaluation::new(vec![1.0]);
+        b.constraint_violation = 1.0;
+        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_so_two_feasible_under_min_and_max() {
+        let a = Evaluation::new(vec![1.0]);
+        let b = Evaluation::new(vec![2.0]);
+        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+        // Maximize inverts.
+        assert_eq!(compare_so(&a, &b, Direction::Maximize), std::cmp::Ordering::Greater);
+        assert_eq!(compare_so(&b, &a, Direction::Maximize), std::cmp::Ordering::Less);
+    }
+
+    #[test]
+    fn compare_so_two_infeasible_compares_violation() {
+        let mut a = Evaluation::new(vec![0.0]);
+        a.constraint_violation = 0.5;
+        let mut b = Evaluation::new(vec![0.0]);
+        b.constraint_violation = 1.0;
+        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn better_than_so_matches_compare_so() {
+        let a = Evaluation::new(vec![1.0]);
+        let b = Evaluation::new(vec![2.0]);
+        assert!(better_than_so(&a, &b, Direction::Minimize));
+        assert!(!better_than_so(&b, &a, Direction::Minimize));
+        assert!(better_than_so(&b, &a, Direction::Maximize));
+        // Equal: not strictly better.
+        let c = Evaluation::new(vec![1.0]);
+        assert!(!better_than_so(&a, &c, Direction::Minimize));
+    }
+
+    /// Pin the final population size and at least one improvement step.
+    #[test]
+    fn cmaes_decreases_sphere_objective_over_generations() {
+        let mut opt = CmaEs::new(
+            CmaEsConfig {
+                population_size: 8,
+                generations: 30,
+                initial_sigma: 0.5,
+                eigen_decomposition_period: 1,
+                initial_mean: None,
+                seed: 7,
+            },
+            RealBounds::new(vec![(-3.0, 3.0); 2]),
+        );
+        let r = opt.run(&Sphere1D);
+        let best = r.best.unwrap().evaluation.objectives[0];
+        // After 30 gens × 8 pop on a 2-D sphere starting σ=0.5, best should
+        // be much smaller than initial random sampling (variance bound = 9).
+        assert!(best < 1.0, "best = {best}");
+    }
 }

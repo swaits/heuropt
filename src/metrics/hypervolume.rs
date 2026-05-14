@@ -279,27 +279,58 @@ fn hso_recursive(points: &[Vec<f64>], reference: &[f64]) -> f64 {
     let sub_reference: &[f64] = &reference[..last];
     let mut total = 0.0;
     let mut prev = reference[last];
-    for k in (0..order.len()).rev() {
-        let p_last = points[order[k]][last];
-        let depth = prev - p_last;
-        if depth > 0.0 {
-            let active = &projected[..=k];
-            // The 2-D base case sweeps in sorted-x order and skips any
-            // point with `y >= last_y`, which is exactly the dominance
-            // filter — so for M=3 (sub_reference len 2) we can hand
-            // `active` straight to `hso_recursive` without paying for
-            // an O(K²) `non_dominated_projection` first. For M≥4 we
-            // still need the explicit filter to keep the recursion's
-            // upper levels honest.
-            let inner = if sub_reference.len() == 2 {
-                hso_recursive(active, sub_reference)
-            } else {
-                let nd = non_dominated_projection(active);
-                hso_recursive(&nd, sub_reference)
-            };
-            total += depth * inner;
+
+    if sub_reference.len() == 2 {
+        // M == 3: the inner HV is a 2-D staircase sweep. `projected` is in
+        // last-axis order, so the active set at step `k` is the prefix
+        // `projected[..=k]`. The generic recursion re-sorts that prefix by
+        // axis 0 on every step — O(n² log n). Instead, sort the projected
+        // indices by axis 0 once and, for each `k`, sweep them skipping any
+        // whose last-axis rank exceeds `k`. The sweep visits points in the
+        // same (axis-0, then last-axis) order the stable per-prefix sort
+        // produced, so the result is bit-identical.
+        let r0 = sub_reference[0];
+        let r1 = sub_reference[1];
+        let mut x_order: Vec<usize> = (0..projected.len()).collect();
+        x_order.sort_by(|&a, &b| {
+            projected[a][0]
+                .partial_cmp(&projected[b][0])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for k in (0..order.len()).rev() {
+            let p_last = points[order[k]][last];
+            let depth = prev - p_last;
+            if depth > 0.0 {
+                let mut area = 0.0;
+                let mut last_y = r1;
+                for &pi in &x_order {
+                    if pi > k {
+                        continue;
+                    }
+                    let p = &projected[pi];
+                    if p[1] >= last_y {
+                        continue;
+                    }
+                    area += (r0 - p[0]) * (last_y - p[1]);
+                    last_y = p[1];
+                }
+                total += depth * area;
+            }
+            prev = p_last;
         }
-        prev = p_last;
+    } else {
+        // M >= 4: recurse generically, with the explicit non-dominated
+        // filter to keep the recursion's upper levels honest.
+        for k in (0..order.len()).rev() {
+            let p_last = points[order[k]][last];
+            let depth = prev - p_last;
+            if depth > 0.0 {
+                let active = &projected[..=k];
+                let nd = non_dominated_projection(active);
+                total += depth * hso_recursive(&nd, sub_reference);
+            }
+            prev = p_last;
+        }
     }
 
     total

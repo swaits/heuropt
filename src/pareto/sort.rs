@@ -62,14 +62,15 @@ pub fn non_dominated_sort<D>(
     let mut fronts: Vec<Vec<usize>> = Vec::new();
     let mut first_front: Vec<usize> = Vec::new();
 
+    // Compare each unordered pair {i, j} exactly once. The dominance
+    // relation is antisymmetric — the outcome of `compare(i, j)` fully
+    // determines `compare(j, i)` — so iterating `j > i` and applying the
+    // result in both directions does identical work in half the iterations.
     for i in 0..n {
         let ai_feasible = feasible[i];
         let ai_violation = violation[i];
         let ai = &oriented[i];
-        for j in 0..n {
-            if i == j {
-                continue;
-            }
+        for j in (i + 1)..n {
             let bi_feasible = feasible[j];
             let bi_violation = violation[j];
             // Inline the body of `pareto_compare`. We only care about
@@ -77,7 +78,7 @@ pub fn non_dominated_sort<D>(
             // are no-ops here.
             let dominates_outcome = match (ai_feasible, bi_feasible) {
                 (true, false) => Some(true),  // i dominates j
-                (false, true) => Some(false), // i is dominated
+                (false, true) => Some(false), // j dominates i
                 (false, false) => {
                     if ai_violation < bi_violation {
                         Some(true)
@@ -108,12 +109,23 @@ pub fn non_dominated_sort<D>(
                 }
             };
             match dominates_outcome {
-                Some(true) => dominates[i].push(j),
-                Some(false) => dominated_by_count[i] += 1,
+                Some(true) => {
+                    // i dominates j
+                    dominates[i].push(j);
+                    dominated_by_count[j] += 1;
+                }
+                Some(false) => {
+                    // j dominates i
+                    dominates[j].push(i);
+                    dominated_by_count[i] += 1;
+                }
                 None => {}
             }
         }
-        if dominated_by_count[i] == 0 {
+    }
+
+    for (i, &count) in dominated_by_count.iter().enumerate() {
+        if count == 0 {
             first_front.push(i);
         }
     }

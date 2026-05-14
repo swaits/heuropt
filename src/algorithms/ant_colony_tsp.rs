@@ -565,4 +565,116 @@ mod tests {
         );
         let _ = opt.run(&DummyMo);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::objective::Direction;
+    use crate::core::rng::rng_from_seed;
+
+    /// `better_than_so` follows the feasibility-first / objective-second
+    /// tournament rule. Pin each of the four feasibility-cross-product
+    /// branches so the `<` and `>` comparisons cannot flip silently.
+    #[test]
+    fn better_than_so_feasible_beats_infeasible() {
+        let mut a = Evaluation::new(vec![10.0]);
+        a.constraint_violation = 0.0; // feasible
+        let mut b = Evaluation::new(vec![1.0]);
+        b.constraint_violation = 1.0; // infeasible
+        assert!(better_than_so(&a, &b, Direction::Minimize));
+        assert!(!better_than_so(&b, &a, Direction::Minimize));
+    }
+
+    #[test]
+    fn better_than_so_two_infeasible_compares_violation() {
+        let mut a = Evaluation::new(vec![0.0]);
+        a.constraint_violation = 0.5;
+        let mut b = Evaluation::new(vec![0.0]);
+        b.constraint_violation = 1.0;
+        // a has smaller constraint_violation → "better".
+        assert!(better_than_so(&a, &b, Direction::Minimize));
+        assert!(!better_than_so(&b, &a, Direction::Minimize));
+    }
+
+    #[test]
+    fn better_than_so_two_feasible_compares_objective_under_min() {
+        let a = Evaluation::new(vec![1.0]); // feasible (default cv=0)
+        let b = Evaluation::new(vec![2.0]); // feasible
+        assert!(better_than_so(&a, &b, Direction::Minimize));
+        assert!(!better_than_so(&b, &a, Direction::Minimize));
+    }
+
+    #[test]
+    fn better_than_so_two_feasible_compares_objective_under_max() {
+        let a = Evaluation::new(vec![2.0]);
+        let b = Evaluation::new(vec![1.0]);
+        assert!(better_than_so(&a, &b, Direction::Maximize));
+        assert!(!better_than_so(&b, &a, Direction::Maximize));
+    }
+
+    #[test]
+    fn better_than_so_equal_objectives_neither_strictly_better() {
+        let a = Evaluation::new(vec![1.0]);
+        let b = Evaluation::new(vec![1.0]);
+        // Equal objectives → strict `<` is false both directions.
+        assert!(!better_than_so(&a, &b, Direction::Minimize));
+        assert!(!better_than_so(&b, &a, Direction::Minimize));
+    }
+
+    /// `build_tour` must produce a permutation of `[0..n)` starting at the
+    /// given start city. Pin both invariants across many seeds.
+    #[test]
+    fn build_tour_is_permutation_starting_at_start() {
+        let n = 6;
+        let pher = vec![vec![1.0; n]; n];
+        let eta = vec![vec![1.0; n]; n];
+        for seed in 0..20 {
+            for start in 0..n {
+                let mut rng = rng_from_seed(seed);
+                let tour = build_tour(n, start, &pher, &eta, 1.0, 2.0, &mut rng);
+                assert_eq!(tour.len(), n);
+                assert_eq!(tour[0], start, "tour must start at the given city");
+                let mut sorted = tour.clone();
+                sorted.sort();
+                let expected: Vec<usize> = (0..n).collect();
+                assert_eq!(sorted, expected, "tour must visit every city exactly once");
+            }
+        }
+    }
+
+    /// With a high `beta` and a heuristic that strongly prefers the next
+    /// city, `build_tour` chooses that next city with near-certainty.
+    /// Pins the heuristic-weighting arithmetic.
+    #[test]
+    fn build_tour_follows_strong_heuristic() {
+        let n = 4;
+        let pher = vec![vec![1.0; n]; n];
+        // Heuristic strongly favors city (i+1) % n: 1000x preferred.
+        let mut eta = vec![vec![1.0; n]; n];
+        for i in 0..n {
+            eta[i][(i + 1) % n] = 1000.0;
+        }
+        let mut rng = rng_from_seed(0);
+        let tour = build_tour(n, 0, &pher, &eta, 1.0, 5.0, &mut rng);
+        // With beta=5 and 1000× heuristic, the path 0→1→2→3 has overwhelming
+        // probability.
+        assert_eq!(tour, vec![0, 1, 2, 3]);
+    }
+
+    /// `build_tour` with zero alpha + zero beta degenerates to uniform
+    /// random over unvisited cities; the result is still a permutation.
+    #[test]
+    fn build_tour_zero_weights_still_produces_permutation() {
+        let n = 5;
+        let pher = vec![vec![1.0; n]; n];
+        let eta = vec![vec![1.0; n]; n];
+        let mut rng = rng_from_seed(42);
+        let tour = build_tour(n, 2, &pher, &eta, 0.0, 0.0, &mut rng);
+        // With alpha=beta=0, every term is 1.0 so the result is uniform but
+        // still a permutation.
+        assert_eq!(tour.len(), n);
+        assert_eq!(tour[0], 2);
+        let mut sorted = tour.clone();
+        sorted.sort();
+        assert_eq!(sorted, vec![0, 1, 2, 3, 4]);
+    }
 }

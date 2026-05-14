@@ -42,7 +42,6 @@ library_benchmark_group!(
 // (`Ir`) only, so callgrind's cache simulation is pure overhead here —
 // disabling it roughly halves each profiling run.
 main!(
-    config = LibraryBenchmarkConfig::default()
-        .tool(Callgrind::with_args(["--cache-sim=no"])),
+    config = LibraryBenchmarkConfig::default().tool(Callgrind::with_args(["--cache-sim=no"])),
     library_benchmark_groups = compare_group
 );

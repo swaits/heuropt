@@ -194,16 +194,22 @@ where
 
             let best_target = targets.iter().cloned().fold(f64::INFINITY, f64::min);
 
-            // Maximize EI by best-of-N random sampling.
+            // Maximize EI by best-of-N random sampling. `cand` and the two
+            // GP-prediction scratch buffers are reused across all samples
+            // so the inner loop allocates nothing.
             let mut best_x = sample_uniform_in_bounds(&self.bounds, &mut rng);
             let mut best_ei = -f64::INFINITY;
+            let mut cand: Vec<f64> = Vec::with_capacity(dim);
+            let mut k_star_buf: Vec<f64> = Vec::new();
+            let mut v_temp_buf: Vec<f64> = Vec::new();
             for _ in 0..self.config.acquisition_samples {
-                let cand = sample_uniform_in_bounds(&self.bounds, &mut rng);
-                let (mu, sigma) = posterior.predict(&cand);
+                sample_uniform_in_bounds_into(&self.bounds, &mut rng, &mut cand);
+                let (mu, sigma) = posterior.predict_into(&cand, &mut k_star_buf, &mut v_temp_buf);
                 let ei = expected_improvement(mu, sigma, best_target);
                 if ei > best_ei {
                     best_ei = ei;
-                    best_x = cand;
+                    best_x.clear();
+                    best_x.extend_from_slice(&cand);
                 }
             }
 
@@ -270,18 +276,23 @@ fn better(a: &Evaluation, b: &Evaluation, direction: Direction) -> bool {
     }
 }
 
+/// Sample a uniform-in-bounds point into `out` (reused across calls).
+fn sample_uniform_in_bounds_into(bounds: &RealBounds, rng: &mut Rng, out: &mut Vec<f64>) {
+    out.clear();
+    for &(lo, hi) in &bounds.bounds {
+        let v = if lo == hi {
+            lo
+        } else {
+            lo + (hi - lo) * rng.random::<f64>()
+        };
+        out.push(v);
+    }
+}
+
 fn sample_uniform_in_bounds(bounds: &RealBounds, rng: &mut Rng) -> Vec<f64> {
-    bounds
-        .bounds
-        .iter()
-        .map(|&(lo, hi)| {
-            if lo == hi {
-                lo
-            } else {
-                lo + (hi - lo) * rng.random::<f64>()
-            }
-        })
-        .collect()
+    let mut out = Vec::new();
+    sample_uniform_in_bounds_into(bounds, rng, &mut out);
+    out
 }
 
 /// Anisotropic RBF kernel: `k(x, y) = σ² · exp(-0.5 · Σ ((x_i - y_i)/ℓ_i)²)`.
@@ -333,26 +344,23 @@ impl GpPosterior {
         })
     }
 
-    fn predict(&self, x: &[f64]) -> (f64, f64) {
+    /// Predict `(mean, std)` at `x`, using caller-owned scratch buffers
+    /// (`k_star`, `v_temp`) so the hot acquisition loop allocates nothing.
+    fn predict_into(&self, x: &[f64], k_star: &mut Vec<f64>, v_temp: &mut Vec<f64>) -> (f64, f64) {
         let n = self.decisions.len();
-        let mut k_star = vec![0.0_f64; n];
-        for (i, k_star_i) in k_star.iter_mut().enumerate() {
-            *k_star_i = rbf_kernel(
-                x,
-                &self.decisions[i],
-                &self.length_scales,
-                self.signal_variance,
-            );
+        k_star.clear();
+        k_star.reserve(n);
+        for d in &self.decisions {
+            k_star.push(rbf_kernel(x, d, &self.length_scales, self.signal_variance));
         }
-        let _ = n;
         let mu: f64 = k_star
             .iter()
             .zip(self.alpha.iter())
             .map(|(a, b)| a * b)
             .sum();
-        // Var = k(x,x) - k_star^T · K^{-1} · k_star
-        // Compute K^{-1}·k_star = solve_upper_transpose(L, solve_lower(L, k_star))
-        let v_temp = crate::internal::cholesky::solve_lower(&self.chol_l, &k_star);
+        // Var = k(x,x) - k_star^T · K^{-1} · k_star; the squared norm of
+        // `solve_lower(L, k_star)` is exactly `k_star^T · K^{-1} · k_star`.
+        crate::internal::cholesky::solve_lower_into(&self.chol_l, k_star, v_temp);
         let v: f64 = v_temp.iter().map(|x| x * x).sum();
         let var = (self.signal_variance - v).max(0.0);
         (mu, var.sqrt())
@@ -496,13 +504,17 @@ impl BayesianOpt {
 
             let mut best_x = sample_uniform_in_bounds(&self.bounds, &mut rng);
             let mut best_ei = -f64::INFINITY;
+            let mut cand: Vec<f64> = Vec::with_capacity(dim);
+            let mut k_star_buf: Vec<f64> = Vec::new();
+            let mut v_temp_buf: Vec<f64> = Vec::new();
             for _ in 0..self.config.acquisition_samples {
-                let cand = sample_uniform_in_bounds(&self.bounds, &mut rng);
-                let (mu, sigma) = posterior.predict(&cand);
+                sample_uniform_in_bounds_into(&self.bounds, &mut rng, &mut cand);
+                let (mu, sigma) = posterior.predict_into(&cand, &mut k_star_buf, &mut v_temp_buf);
                 let ei = expected_improvement(mu, sigma, best_target);
                 if ei > best_ei {
                     best_ei = ei;
-                    best_x = cand;
+                    best_x.clear();
+                    best_x.extend_from_slice(&cand);
                 }
             }
 

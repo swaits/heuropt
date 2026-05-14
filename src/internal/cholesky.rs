@@ -39,17 +39,25 @@ pub(crate) fn cholesky(a: &[Vec<f64>]) -> Result<Vec<Vec<f64>>, &'static str> {
     Ok(l)
 }
 
-/// Solve `L · y = b` (forward substitution) for lower-triangular `L`.
-pub(crate) fn solve_lower(l: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
+/// Solve `L · y = b` (forward substitution) for lower-triangular `L`,
+/// writing the result into `out` (reused across calls to avoid allocating).
+pub(crate) fn solve_lower_into(l: &[Vec<f64>], b: &[f64], out: &mut Vec<f64>) {
     let n = l.len();
-    let mut y = vec![0.0_f64; n];
+    out.clear();
+    out.resize(n, 0.0);
     for i in 0..n {
         let mut sum = b[i];
         for k in 0..i {
-            sum -= l[i][k] * y[k];
+            sum -= l[i][k] * out[k];
         }
-        y[i] = sum / l[i][i];
+        out[i] = sum / l[i][i];
     }
+}
+
+/// Solve `L · y = b` (forward substitution) for lower-triangular `L`.
+pub(crate) fn solve_lower(l: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
+    let mut y = Vec::new();
+    solve_lower_into(l, b, &mut y);
     y
 }
 

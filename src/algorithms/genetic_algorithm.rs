@@ -415,4 +415,72 @@ mod tests {
         );
         let _ = opt.run(&Sphere1D);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::candidate::Candidate;
+    use crate::core::evaluation::Evaluation;
+
+    fn fc(obj: f64) -> Candidate<u32> {
+        Candidate::new(0, Evaluation::new(vec![obj]))
+    }
+    fn fc_cv(obj: f64, cv: f64) -> Candidate<u32> {
+        Candidate::new(0, Evaluation::constrained(vec![obj], cv))
+    }
+
+    #[test]
+    fn compare_for_fitness_feasibility_first() {
+        let feasible = fc(100.0);
+        let infeasible = fc_cv(0.0, 1.0);
+        assert_eq!(
+            compare_for_fitness(&feasible, &infeasible, Direction::Minimize),
+            std::cmp::Ordering::Less,
+        );
+        assert_eq!(
+            compare_for_fitness(&infeasible, &feasible, Direction::Minimize),
+            std::cmp::Ordering::Greater,
+        );
+    }
+
+    #[test]
+    fn compare_for_fitness_two_feasible_min_and_max() {
+        let lo = fc(1.0);
+        let hi = fc(2.0);
+        assert_eq!(compare_for_fitness(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(compare_for_fitness(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn compare_for_fitness_two_infeasible_lower_violation_wins() {
+        let low = fc_cv(0.0, 0.3);
+        let high = fc_cv(0.0, 0.9);
+        assert_eq!(compare_for_fitness(&low, &high, Direction::Minimize), std::cmp::Ordering::Less);
+    }
+
+    /// `survival_selection` carries `elitism` parents and `n - elitism`
+    /// offspring, each set sorted best-first. Pin the exact composition.
+    #[test]
+    fn survival_selection_keeps_elites_and_best_offspring() {
+        // Parents: objectives 5, 1, 9 → best is 1.
+        let parents = vec![fc(5.0), fc(1.0), fc(9.0)];
+        // Offspring: objectives 4, 2, 8 → best two are 2, 4.
+        let offspring = vec![fc(4.0), fc(2.0), fc(8.0)];
+        let next = survival_selection(&parents, offspring, Direction::Minimize, 3, 1);
+        assert_eq!(next.len(), 3);
+        // 1 elite (best parent = 1.0) + 2 best offspring (2.0, 4.0).
+        assert_eq!(next[0].evaluation.objectives[0], 1.0);
+        assert_eq!(next[1].evaluation.objectives[0], 2.0);
+        assert_eq!(next[2].evaluation.objectives[0], 4.0);
+    }
+
+    #[test]
+    fn survival_selection_zero_elitism_is_all_offspring() {
+        let parents = vec![fc(1.0)];
+        let offspring = vec![fc(9.0), fc(3.0)];
+        let next = survival_selection(&parents, offspring, Direction::Minimize, 2, 0);
+        assert_eq!(next.len(), 2);
+        // No elites — both slots come from offspring, best-first.
+        assert_eq!(next[0].evaluation.objectives[0], 3.0);
+        assert_eq!(next[1].evaluation.objectives[0], 9.0);
+    }
 }

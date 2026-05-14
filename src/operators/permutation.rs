@@ -372,12 +372,20 @@ fn ox_child(donor: &[usize], filler: &[usize], lo: usize, hi: usize) -> Vec<usiz
     let mut child = vec![0_usize; n];
     let segment = &donor[lo..hi];
     child[lo..hi].copy_from_slice(segment);
+    // Membership bitmap for the donor segment. OX operates on strict
+    // permutations of 0..n, so a value-indexed bitmap replaces the
+    // O(segment) `contains` scan inside the fill loop with an O(1) check.
+    let mut in_segment = vec![false; n];
+    for &v in segment {
+        debug_assert!(v < n, "OrderCrossover requires strict permutations of 0..n");
+        in_segment[v] = true;
+    }
     let mut fill_pos = hi % n;
     let mut filler_pos = hi % n;
     let mut placed = hi - lo;
     while placed < n {
         let v = filler[filler_pos];
-        if !segment.contains(&v) {
+        if !in_segment[v] {
             child[fill_pos] = v;
             fill_pos = (fill_pos + 1) % n;
             placed += 1;
@@ -452,16 +460,29 @@ fn pmx_child(donor: &[usize], base: &[usize], lo: usize, hi: usize) -> Vec<usize
     // Start from a copy of `base`; for each position k in [lo, hi), swap so
     // that child[k] == donor[k]. Each swap preserves the permutation.
     let mut child = base.to_vec();
+    let n = child.len();
+    // pos[value] = current index of that value in `child`. PMX operates on
+    // strict permutations of 0..n, so this value-indexed table replaces the
+    // O(n) `position` scan with an O(1) lookup, kept in sync across swaps.
+    let mut pos = vec![0_usize; n];
+    for (i, &v) in child.iter().enumerate() {
+        debug_assert!(
+            v < n,
+            "PartiallyMappedCrossover requires strict permutations of 0..n",
+        );
+        pos[v] = i;
+    }
     for k in lo..hi {
         let v = donor[k];
         if child[k] == v {
             continue;
         }
-        let cur = child
-            .iter()
-            .position(|&x| x == v)
-            .expect("permutation invariant: every value must appear");
+        let cur = pos[v];
+        let displaced = child[k];
         child.swap(k, cur);
+        // child[k] is now `v`; child[cur] is now `displaced`.
+        pos[v] = k;
+        pos[displaced] = cur;
     }
     child
 }

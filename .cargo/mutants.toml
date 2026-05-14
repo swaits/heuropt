@@ -5,12 +5,36 @@
 #   cargo mutants                          # full sweep (slow)
 #   cargo mutants --in-diff HEAD~1         # only mutate recently-changed lines
 #
+# IMPORTANT: pass `--all-features` (or at least `--features async,serde`).
+# Without them the async `run_async` paths and the `explorer` module are
+# not compiled, so their mutants come back as unviable/missed noise rather
+# than being exercised by the test suite.
+#
+# Note: `--test-tool nextest` does not accept the libtest-style
+# `--test-threads=1` set below; for a nextest run pass `--no-config` (and
+# re-add `--all-features` / the `--file` filters you need on the CLI).
+#
 # A *surviving* mutation = the test suite passed despite a code change,
 # which usually means a missing test or a missing invariant.
 #
 # This isn't gated CI; it's an advisory tool. The property tests in
-# tests/properties.rs are the natural place to land new invariants
-# discovered via mutation runs.
+# tests/properties.rs and the per-algorithm exact-output snapshot tests
+# in tests/algorithm_properties.rs are the natural places to land new
+# invariants discovered via mutation runs.
+#
+# Mutation-coverage notes (2026-05 campaign — catch rate ~74% -> ~85%):
+#   - tests/algorithm_properties.rs pins an exact final-population
+#     snapshot for every algorithm at a fixed seed. Those snapshots use
+#     deliberately *hard* fixtures (3-D Rosenbrock, an 8-city scattered
+#     TSP, a budget-sensitive multi-fidelity problem): on convex /
+#     trivially-solved problems the optimizers converge to the same
+#     answer regardless of arithmetic mutations, which hides them.
+#   - The residual MISSED mutants are dominated by (a) equivalent
+#     mutants — e.g. `<` vs `<=` at a boundary the inputs never hit —
+#     and (b) arithmetic the optimizers are mathematically robust to.
+#   - TIMEOUT mutants here are loop-bound mutations that make an
+#     offspring-collection loop non-terminating; cargo-mutants reports
+#     those *as detected*, in their own category separate from MISSED.
 
 # Files to skip mutating. We skip:
 #   - examples (illustrative, not core algorithm correctness)

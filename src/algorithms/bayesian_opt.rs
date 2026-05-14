@@ -623,4 +623,138 @@ mod tests {
         );
         let _ = opt.run(&Sphere1D);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+    //
+    // BayesianOpt's GP / EI machinery has many pure helpers (rbf_kernel,
+    // expected_improvement, normal_pdf/cdf, erf, oriented_target, better).
+    // The tests below pin their exact numerical outputs.
+
+    #[test]
+    fn rbf_kernel_x_equals_y_is_signal_variance() {
+        let x = vec![0.5_f64, -1.0, 2.0];
+        let lengths = vec![1.0_f64; 3];
+        assert!((rbf_kernel(&x, &x, &lengths, 1.5) - 1.5).abs() < 1e-12);
+        // Different signal variance scales the result.
+        assert!((rbf_kernel(&x, &x, &lengths, 4.0) - 4.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rbf_kernel_unit_distance_unit_length() {
+        // k = exp(-0.5 * (1)^2) = exp(-0.5) ≈ 0.6065
+        let got = rbf_kernel(&[0.0], &[1.0], &[1.0], 1.0);
+        let expected = (-0.5_f64).exp();
+        assert!((got - expected).abs() < 1e-12, "got {got}, expected {expected}");
+    }
+
+    #[test]
+    fn rbf_kernel_far_points_approach_zero() {
+        let got = rbf_kernel(&[0.0], &[100.0], &[1.0], 1.0);
+        assert!((0.0..1e-12).contains(&got), "got {got}");
+    }
+
+    #[test]
+    fn rbf_kernel_length_scale_widens_kernel() {
+        // Same distance, larger length scale → larger kernel value.
+        let small_l = rbf_kernel(&[0.0], &[1.0], &[1.0], 1.0);
+        let large_l = rbf_kernel(&[0.0], &[1.0], &[10.0], 1.0);
+        assert!(large_l > small_l, "small_l={small_l} large_l={large_l}");
+    }
+
+    #[test]
+    fn normal_pdf_at_zero_is_inverse_sqrt_2pi() {
+        let got = normal_pdf(0.0);
+        let expected = 1.0 / (2.0 * std::f64::consts::PI).sqrt();
+        assert!((got - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn normal_pdf_symmetric_about_zero() {
+        for z in [0.5_f64, 1.0, 2.5] {
+            assert!((normal_pdf(z) - normal_pdf(-z)).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn normal_cdf_at_zero_is_one_half() {
+        assert!((normal_cdf(0.0) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn normal_cdf_sums_to_one_at_symmetric_points() {
+        for z in [0.5_f64, 1.0, 2.5] {
+            let s = normal_cdf(z) + normal_cdf(-z);
+            assert!((s - 1.0).abs() < 1e-9, "z={z} sum={s}");
+        }
+    }
+
+    #[test]
+    fn erf_zero_is_zero() {
+        // The Numerical-Recipes-style rational approximation has ~1e-7 accuracy.
+        assert!(erf(0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn erf_odd_function() {
+        for x in [0.1_f64, 0.5, 1.0, 2.0] {
+            assert!((erf(x) + erf(-x)).abs() < 1e-9, "x={x}");
+        }
+    }
+
+    #[test]
+    fn expected_improvement_zero_sigma_is_zero() {
+        assert_eq!(expected_improvement(0.0, 0.0, 1.0), 0.0);
+        assert_eq!(expected_improvement(-5.0, 1e-13, 1.0), 0.0);
+    }
+
+    #[test]
+    fn expected_improvement_grows_with_sigma() {
+        // At μ = f_best, EI is proportional to σ.
+        let lo = expected_improvement(1.0, 0.1, 1.0);
+        let hi = expected_improvement(1.0, 1.0, 1.0);
+        assert!(hi > lo, "lo={lo} hi={hi}");
+    }
+
+    #[test]
+    fn expected_improvement_positive_when_mu_below_fbest() {
+        // μ < f_best means improvement is expected → EI > 0.
+        let ei = expected_improvement(0.5, 0.5, 1.0);
+        assert!(ei > 0.0, "ei = {ei}");
+    }
+
+    #[test]
+    fn oriented_target_flips_sign_under_maximize() {
+        let e = Evaluation::new(vec![3.0]);
+        assert!((oriented_target(&e, Direction::Minimize) - 3.0).abs() < 1e-12);
+        assert!((oriented_target(&e, Direction::Maximize) - (-3.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn oriented_target_penalizes_infeasible() {
+        let mut e = Evaluation::new(vec![1.0]);
+        e.constraint_violation = 0.5;
+        // base 1.0 + 1e6 * 0.5 = 500001.0
+        let got = oriented_target(&e, Direction::Minimize);
+        assert!((got - 500_001.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn better_helper_feasibility_first() {
+        let mut a = Evaluation::new(vec![10.0]);
+        a.constraint_violation = 0.0;
+        let mut b = Evaluation::new(vec![1.0]);
+        b.constraint_violation = 1.0;
+        assert!(better(&a, &b, Direction::Minimize));
+        assert!(!better(&b, &a, Direction::Minimize));
+    }
+
+    #[test]
+    fn better_helper_two_feasible_under_min_and_max() {
+        let a = Evaluation::new(vec![1.0]);
+        let b = Evaluation::new(vec![2.0]);
+        assert!(better(&a, &b, Direction::Minimize));
+        assert!(!better(&b, &a, Direction::Minimize));
+        assert!(better(&b, &a, Direction::Maximize));
+        assert!(!better(&a, &b, Direction::Maximize));
+    }
 }

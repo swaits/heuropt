@@ -19,9 +19,11 @@ pub use crate::pareto::{
 };
 
 pub use crate::operators::{
-    BitFlipMutation, BoundedGaussianMutation, ClampToBounds, CompositeVariation, GaussianMutation,
-    LevyMutation, PolynomialMutation, ProjectToSimplex, RealBounds, SimulatedBinaryCrossover,
-    SwapMutation,
+    BitFlipMutation, BoundedGaussianMutation, ClampToBounds, CompositeVariation, CycleCrossover,
+    EdgeRecombinationCrossover, GaussianMutation, InsertionMutation, InversionMutation,
+    LevyMutation, OrderCrossover, PartiallyMappedCrossover, PolynomialMutation, ProjectToSimplex,
+    RealBounds, ScrambleMutation, ShuffledMultisetPermutation, ShuffledPermutation,
+    SimulatedBinaryCrossover, SwapMutation,
 };
 
 pub use crate::algorithms::{

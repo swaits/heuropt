@@ -60,10 +60,17 @@ dominated gaps between them.
 
 | algorithm | hypervolume ↑       | spacing ↓       | front | ms  |
 |---|---|---|---|---|
-| **IBEA**  | **126.2072 ± 1.2280** | 0.0164 ± 0.0036 | 48  | 131 |
-| MOEA/D    | 125.2413 ± 2.1647   | 0.0198 ± 0.0043 | 92    | 27  |
-| NSGA-II   | 123.1826 ± 1.5829   | **0.0092 ± 0.0020** | 98 | 40  |
-| AGE-MOEA  | 119.5132 ± 1.2732   | 0.0136 ± 0.0023 | 90    | 171 |
+| **IBEA**  | **126.2072 ± 1.2280** | 0.0164 ± 0.0036 | 48  | 126 |
+| MOEA/D    | 125.2413 ± 2.1647   | 0.0198 ± 0.0043 | 92    | 26  |
+| NSGA-II   | 123.1826 ± 1.5829   | **0.0092 ± 0.0020** | 98 | 39  |
+| AGE-MOEA  | 119.5132 ± 1.2732   | 0.0136 ± 0.0023 | 90    | 170 |
+| KnEA      | 117.2180 ± 0.7027   | 0.0147 ± 0.0049 | 79    | 32  |
+
+The **geometry-aware methods finish last** on the disconnected front:
+AGE-MOEA and KnEA both trail the dominance- and decomposition-based
+methods. Estimating a single front geometry — or chasing knee points —
+doesn't help when the front is in pieces; IBEA's indicator-based
+selection wins here.
 
 ## DTLZ2 (3-obj, dim=12, 30000 evals/run × 10 seeds)
 

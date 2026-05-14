@@ -412,10 +412,13 @@ START
      │    │         → GA with BitFlipMutation +
      │    │           a bit-string crossover
      │    │
-     │    ├─ Decision is Vec<usize> (permutation, e.g., TSP)
-     │    │     → Ant Colony (with a distance matrix)
-     │    │     → Tabu Search (with your own neighbor function)
-     │    │     → Simulated Annealing with SwapMutation
+     │    ├─ Decision is Vec<usize> (permutation: TSP, JSS, …)
+     │    │     → Ant Colony (TSP, with a distance matrix)
+     │    │     → Simulated Annealing / Tabu Search (strong on
+     │    │        sequencing — they win the harness TSP and JSS
+     │    │        tables — you supply the neighbour move)
+     │    │     → GA + permutation toolkit (ERX for TSP-shaped
+     │    │        instances)
      │    │
      │    └─ Custom decision type (a struct, a tree, …)
      │          → Simulated Annealing or Hill Climber
@@ -448,10 +451,14 @@ START
      │    ├─ Want decomposition / weight-vector style
      │    │     → MOEA/D   (very fast per generation, scales well)
      │    │
-     │    ├─ Disconnected or non-convex front
+     │    ├─ Disconnected front (separate arcs, e.g. ZDT3)
+     │    │     → IBEA     (wins ZDT3 hypervolume on the harness;
+     │    │                 MOEA/D and NSGA-II follow. Geometry-aware
+     │    │                 methods trail when the front is in pieces)
+     │    │
+     │    ├─ Non-convex but *contiguous* front
      │    │     → AGE-MOEA (estimates front geometry adaptively)
      │    │     → KnEA     (favors knee points)
-     │    │     → IBEA
      │    │
      │    ├─ Want region-based diversity
      │    │     → PESA-II  (grid hyperboxes drive selection)

@@ -104,9 +104,9 @@ optimizer or with the problem).
 | `Vec<bool>` | [GA][GeneticAlgorithm] + [`BitFlipMutation`] | When bit interactions matter. |
 | `Vec<usize>` (permutation) | [Ant Colony][AntColonyTsp] | TSP-style with a distance matrix. |
 | `Vec<usize>` (permutation) | [GA][GeneticAlgorithm] + [`ShuffledPermutation`] + [`OrderCrossover`] + [`InversionMutation`] | Generic permutation GA; use [`EdgeRecombinationCrossover`] for TSP-shaped instances. |
-| `Vec<usize>` (JSS multiset) | [GA][GeneticAlgorithm] + [`ShuffledMultisetPermutation`] + local POX + [`InversionMutation`] | Operation-string encoding; see [Optimize a permutation](./cookbook/permutation.md). |
-| `Vec<usize>` (permutation) | [Simulated Annealing][SimulatedAnnealing] + [`SwapMutation`] | One-decision baseline. |
-| `Vec<usize>` or custom | [Tabu Search][TabuSearch] | You supply the neighbor function. |
+| `Vec<usize>` (JSS multiset) | [Simulated Annealing][SimulatedAnnealing] / [Tabu Search][TabuSearch] with [`InsertionMutation`], or [GA][GeneticAlgorithm] + [`ShuffledMultisetPermutation`] + local POX | Operation-string encoding. On the FT06 harness the local-search pair edges out the GA — see [Optimize a permutation](./cookbook/permutation.md). |
+| `Vec<usize>` (permutation) | [Simulated Annealing][SimulatedAnnealing] + [`InversionMutation`] | Strong on sequencing, not just a baseline — wins the harness's FT06 job-shop table and ties for the TSP optimum. |
+| `Vec<usize>` or custom | [Tabu Search][TabuSearch] | You supply the neighbor function; consistently near the top on the TSP and JSS tables. |
 | Custom struct | [Simulated Annealing][SimulatedAnnealing] / [Hill Climber][HillClimber] | With your own `Variation` impl. |
 
 heuropt's permutation operator toolkit covers four crossovers
@@ -161,13 +161,23 @@ objectives.
 
 ### Disconnected or non-convex front
 
+A *disconnected* front (separate arcs, like ZDT3) and a *non-convex but
+contiguous* front are different problems — don't conflate them.
+
+For a **disconnected** front, [IBEA][Ibea] is the clear pick: on the
+harness it wins ZDT3 — the disconnected-front benchmark — outright on
+hypervolume, with [MOEA/D][Moead] and [NSGA-II][Nsga2] close behind.
+Counter-intuitively the geometry-aware methods below *trail* here:
+estimating a single front geometry or chasing knee points doesn't help
+when the front is in pieces (on ZDT3, AGE-MOEA and KnEA finish last).
+
+For a **non-convex but contiguous** front:
+
 [AGE-MOEA][AgeMoea] estimates the front geometry adaptively (the L_p
 parameter `p` is fit from data each generation).
 
 [KnEA][Knea] favors knee points — the regions of the front where small
 gains in one objective cost large losses in another.
-
-[IBEA][Ibea] also handles disconnected fronts well.
 
 ### Region-based diversity
 

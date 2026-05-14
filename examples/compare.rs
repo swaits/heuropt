@@ -1574,6 +1574,29 @@ fn zdt3_age_moea(seed: u64) -> MoRun {
     }
 }
 
+fn zdt3_knea(seed: u64) -> MoRun {
+    let problem = zdt3_problem();
+    let bounds = vec![(0.0, 1.0); ZDT3_DIM];
+    let initializer = RealBounds::new(bounds.clone());
+    let variation = CompositeVariation {
+        crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+        mutation: PolynomialMutation::new(bounds, 20.0, 1.0 / ZDT3_DIM as f64),
+    };
+    let pop = 100;
+    let config = KneaConfig {
+        population_size: pop,
+        generations: ZDT3_BUDGET / pop,
+        seed,
+    };
+    let mut opt = Knea::new(config, initializer, variation);
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
 // -----------------------------------------------------------------------------
 // DTLZ1 runners (curated many-obj subset)
 // -----------------------------------------------------------------------------
@@ -1998,6 +2021,7 @@ fn run_zdt3_comparison() {
         ("MOEA/D", zdt3_moead),
         ("IBEA", zdt3_ibea),
         ("AGE-MOEA", zdt3_age_moea),
+        ("KnEA", zdt3_knea),
     ];
     let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
     for (name, runner) in runners {

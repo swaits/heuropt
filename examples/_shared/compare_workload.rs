@@ -3163,6 +3163,174 @@ pub fn run_many_objective_comparison(title: &str, blurb: &[&str], spec: ManySpec
     print_table(&["algorithm", "mean dist", "front", "ms"], &table);
 }
 
+/// Run every algorithm runner exactly once at seed 0 — the full `compare`
+/// workload at a single seed, with no multi-seed aggregation and no
+/// printing. This is the unit of work the `compare_profile` gungraun
+/// benchmark profiles under callgrind.
+///
+/// Returns a checksum folded from every run's result so the optimizer
+/// cannot elide any runner call.
+///
+/// Must enumerate *every* runner function — `benches/compare_profile.rs`
+/// allow-lists the presentation layer, so a runner missing here would not
+/// be caught by the bench's dead-code lint (it is caught by the example
+/// build, where every runner is reachable through `run_all`).
+#[allow(dead_code)] // entry point for the compare_profile bench; unused by the example
+pub fn profile_workload() -> u64 {
+    let mut acc: u64 = 0;
+    macro_rules! mo {
+        ($run:expr) => {
+            acc = acc.wrapping_add($run.front.len() as u64);
+        };
+    }
+    macro_rules! so {
+        ($run:expr) => {
+            acc ^= $run.best_value.to_bits();
+        };
+    }
+    macro_rules! kn {
+        ($run:expr) => {{
+            let r = $run;
+            acc = acc.wrapping_add(r.front_size as u64) ^ r.hypervolume.to_bits();
+        }};
+    }
+
+    // ZDT1 — 2-objective continuous
+    mo!(zdt1_random(0));
+    mo!(zdt1_paes(0));
+    mo!(zdt1_spea2(0));
+    mo!(zdt1_nsga2(0));
+    mo!(zdt1_sms_emoa(0));
+    mo!(zdt1_hype(0));
+    mo!(zdt1_rvea(0));
+    mo!(zdt1_pesa2(0));
+    mo!(zdt1_epsilon_moea(0));
+    mo!(zdt1_mopso(0));
+    mo!(zdt1_ibea(0));
+    mo!(zdt1_moead(0));
+    mo!(zdt1_nsga3(0));
+
+    // DTLZ2 — 3-objective continuous
+    mo!(dtlz2_random(0));
+    mo!(dtlz2_nsga2(0));
+    mo!(dtlz2_spea2(0));
+    mo!(dtlz2_sms_emoa(0));
+    mo!(dtlz2_hype(0));
+    mo!(dtlz2_rvea(0));
+    mo!(dtlz2_pesa2(0));
+    mo!(dtlz2_epsilon_moea(0));
+    mo!(dtlz2_mopso(0));
+    mo!(dtlz2_ibea(0));
+    mo!(dtlz2_moead(0));
+    mo!(dtlz2_nsga3(0));
+
+    // Rastrigin — single-objective multimodal
+    so!(rastrigin_random(0));
+    so!(rastrigin_paes(0));
+    so!(rastrigin_nsga2(0));
+    so!(rastrigin_de(0));
+    so!(rastrigin_hill_climber(0));
+    so!(rastrigin_simulated_annealing(0));
+    so!(rastrigin_genetic_algorithm(0));
+    so!(rastrigin_particle_swarm(0));
+    so!(rastrigin_cma_es(0));
+    so!(rastrigin_ipop_cma_es(0));
+    so!(rastrigin_one_plus_one_es(0));
+
+    // Rosenbrock + Ackley — single-objective smooth / multimodal
+    so!(rosenbrock_nelder_mead(0));
+    so!(rosenbrock_one_plus_one_es(0));
+    so!(rosenbrock_bo(0));
+    so!(ackley_bo(0));
+    so!(rosenbrock_de(0));
+    so!(rosenbrock_cma(0));
+    so!(rosenbrock_pso(0));
+    so!(rosenbrock_tlbo(0));
+    so!(ackley_de(0));
+    so!(ackley_cma(0));
+    so!(ackley_pso(0));
+    so!(ackley_tlbo(0));
+
+    // ZDT3 — 2-objective, disconnected front
+    mo!(zdt3_nsga2(0));
+    mo!(zdt3_moead(0));
+    mo!(zdt3_ibea(0));
+    mo!(zdt3_age_moea(0));
+    mo!(zdt3_knea(0));
+
+    // DTLZ1 — 3-objective, linear simplex
+    mo!(dtlz1_nsga3(0));
+    mo!(dtlz1_moead(0));
+    mo!(dtlz1_age_moea(0));
+    mo!(dtlz1_grea(0));
+
+    // TSP ring — single-objective permutation
+    so!(tsp_random(0));
+    so!(tsp_hill_climber(0));
+    so!(tsp_simulated_annealing(0));
+    so!(tsp_tabu_search(0));
+    so!(tsp_genetic_algorithm(0));
+    so!(tsp_ant_colony(0));
+
+    // JSS FT06 — single-objective sequencing
+    so!(jss_random(0));
+    so!(jss_hill_climber(0));
+    so!(jss_simulated_annealing(0));
+    so!(jss_tabu_search(0));
+    so!(jss_genetic_algorithm(0));
+
+    // Knapsack — bi-objective binary
+    kn!(knapsack_random(0));
+    kn!(knapsack_nsga2(0));
+    kn!(knapsack_spea2(0));
+    kn!(knapsack_nsga3(0));
+    kn!(knapsack_ibea(0));
+
+    // Many-objective — every runner against each of the three DTLZ specs
+    let many_specs = [
+        ManySpec {
+            objectives: 4,
+            dim: 13,
+            budget: 40_000,
+            population: 56,
+            reference_divisions: 5,
+            is_dtlz1: false,
+            hype_ref: 3.0,
+        },
+        ManySpec {
+            objectives: 10,
+            dim: 19,
+            budget: 40_000,
+            population: 55,
+            reference_divisions: 2,
+            is_dtlz1: false,
+            hype_ref: 3.0,
+        },
+        ManySpec {
+            objectives: 8,
+            dim: 12,
+            budget: 40_000,
+            population: 120,
+            reference_divisions: 3,
+            is_dtlz1: true,
+            hype_ref: 1.0,
+        },
+    ];
+    for spec in many_specs {
+        mo!(many_random(spec, 0));
+        mo!(many_nsga2(spec, 0));
+        mo!(many_nsga3(spec, 0));
+        mo!(many_moead(spec, 0));
+        mo!(many_rvea(spec, 0));
+        mo!(many_grea(spec, 0));
+        mo!(many_ibea(spec, 0));
+        mo!(many_hype(spec, 0));
+        mo!(many_age_moea(spec, 0));
+    }
+
+    acc
+}
+
 pub fn run_all() {
     run_zdt1_comparison();
     run_zdt3_comparison();

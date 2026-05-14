@@ -36,6 +36,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 name = "hot_paths"
 harness = false
 
+[[bench]]
+name = "compare_profile"
+harness = false
+
 [[example]]
 name = "async_eval"
 required-features = ["async"]

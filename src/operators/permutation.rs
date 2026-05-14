@@ -642,14 +642,19 @@ fn erx_child(p1: &[usize], p2: &[usize], start: usize, rng: &mut Rng) -> Vec<usi
     for _ in 0..n {
         child.push(current);
         visited[current] = true;
-        // Remove `current` from every adjacency list so it isn't picked again.
-        for list in adj.iter_mut() {
-            list.retain(|&x| x != current);
+        // Remove `current` from the adjacency lists it appears in. The
+        // parent-tour adjacency relation is symmetric (`b ∈ adj[a]` iff
+        // `a ∈ adj[b]`), so `current` appears only in the lists of its own
+        // neighbors — taking `adj[current]` out and scrubbing just those
+        // lists is O(degree), not O(n) over every list.
+        let current_adj = std::mem::take(&mut adj[current]);
+        for &nb in &current_adj {
+            adj[nb].retain(|&x| x != current);
         }
         if child.len() == n {
             break;
         }
-        let neighbors: Vec<usize> = adj[current]
+        let neighbors: Vec<usize> = current_adj
             .iter()
             .copied()
             .filter(|&c| !visited[c])

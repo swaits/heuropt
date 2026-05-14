@@ -1239,4 +1239,88 @@ mod tests {
             "ERX never produced distinct children across 30 seeds"
         );
     }
+
+    /// Undirected edge set of a closed tour, each edge normalised to
+    /// `(min, max)` so direction and rotation don't matter.
+    fn tour_edges(tour: &[usize]) -> std::collections::HashSet<(usize, usize)> {
+        let n = tour.len();
+        (0..n)
+            .map(|i| {
+                let (a, b) = (tour[i], tour[(i + 1) % n]);
+                if a <= b { (a, b) } else { (b, a) }
+            })
+            .collect()
+    }
+
+    /// ERX's whole purpose: with identical parents the adjacency table is
+    /// exactly that tour's edge set, so the child must inherit *every*
+    /// edge — zero foreign edges. (The existing identical-parents test
+    /// only checks the result is *a* permutation, not that it reuses the
+    /// parent's edges.)
+    #[test]
+    fn erx_identical_parents_inherit_every_edge() {
+        let mut erx = EdgeRecombinationCrossover;
+        let p: Vec<usize> = vec![3, 0, 4, 1, 5, 2, 6];
+        let p_edges = tour_edges(&p);
+        for seed in 0..30 {
+            let mut rng = rng_from_seed(seed);
+            for child in erx.vary(&[p.clone(), p.clone()], &mut rng) {
+                assert_eq!(
+                    tour_edges(&child),
+                    p_edges,
+                    "identical-parent child must reuse exactly the parent's edges",
+                );
+            }
+        }
+    }
+
+    /// ERX exists to *preserve parent edges*. It walks the parents' joint
+    /// adjacency table, so a child's only non-parent ("foreign") edges
+    /// come from dead-end jumps. Order Crossover keeps just one contiguous
+    /// segment and re-threads the rest, stranding far more edges that
+    /// exist in neither parent. Pinning `ERX foreign < OX foreign`
+    /// directly verifies ERX is doing its job — a hypothetical
+    /// "valid-permutation-but-edge-ignoring" ERX would fail here while
+    /// still passing every `is_strict_perm` test.
+    #[test]
+    fn erx_preserves_parent_edges_better_than_order_crossover() {
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let p2: Vec<usize> = vec![9, 7, 5, 3, 1, 8, 6, 4, 2, 0];
+        let parent_edges: std::collections::HashSet<(usize, usize)> =
+            tour_edges(&p1).union(&tour_edges(&p2)).copied().collect();
+        let foreign = |child: &[usize]| tour_edges(child).difference(&parent_edges).count();
+
+        let (mut erx_foreign, mut ox_foreign) = (0usize, 0usize);
+        let mut erx = EdgeRecombinationCrossover;
+        let mut ox = OrderCrossover;
+        for seed in 0..40 {
+            let mut rng = rng_from_seed(seed);
+            for child in erx.vary(&[p1.clone(), p2.clone()], &mut rng) {
+                erx_foreign += foreign(&child);
+            }
+            let mut rng = rng_from_seed(seed);
+            for child in ox.vary(&[p1.clone(), p2.clone()], &mut rng) {
+                ox_foreign += foreign(&child);
+            }
+        }
+        assert!(
+            erx_foreign < ox_foreign,
+            "ERX should strand fewer foreign edges than OX \
+             (ERX={erx_foreign}, OX={ox_foreign})",
+        );
+    }
+
+    /// Pinned exact output — locks the adjacency-walk and min-degree
+    /// tie-break logic so a subtle regression in `erx_child` is caught
+    /// even when the result is still a valid permutation.
+    #[test]
+    fn erx_pinned_output() {
+        let mut erx = EdgeRecombinationCrossover;
+        let p1: Vec<usize> = vec![0, 1, 2, 3, 4, 5, 6, 7];
+        let p2: Vec<usize> = vec![2, 4, 6, 0, 7, 5, 3, 1];
+        let mut rng = rng_from_seed(123);
+        let children = erx.vary(&[p1, p2], &mut rng);
+        assert_eq!(children[0], vec![0, 1, 2, 3, 4, 5, 7, 6]);
+        assert_eq!(children[1], vec![2, 1, 0, 7, 6, 5, 3, 4]);
+    }
 }

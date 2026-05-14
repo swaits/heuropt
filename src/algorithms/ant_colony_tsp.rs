@@ -147,41 +147,46 @@ where
         let n = self.distances.len();
         let mut rng = rng_from_seed(self.config.seed);
 
-        // Heuristic desirability: 1 / distance (with a small floor to avoid
-        // division by zero for very-close cities).
-        let eta: Vec<Vec<f64>> = self
+        // Heuristic desirability 1/distance, pre-raised to β. η is constant
+        // for the whole run, so β is applied exactly once here instead of
+        // once per ant per step inside `build_tour`.
+        let eta_pow: Vec<Vec<f64>> = self
             .distances
             .iter()
             .map(|row| {
                 row.iter()
-                    .map(|&d| if d > 0.0 { 1.0 / d } else { 0.0 })
+                    .map(|&d| {
+                        let e = if d > 0.0 { 1.0 / d } else { 0.0 };
+                        e.powf(self.config.beta)
+                    })
                     .collect()
             })
             .collect();
 
-        // Pheromone matrix.
+        // Pheromone matrix, plus a reused buffer holding τ pre-raised to α.
         let mut pheromone: Vec<Vec<f64>> = vec![vec![self.config.initial_pheromone; n]; n];
+        let mut pheromone_pow: Vec<Vec<f64>> = vec![vec![0.0_f64; n]; n];
 
         let mut best_decision: Option<Vec<usize>> = None;
         let mut best_eval: Option<crate::core::evaluation::Evaluation> = None;
         let mut evaluations = 0usize;
 
         for _ in 0..self.config.generations {
+            // τ is constant across the ant loop, so raise it to α once per
+            // generation rather than once per ant per step per candidate.
+            for (src, dst) in pheromone.iter().zip(pheromone_pow.iter_mut()) {
+                for (&t, p) in src.iter().zip(dst.iter_mut()) {
+                    *p = t.max(0.0).powf(self.config.alpha);
+                }
+            }
+
             let mut tours: Vec<Vec<usize>> = Vec::with_capacity(self.config.ants);
             let mut tour_evals: Vec<crate::core::evaluation::Evaluation> =
                 Vec::with_capacity(self.config.ants);
 
             for _ in 0..self.config.ants {
                 let start = rng.random_range(0..n);
-                let tour = build_tour(
-                    n,
-                    start,
-                    &pheromone,
-                    &eta,
-                    self.config.alpha,
-                    self.config.beta,
-                    &mut rng,
-                );
+                let tour = build_tour(n, start, &pheromone_pow, &eta_pow, &mut rng);
                 let eval = problem.evaluate(&tour);
                 evaluations += 1;
                 tours.push(tour);
@@ -268,35 +273,37 @@ impl AntColonyTsp {
         let n = self.distances.len();
         let mut rng = rng_from_seed(self.config.seed);
 
-        let eta: Vec<Vec<f64>> = self
+        let eta_pow: Vec<Vec<f64>> = self
             .distances
             .iter()
             .map(|row| {
                 row.iter()
-                    .map(|&d| if d > 0.0 { 1.0 / d } else { 0.0 })
+                    .map(|&d| {
+                        let e = if d > 0.0 { 1.0 / d } else { 0.0 };
+                        e.powf(self.config.beta)
+                    })
                     .collect()
             })
             .collect();
 
         let mut pheromone: Vec<Vec<f64>> = vec![vec![self.config.initial_pheromone; n]; n];
+        let mut pheromone_pow: Vec<Vec<f64>> = vec![vec![0.0_f64; n]; n];
 
         let mut best_decision: Option<Vec<usize>> = None;
         let mut best_eval: Option<crate::core::evaluation::Evaluation> = None;
         let mut evaluations = 0usize;
 
         for _ in 0..self.config.generations {
+            for (src, dst) in pheromone.iter().zip(pheromone_pow.iter_mut()) {
+                for (&t, p) in src.iter().zip(dst.iter_mut()) {
+                    *p = t.max(0.0).powf(self.config.alpha);
+                }
+            }
+
             let mut tours: Vec<Vec<usize>> = Vec::with_capacity(self.config.ants);
             for _ in 0..self.config.ants {
                 let start = rng.random_range(0..n);
-                let tour = build_tour(
-                    n,
-                    start,
-                    &pheromone,
-                    &eta,
-                    self.config.alpha,
-                    self.config.beta,
-                    &mut rng,
-                );
+                let tour = build_tour(n, start, &pheromone_pow, &eta_pow, &mut rng);
                 tours.push(tour);
             }
 
@@ -357,10 +364,8 @@ impl AntColonyTsp {
 fn build_tour(
     n: usize,
     start: usize,
-    pheromone: &[Vec<f64>],
-    eta: &[Vec<f64>],
-    alpha: f64,
-    beta: f64,
+    pheromone_pow: &[Vec<f64>],
+    eta_pow: &[Vec<f64>],
     rng: &mut crate::core::rng::Rng,
 ) -> Vec<usize> {
     let mut tour = Vec::with_capacity(n);
@@ -370,11 +375,13 @@ fn build_tour(
 
     for _ in 1..n {
         let current = *tour.last().unwrap();
-        // Build a probability vector over the unvisited candidates.
+        // Build a probability vector over the unvisited candidates. Both
+        // matrices are already raised to α / β by the caller, so the per-
+        // candidate weight is a single multiply — no `powf` in the hot loop.
         let probs: Vec<(usize, f64)> = (0..n)
             .filter(|&j| !visited[j])
             .map(|j| {
-                let p = pheromone[current][j].max(0.0).powf(alpha) * eta[current][j].powf(beta);
+                let p = pheromone_pow[current][j] * eta_pow[current][j];
                 (j, p)
             })
             .collect();
@@ -571,6 +578,14 @@ mod tests {
     use crate::core::objective::Direction;
     use crate::core::rng::rng_from_seed;
 
+    /// Raise every matrix entry to `p` — mirrors the α / β pre-raising the
+    /// `run` loop now does before calling `build_tour`.
+    fn raise(m: &[Vec<f64>], p: f64) -> Vec<Vec<f64>> {
+        m.iter()
+            .map(|row| row.iter().map(|&v| v.powf(p)).collect())
+            .collect()
+    }
+
     /// `better_than_so` follows the feasibility-first / objective-second
     /// tournament rule. Pin each of the four feasibility-cross-product
     /// branches so the `<` and `>` comparisons cannot flip silently.
@@ -625,12 +640,12 @@ mod tests {
     #[test]
     fn build_tour_is_permutation_starting_at_start() {
         let n = 6;
-        let pher = vec![vec![1.0; n]; n];
-        let eta = vec![vec![1.0; n]; n];
+        let pher = raise(&vec![vec![1.0; n]; n], 1.0);
+        let eta = raise(&vec![vec![1.0; n]; n], 2.0);
         for seed in 0..20 {
             for start in 0..n {
                 let mut rng = rng_from_seed(seed);
-                let tour = build_tour(n, start, &pher, &eta, 1.0, 2.0, &mut rng);
+                let tour = build_tour(n, start, &pher, &eta, &mut rng);
                 assert_eq!(tour.len(), n);
                 assert_eq!(tour[0], start, "tour must start at the given city");
                 let mut sorted = tour.clone();
@@ -647,14 +662,15 @@ mod tests {
     #[test]
     fn build_tour_follows_strong_heuristic() {
         let n = 4;
-        let pher = vec![vec![1.0; n]; n];
+        let pher = raise(&vec![vec![1.0; n]; n], 1.0);
         // Heuristic strongly favors city (i+1) % n: 1000x preferred.
         let mut eta = vec![vec![1.0; n]; n];
         for i in 0..n {
             eta[i][(i + 1) % n] = 1000.0;
         }
+        let eta = raise(&eta, 5.0);
         let mut rng = rng_from_seed(0);
-        let tour = build_tour(n, 0, &pher, &eta, 1.0, 5.0, &mut rng);
+        let tour = build_tour(n, 0, &pher, &eta, &mut rng);
         // With beta=5 and 1000× heuristic, the path 0→1→2→3 has overwhelming
         // probability.
         assert_eq!(tour, vec![0, 1, 2, 3]);
@@ -665,10 +681,10 @@ mod tests {
     #[test]
     fn build_tour_zero_weights_still_produces_permutation() {
         let n = 5;
-        let pher = vec![vec![1.0; n]; n];
-        let eta = vec![vec![1.0; n]; n];
+        let pher = raise(&vec![vec![1.0; n]; n], 0.0);
+        let eta = raise(&vec![vec![1.0; n]; n], 0.0);
         let mut rng = rng_from_seed(42);
-        let tour = build_tour(n, 2, &pher, &eta, 0.0, 0.0, &mut rng);
+        let tour = build_tour(n, 2, &pher, &eta, &mut rng);
         // With alpha=beta=0, every term is 1.0 so the result is uniform but
         // still a permutation.
         assert_eq!(tour.len(), n);

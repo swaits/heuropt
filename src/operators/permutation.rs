@@ -527,15 +527,29 @@ fn cx_child(start_parent: &[usize], other_parent: &[usize]) -> Vec<usize> {
     let n = start_parent.len();
     let mut child = vec![0_usize; n];
     let mut visited = vec![false; n];
+    // Position lookup per parent: `pos_*[value]` is the index of that value.
+    // CX operates on strict permutations of `0..n` (see the type docs), so a
+    // direct-indexed table is valid and turns the per-step value lookup from
+    // an O(n) `position` scan into an O(1) index.
+    let mut pos_start = vec![0_usize; n];
+    let mut pos_other = vec![0_usize; n];
+    for (i, (&s, &o)) in start_parent.iter().zip(other_parent.iter()).enumerate() {
+        debug_assert!(
+            s < n && o < n,
+            "CycleCrossover requires strict permutations of 0..n",
+        );
+        pos_start[s] = i;
+        pos_other[o] = i;
+    }
     let mut cycle_index = 0_usize;
     for seed in 0..n {
         if visited[seed] {
             continue;
         }
-        let (from, switch_through) = if cycle_index % 2 == 0 {
-            (start_parent, other_parent)
+        let (from, switch_through, from_pos) = if cycle_index % 2 == 0 {
+            (start_parent, other_parent, &pos_start)
         } else {
-            (other_parent, start_parent)
+            (other_parent, start_parent, &pos_other)
         };
         let mut k = seed;
         loop {
@@ -545,11 +559,7 @@ fn cx_child(start_parent: &[usize], other_parent: &[usize]) -> Vec<usize> {
             visited[k] = true;
             child[k] = from[k];
             let next_val = switch_through[k];
-            let next_pos = from
-                .iter()
-                .position(|&x| x == next_val)
-                .expect("CycleCrossover: parents must share the same value multiset");
-            k = next_pos;
+            k = from_pos[next_val];
         }
         cycle_index += 1;
     }

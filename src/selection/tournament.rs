@@ -282,15 +282,27 @@ mod tests {
         let feasible = cand_min(1, 100.0);
         let infeasible = constrained(2, 0.0, 1.0);
         assert!(challenger_wins(&feasible, &infeasible, Direction::Minimize));
-        assert!(!challenger_wins(&infeasible, &feasible, Direction::Minimize));
+        assert!(!challenger_wins(
+            &infeasible,
+            &feasible,
+            Direction::Minimize
+        ));
     }
 
     #[test]
     fn challenger_wins_two_infeasible_compares_violation() {
         let less_violating = constrained(1, 0.0, 0.5);
         let more_violating = constrained(2, 0.0, 1.0);
-        assert!(challenger_wins(&less_violating, &more_violating, Direction::Minimize));
-        assert!(!challenger_wins(&more_violating, &less_violating, Direction::Minimize));
+        assert!(challenger_wins(
+            &less_violating,
+            &more_violating,
+            Direction::Minimize
+        ));
+        assert!(!challenger_wins(
+            &more_violating,
+            &less_violating,
+            Direction::Minimize
+        ));
     }
 
     #[test]
@@ -330,17 +342,37 @@ mod tests {
         let feasible_a = Evaluation::new(vec![10.0]);
         let infeasible_b = Evaluation::constrained(vec![0.0], 1.0);
         // feasible vs infeasible
-        assert!(better_by_feasibility(&feasible_a, &infeasible_b, Direction::Minimize));
-        assert!(!better_by_feasibility(&infeasible_b, &feasible_a, Direction::Minimize));
+        assert!(better_by_feasibility(
+            &feasible_a,
+            &infeasible_b,
+            Direction::Minimize
+        ));
+        assert!(!better_by_feasibility(
+            &infeasible_b,
+            &feasible_a,
+            Direction::Minimize
+        ));
         // two infeasible: smaller violation wins
         let low_cv = Evaluation::constrained(vec![0.0], 0.3);
         let high_cv = Evaluation::constrained(vec![0.0], 0.9);
-        assert!(better_by_feasibility(&low_cv, &high_cv, Direction::Minimize));
-        assert!(!better_by_feasibility(&high_cv, &low_cv, Direction::Minimize));
+        assert!(better_by_feasibility(
+            &low_cv,
+            &high_cv,
+            Direction::Minimize
+        ));
+        assert!(!better_by_feasibility(
+            &high_cv,
+            &low_cv,
+            Direction::Minimize
+        ));
         // two feasible: delegates to better_by_objective
         let feasible_lower = Evaluation::new(vec![1.0]);
         let feasible_higher = Evaluation::new(vec![2.0]);
-        assert!(better_by_feasibility(&feasible_lower, &feasible_higher, Direction::Minimize));
+        assert!(better_by_feasibility(
+            &feasible_lower,
+            &feasible_higher,
+            Direction::Minimize
+        ));
     }
 
     #[test]
@@ -349,8 +381,8 @@ mod tests {
         // must rank first regardless of objective value.
         let s = ObjectiveSpace::new(vec![Objective::minimize("f")]);
         let pop = [
-            constrained(1, 0.0, 2.0),  // infeasible, great objective
-            cand_min(2, 100.0),         // feasible, terrible objective
+            constrained(1, 0.0, 2.0), // infeasible, great objective
+            cand_min(2, 100.0),       // feasible, terrible objective
         ];
         let mut rng = rng_from_seed(7);
         let picks = stochastic_ranking_select(&pop, &s, 0.0, 1, &mut rng);

@@ -560,12 +560,12 @@ mod nd_tests {
     /// positive value for a dominating point.
     #[test]
     fn hypervolume_nd_from_evaluations_empty_and_nonempty() {
-        let s = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
         let empty: Vec<&Evaluation> = Vec::new();
-        assert_eq!(hypervolume_nd_from_evaluations(&empty, &s, &[2.0, 2.0]), 0.0);
+        assert_eq!(
+            hypervolume_nd_from_evaluations(&empty, &s, &[2.0, 2.0]),
+            0.0
+        );
 
         let e = Evaluation::new(vec![1.0, 1.0]);
         let evals = vec![&e];
@@ -577,13 +577,13 @@ mod nd_tests {
     /// A point that does not strictly dominate the reference contributes 0.
     #[test]
     fn hypervolume_nd_from_evaluations_skips_non_dominating() {
-        let s = ObjectiveSpace::new(vec![
-            Objective::minimize("f1"),
-            Objective::minimize("f2"),
-        ]);
+        let s = ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")]);
         // (2, 1): axis 0 equals the reference → not strictly dominating.
         let e = Evaluation::new(vec![2.0, 1.0]);
         let evals = vec![&e];
-        assert_eq!(hypervolume_nd_from_evaluations(&evals, &s, &[2.0, 2.0]), 0.0);
+        assert_eq!(
+            hypervolume_nd_from_evaluations(&evals, &s, &[2.0, 2.0]),
+            0.0
+        );
     }
 }

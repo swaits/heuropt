@@ -317,9 +317,15 @@ mod tests {
     #[test]
     fn infeasible_candidate_with_smaller_violation_evicts_larger() {
         let mut a = ParetoArchive::<u32>::new(space_min2());
-        a.insert(Candidate::new(1u32, Evaluation::constrained(vec![0.0, 0.0], 1.0)));
+        a.insert(Candidate::new(
+            1u32,
+            Evaluation::constrained(vec![0.0, 0.0], 1.0),
+        ));
         // Smaller violation → dominates the existing infeasible member.
-        a.insert(Candidate::new(2u32, Evaluation::constrained(vec![9.0, 9.0], 0.5)));
+        a.insert(Candidate::new(
+            2u32,
+            Evaluation::constrained(vec![9.0, 9.0], 0.5),
+        ));
         assert_eq!(a.members().len(), 1);
         assert_eq!(a.members()[0].decision, 2);
     }

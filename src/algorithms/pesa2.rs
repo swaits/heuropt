@@ -560,6 +560,9 @@ mod tests {
         }
         // Index 2 wins whenever it's drawn against 0 or 1, plus half its
         // self-draws — clear majority.
-        assert!(picked_uncrowded > 150, "uncrowded picked {picked_uncrowded}/300");
+        assert!(
+            picked_uncrowded > 150,
+            "uncrowded picked {picked_uncrowded}/300"
+        );
     }
 }

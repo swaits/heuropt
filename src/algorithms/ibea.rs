@@ -501,7 +501,10 @@ mod tests {
         let pool = vec![ibea_cand(vec![1.0, 1.0]), ibea_cand(vec![2.0, 2.0])];
         let fit = compute_fitness(&pool, &ibea_space(), 0.05);
         assert_eq!(fit.len(), 2);
-        assert!(fit[0] > fit[1], "dominating point should score higher: {fit:?}");
+        assert!(
+            fit[0] > fit[1],
+            "dominating point should score higher: {fit:?}"
+        );
     }
 
     #[test]

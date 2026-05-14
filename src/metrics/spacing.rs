@@ -135,7 +135,10 @@ mod tests {
         ];
         let got = spacing(&front, &s);
         let expected = (1536.0_f64 / 27.0).sqrt();
-        assert!((got - expected).abs() < 1e-9, "got {got}, expected {expected}");
+        assert!(
+            (got - expected).abs() < 1e-9,
+            "got {got}, expected {expected}"
+        );
     }
 
     /// A perfectly even front has zero spacing — the variance term is 0.

@@ -733,7 +733,11 @@ mod tests {
     // snapshot, by design.
 
     fn assert_close_slice(got: &[f64], want: &[f64], tol: f64) {
-        assert_eq!(got.len(), want.len(), "length mismatch: got {got:?} want {want:?}");
+        assert_eq!(
+            got.len(),
+            want.len(),
+            "length mismatch: got {got:?} want {want:?}"
+        );
         for (g, w) in got.iter().zip(want.iter()) {
             assert!((g - w).abs() < tol, "got {g}, want {w}; full got = {got:?}");
         }
@@ -747,7 +751,11 @@ mod tests {
         let children = m.vary(std::slice::from_ref(&parent), &mut rng);
         assert_close_slice(
             &children[0],
-            &[1.034_713_959_180_981_7, 2.066_469_060_997_062_6, 3.131_288_178_686_977],
+            &[
+                1.034_713_959_180_981_7,
+                2.066_469_060_997_062_6,
+                3.131_288_178_686_977,
+            ],
             1e-12,
         );
     }
@@ -854,7 +862,10 @@ mod tests {
         // Same seed → same δ; the only difference is the (hi-lo) factor.
         // Ratio must be ≈ 10.
         let ratio = wide / narrow;
-        assert!((ratio - 10.0).abs() < 1e-12, "ratio = {ratio}, narrow={narrow}, wide={wide}");
+        assert!(
+            (ratio - 10.0).abs() < 1e-12,
+            "ratio = {ratio}, narrow={narrow}, wide={wide}"
+        );
     }
 
     #[test]
@@ -890,10 +901,7 @@ mod tests {
     fn mantegna_sigma_u_alpha_1_0_pinned() {
         // alpha = 1.0: sin(π/2) = 1, gamma(2) = 1, gamma(1) = 1 → σᵤ ≈ 1.
         let got = mantegna_sigma_u(1.0);
-        assert!(
-            (got - 1.0).abs() < 1e-12,
-            "mantegna_sigma_u(1.0) = {got}",
-        );
+        assert!((got - 1.0).abs() < 1e-12, "mantegna_sigma_u(1.0) = {got}",);
     }
 
     #[test]

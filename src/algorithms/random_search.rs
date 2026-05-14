@@ -224,7 +224,11 @@ mod tests {
     #[test]
     fn best_is_no_worse_than_any_sample() {
         let mut opt = RandomSearch::new(
-            RandomSearchConfig { iterations: 50, batch_size: 2, seed: 9 },
+            RandomSearchConfig {
+                iterations: 50,
+                batch_size: 2,
+                seed: 9,
+            },
             RealBounds::new(vec![(-3.0, 3.0)]),
         );
         let r = opt.run(&Sphere1D);

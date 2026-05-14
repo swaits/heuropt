@@ -152,7 +152,10 @@ fn main() {
     println!("Source: TSPLIB95 (Groetschel/Padberg)");
     println!();
     println!("Known optimum:    {:>8.0}", KNOWN_OPTIMUM);
-    println!("GA best found:    {:>8.0}   (gap {:+.0}, {:+.2}%)", best_len, gap_abs, gap_pct);
+    println!(
+        "GA best found:    {:>8.0}   (gap {:+.0}, {:+.2}%)",
+        best_len, gap_abs, gap_pct
+    );
     println!();
     println!("Total evaluations: {}", result.evaluations);
     println!("Final population:  {}", result.population.len());

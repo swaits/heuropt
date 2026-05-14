@@ -644,7 +644,10 @@ mod tests {
         // k = exp(-0.5 * (1)^2) = exp(-0.5) ≈ 0.6065
         let got = rbf_kernel(&[0.0], &[1.0], &[1.0], 1.0);
         let expected = (-0.5_f64).exp();
-        assert!((got - expected).abs() < 1e-12, "got {got}, expected {expected}");
+        assert!(
+            (got - expected).abs() < 1e-12,
+            "got {got}, expected {expected}"
+        );
     }
 
     #[test]

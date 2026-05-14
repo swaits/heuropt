@@ -313,7 +313,11 @@ mod tests {
     fn produces_deterministic_nonempty_front() {
         let make = || {
             Paes::new(
-                PaesConfig { iterations: 40, archive_size: 10, seed: 5 },
+                PaesConfig {
+                    iterations: 40,
+                    archive_size: 10,
+                    seed: 5,
+                },
                 RealBounds::new(vec![(-5.0, 5.0)]),
                 GaussianMutation { sigma: 0.3 },
             )
@@ -321,8 +325,16 @@ mod tests {
         let r1 = make().run(&SchafferN1);
         let r2 = make().run(&SchafferN1);
         assert!(!r1.pareto_front.is_empty());
-        let f1: Vec<Vec<f64>> = r1.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let f2: Vec<Vec<f64>> = r2.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let f1: Vec<Vec<f64>> = r1
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let f2: Vec<Vec<f64>> = r2
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(f1, f2);
         // Archive never exceeds its configured cap.
         assert!(r1.pareto_front.len() <= 10);

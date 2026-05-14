@@ -598,9 +598,18 @@ mod tests {
         let v: Vec<i64> = vec![-3, 0, 7];
         let got = v.to_decision_values();
         assert_eq!(got.len(), 3);
-        assert_eq!(got[0], serde_json::Value::Number(serde_json::Number::from(-3i64)));
-        assert_eq!(got[1], serde_json::Value::Number(serde_json::Number::from(0i64)));
-        assert_eq!(got[2], serde_json::Value::Number(serde_json::Number::from(7i64)));
+        assert_eq!(
+            got[0],
+            serde_json::Value::Number(serde_json::Number::from(-3i64))
+        );
+        assert_eq!(
+            got[1],
+            serde_json::Value::Number(serde_json::Number::from(0i64))
+        );
+        assert_eq!(
+            got[2],
+            serde_json::Value::Number(serde_json::Number::from(7i64))
+        );
     }
 
     /// Pins the *exact* booleans, not just the count.
@@ -642,8 +651,7 @@ mod tests {
     fn from_result_propagates_evaluation_and_generation_counts() {
         let problem = SingleObjMin;
         let cands = vec![Candidate::new(vec![1.0], Evaluation::new(vec![1.0]))];
-        let result =
-            OptimizationResult::new(Population::new(cands.clone()), cands, None, 137, 9);
+        let result = OptimizationResult::new(Population::new(cands.clone()), cands, None, 137, 9);
         let export = ExplorerExport::from_result(&problem, &result);
         assert_eq!(export.run.evaluations, 137);
         assert_eq!(export.run.generations, 9);
@@ -654,8 +662,8 @@ mod tests {
     fn with_problem_name_sets_field_and_preserves_other_state() {
         let problem = SingleObjMin;
         let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
-        let export = ExplorerExport::from_result(&problem, &result)
-            .with_problem_name("Toy Problem");
+        let export =
+            ExplorerExport::from_result(&problem, &result).with_problem_name("Toy Problem");
         assert_eq!(export.run.problem_name.as_deref(), Some("Toy Problem"));
         // The candidates and objectives should still be intact, proving the
         // chained builder isn't replacing the whole struct.
@@ -678,9 +686,12 @@ mod tests {
     fn with_timestamp_sets_field_and_preserves_other_state() {
         let problem = SingleObjMin;
         let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
-        let export = ExplorerExport::from_result(&problem, &result)
-            .with_timestamp("2025-01-01T00:00:00Z");
-        assert_eq!(export.run.timestamp.as_deref(), Some("2025-01-01T00:00:00Z"));
+        let export =
+            ExplorerExport::from_result(&problem, &result).with_timestamp("2025-01-01T00:00:00Z");
+        assert_eq!(
+            export.run.timestamp.as_deref(),
+            Some("2025-01-01T00:00:00Z")
+        );
         assert_eq!(export.candidates.len(), 1);
     }
 
@@ -708,8 +719,7 @@ mod tests {
     fn to_writer_emits_full_export() {
         let problem = SingleObjMin;
         let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
-        let export = ExplorerExport::from_result(&problem, &result)
-            .with_problem_name("MyProblem");
+        let export = ExplorerExport::from_result(&problem, &result).with_problem_name("MyProblem");
         let mut buf: Vec<u8> = Vec::new();
         export.to_writer(&mut buf).unwrap();
         assert!(!buf.is_empty());
@@ -725,16 +735,15 @@ mod tests {
         use std::io::Read;
         let problem = SingleObjMin;
         let result = make_result(vec![vec![1.0]], |d| vec![d[0]]);
-        let export = ExplorerExport::from_result(&problem, &result)
-            .with_problem_name("OnDisk");
+        let export = ExplorerExport::from_result(&problem, &result).with_problem_name("OnDisk");
         let dir = std::env::temp_dir();
-        let path = dir.join(format!(
-            "heuropt-explorer-test-{}.json",
-            std::process::id()
-        ));
+        let path = dir.join(format!("heuropt-explorer-test-{}.json", std::process::id()));
         export.to_file(&path).unwrap();
         let mut s = String::new();
-        std::fs::File::open(&path).unwrap().read_to_string(&mut s).unwrap();
+        std::fs::File::open(&path)
+            .unwrap()
+            .read_to_string(&mut s)
+            .unwrap();
         let _ = std::fs::remove_file(&path);
         let back: ExplorerExport = serde_json::from_str(&s).unwrap();
         assert_eq!(back.run.problem_name.as_deref(), Some("OnDisk"));
@@ -777,7 +786,10 @@ mod tests {
         ));
         super::to_file(&path, &problem, &DummyAlgo, &result).unwrap();
         let mut s = String::new();
-        std::fs::File::open(&path).unwrap().read_to_string(&mut s).unwrap();
+        std::fs::File::open(&path)
+            .unwrap()
+            .read_to_string(&mut s)
+            .unwrap();
         let _ = std::fs::remove_file(&path);
         let back: ExplorerExport = serde_json::from_str(&s).unwrap();
         assert_eq!(back.run.algorithm.as_deref(), Some("DummyAlgo"));
@@ -877,8 +889,7 @@ mod tests {
     /// the pad (too few objectives) and truncate (too many) cases.
     #[test]
     fn candidate_to_export_pads_short_objectives_with_nan() {
-        let c: Candidate<Vec<f64>> =
-            Candidate::new(vec![1.0], Evaluation::new(vec![1.0]));
+        let c: Candidate<Vec<f64>> = Candidate::new(vec![1.0], Evaluation::new(vec![1.0]));
         let exported = candidate_to_export(&c, 0, 3);
         assert_eq!(exported.objectives.len(), 3);
         assert_eq!(exported.objectives[0], 1.0);

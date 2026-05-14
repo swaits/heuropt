@@ -446,15 +446,24 @@ mod tests {
     fn compare_for_fitness_two_feasible_min_and_max() {
         let lo = fc(1.0);
         let hi = fc(2.0);
-        assert_eq!(compare_for_fitness(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
-        assert_eq!(compare_for_fitness(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_for_fitness(&lo, &hi, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            compare_for_fitness(&lo, &hi, Direction::Maximize),
+            std::cmp::Ordering::Greater
+        );
     }
 
     #[test]
     fn compare_for_fitness_two_infeasible_lower_violation_wins() {
         let low = fc_cv(0.0, 0.3);
         let high = fc_cv(0.0, 0.9);
-        assert_eq!(compare_for_fitness(&low, &high, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare_for_fitness(&low, &high, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
     }
 
     /// `survival_selection` carries `elitism` parents and `n - elitism`

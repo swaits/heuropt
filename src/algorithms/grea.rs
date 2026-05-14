@@ -415,7 +415,12 @@ mod tests {
                 mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
             };
             let mut opt = Grea::new(
-                GreaConfig { population_size: pop, generations: 5, grid_divisions: 8, seed: 3 },
+                GreaConfig {
+                    population_size: pop,
+                    generations: 5,
+                    grid_divisions: 8,
+                    seed: 3,
+                },
                 initializer,
                 variation,
             );

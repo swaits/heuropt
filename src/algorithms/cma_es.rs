@@ -766,19 +766,37 @@ mod tests {
         a.constraint_violation = 0.0;
         let mut b = Evaluation::new(vec![1.0]);
         b.constraint_violation = 1.0;
-        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
-        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_so(&a, &b, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            compare_so(&b, &a, Direction::Minimize),
+            std::cmp::Ordering::Greater
+        );
     }
 
     #[test]
     fn compare_so_two_feasible_under_min_and_max() {
         let a = Evaluation::new(vec![1.0]);
         let b = Evaluation::new(vec![2.0]);
-        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
-        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_so(&a, &b, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            compare_so(&b, &a, Direction::Minimize),
+            std::cmp::Ordering::Greater
+        );
         // Maximize inverts.
-        assert_eq!(compare_so(&a, &b, Direction::Maximize), std::cmp::Ordering::Greater);
-        assert_eq!(compare_so(&b, &a, Direction::Maximize), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare_so(&a, &b, Direction::Maximize),
+            std::cmp::Ordering::Greater
+        );
+        assert_eq!(
+            compare_so(&b, &a, Direction::Maximize),
+            std::cmp::Ordering::Less
+        );
     }
 
     #[test]
@@ -787,8 +805,14 @@ mod tests {
         a.constraint_violation = 0.5;
         let mut b = Evaluation::new(vec![0.0]);
         b.constraint_violation = 1.0;
-        assert_eq!(compare_so(&a, &b, Direction::Minimize), std::cmp::Ordering::Less);
-        assert_eq!(compare_so(&b, &a, Direction::Minimize), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare_so(&a, &b, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            compare_so(&b, &a, Direction::Minimize),
+            std::cmp::Ordering::Greater
+        );
     }
 
     #[test]

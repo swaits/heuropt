@@ -560,14 +560,26 @@ mod tests {
     fn compare_feasibility_first_and_direction() {
         let feasible = Evaluation::new(vec![10.0]);
         let infeasible = Evaluation::constrained(vec![0.0], 1.0);
-        assert_eq!(compare(&feasible, &infeasible, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare(&feasible, &infeasible, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
         let lo = Evaluation::new(vec![1.0]);
         let hi = Evaluation::new(vec![2.0]);
-        assert_eq!(compare(&lo, &hi, Direction::Minimize), std::cmp::Ordering::Less);
-        assert_eq!(compare(&lo, &hi, Direction::Maximize), std::cmp::Ordering::Greater);
+        assert_eq!(
+            compare(&lo, &hi, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
+        assert_eq!(
+            compare(&lo, &hi, Direction::Maximize),
+            std::cmp::Ordering::Greater
+        );
         let v_lo = Evaluation::constrained(vec![0.0], 0.2);
         let v_hi = Evaluation::constrained(vec![0.0], 0.8);
-        assert_eq!(compare(&v_lo, &v_hi, Direction::Minimize), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare(&v_lo, &v_hi, Direction::Minimize),
+            std::cmp::Ordering::Less
+        );
     }
 
     #[test]

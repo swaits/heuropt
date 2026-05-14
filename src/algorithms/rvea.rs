@@ -591,6 +591,9 @@ mod tests {
     fn smallest_neighbor_angle_of_orthogonal_refs_is_pi_over_2() {
         let refs = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
         let a = smallest_neighbor_angle(&refs);
-        assert!((a - std::f64::consts::FRAC_PI_2).abs() < 1e-9, "angle = {a}");
+        assert!(
+            (a - std::f64::consts::FRAC_PI_2).abs() < 1e-9,
+            "angle = {a}"
+        );
     }
 }

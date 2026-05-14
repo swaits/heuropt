@@ -994,7 +994,10 @@ mod tests {
             let c = m.vary(std::slice::from_ref(&parent), &mut rng);
             c[0] != parent
         });
-        assert!(any_changed, "InversionMutation never modified an 8-element parent across 30 seeds");
+        assert!(
+            any_changed,
+            "InversionMutation never modified an 8-element parent across 30 seeds"
+        );
     }
 
     /// `InsertionMutation` shifts an element across many seeds; at least one
@@ -1195,6 +1198,9 @@ mod tests {
             let kids = erx.vary(&[p1.clone(), p2.clone()], &mut rng);
             kids[0] != kids[1]
         });
-        assert!(any_distinct, "ERX never produced distinct children across 30 seeds");
+        assert!(
+            any_distinct,
+            "ERX never produced distinct children across 30 seeds"
+        );
     }
 }

@@ -290,7 +290,10 @@ mod tests {
     #[test]
     fn hill_climber_never_worsens_objective() {
         let mut opt = HillClimber::new(
-            HillClimberConfig { iterations: 200, seed: 5 },
+            HillClimberConfig {
+                iterations: 200,
+                seed: 5,
+            },
             RealBounds::new(vec![(-3.0, 3.0); 2]),
             GaussianMutation { sigma: 0.3 },
         );
@@ -306,7 +309,10 @@ mod tests {
     #[test]
     fn hill_climber_decreases_sphere() {
         let mut opt = HillClimber::new(
-            HillClimberConfig { iterations: 500, seed: 11 },
+            HillClimberConfig {
+                iterations: 500,
+                seed: 11,
+            },
             RealBounds::new(vec![(-3.0, 3.0)]),
             GaussianMutation { sigma: 0.2 },
         );

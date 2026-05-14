@@ -595,6 +595,9 @@ mod tests {
                 wins0 += 1;
             }
         }
-        assert!(wins0 > 130, "index 0 won only {wins0}/200 — comparison likely flipped");
+        assert!(
+            wins0 > 130,
+            "index 0 won only {wins0}/200 — comparison likely flipped"
+        );
     }
 }

@@ -408,8 +408,16 @@ mod tests {
         // Determinism cross-check.
         let mut opt2 = make_optimizer(7);
         let r2 = opt2.run(&SchafferN1);
-        let f1: Vec<Vec<f64>> = r.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
-        let f2: Vec<Vec<f64>> = r2.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let f1: Vec<Vec<f64>> = r
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
+        let f2: Vec<Vec<f64>> = r2
+            .pareto_front
+            .iter()
+            .map(|c| c.evaluation.objectives.clone())
+            .collect();
         assert_eq!(f1, f2);
     }
 }

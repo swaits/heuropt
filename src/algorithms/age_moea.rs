@@ -599,7 +599,10 @@ mod tests {
         // direction and the loss tie-breaking.
         let translated = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
         let p = estimate_p(&[0, 1], &translated, 2);
-        assert!((p - 0.25).abs() < 1e-12, "expected smallest candidate, got {p}");
+        assert!(
+            (p - 0.25).abs() < 1e-12,
+            "expected smallest candidate, got {p}"
+        );
     }
 
     #[test]
@@ -625,7 +628,11 @@ mod tests {
             mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
         };
         let mut opt = AgeMoea::new(
-            AgeMoeaConfig { population_size: 8, generations: 10, seed: 7 },
+            AgeMoeaConfig {
+                population_size: 8,
+                generations: 10,
+                seed: 7,
+            },
             initializer,
             variation,
         );
@@ -666,7 +673,11 @@ mod tests {
         };
         for pop in [4_usize, 12, 30] {
             let mut opt = AgeMoea::new(
-                AgeMoeaConfig { population_size: pop, generations: 5, seed: 13 },
+                AgeMoeaConfig {
+                    population_size: pop,
+                    generations: 5,
+                    seed: 13,
+                },
                 initializer.clone(),
                 variation.clone(),
             );
@@ -690,7 +701,11 @@ mod tests {
         let pop = 6_usize;
         let gens = 4_usize;
         let mut opt = AgeMoea::new(
-            AgeMoeaConfig { population_size: pop, generations: gens, seed: 13 },
+            AgeMoeaConfig {
+                population_size: pop,
+                generations: gens,
+                seed: 13,
+            },
             initializer,
             variation,
         );

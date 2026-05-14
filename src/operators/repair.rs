@@ -249,4 +249,32 @@ mod tests {
             assert!(approx_eq(v, 0.25, 1e-12));
         }
     }
+
+    // ---- Mutation-test coverage for ProjectToSimplex ----------------------
+    //
+    // The degenerate-magnitude shortcut concentrates mass on argmax(x). The
+    // next two tests pin the *position* of that argmax precisely.
+
+    /// The shortcut picks the **first** index on a tie. Strict `>` keeps
+    /// the earlier index; `>=` would overwrite with the later equal index.
+    /// Kills `> → >=` in the argmax scan.
+    #[test]
+    fn project_extreme_magnitudes_keeps_first_index_on_tie() {
+        let mut r = ProjectToSimplex::new(1.0);
+        let mut x = vec![1e20, 1e20, -1e20];
+        r.repair(&mut x);
+        assert_eq!(x, vec![1.0, 0.0, 0.0]);
+    }
+
+    /// The shortcut finds the argmax at a non-zero index. With `> → ==`
+    /// the scan stops updating because `1e20 == -1e20` is false at i=1
+    /// and the argmax stays at 0 — but the true argmax is at index 1.
+    /// Kills `> → ==` in the argmax scan.
+    #[test]
+    fn project_extreme_magnitudes_finds_argmax_at_non_zero_index() {
+        let mut r = ProjectToSimplex::new(1.0);
+        let mut x = vec![-1e20, 1e20, 5e19];
+        r.repair(&mut x);
+        assert_eq!(x, vec![0.0, 1.0, 0.0]);
+    }
 }

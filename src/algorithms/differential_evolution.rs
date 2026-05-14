@@ -384,4 +384,39 @@ mod tests {
         );
         let _ = opt.run(&Sphere1D);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    #[test]
+    fn pick_three_distinct_returns_distinct_indices_not_equal_to_exclude() {
+        use crate::core::rng::rng_from_seed;
+        for seed in 0..20 {
+            let mut rng = rng_from_seed(seed);
+            let (a, b, c) = pick_three_distinct(10, 3, &mut rng);
+            assert_ne!(a, 3);
+            assert_ne!(b, 3);
+            assert_ne!(c, 3);
+            assert_ne!(a, b);
+            assert_ne!(a, c);
+            assert_ne!(b, c);
+            assert!(a < 10 && b < 10 && c < 10);
+        }
+    }
+
+    #[test]
+    fn de_decreases_sphere_objective_over_generations() {
+        let mut opt = DifferentialEvolution::new(
+            DifferentialEvolutionConfig {
+                population_size: 12,
+                generations: 40,
+                differential_weight: 0.5,
+                crossover_probability: 0.9,
+                seed: 11,
+            },
+            RealBounds::new(vec![(-3.0, 3.0); 2]),
+        );
+        let r = opt.run(&Sphere1D);
+        let best = r.best.unwrap().evaluation.objectives[0];
+        assert!(best < 0.5, "best = {best}");
+    }
 }

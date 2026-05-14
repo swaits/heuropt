@@ -218,4 +218,23 @@ mod tests {
         let r = opt.run(&Sphere1D);
         assert!(r.best.is_some());
     }
+
+    /// RandomSearch's evaluation count is exactly `iterations * batch_size`,
+    /// and the returned best is no worse than every sampled candidate.
+    #[test]
+    fn best_is_no_worse_than_any_sample() {
+        let mut opt = RandomSearch::new(
+            RandomSearchConfig { iterations: 50, batch_size: 2, seed: 9 },
+            RealBounds::new(vec![(-3.0, 3.0)]),
+        );
+        let r = opt.run(&Sphere1D);
+        assert_eq!(r.evaluations, 100);
+        let best = r.best.unwrap().evaluation.objectives[0];
+        let pop_min = r
+            .population
+            .iter()
+            .map(|c| c.evaluation.objectives[0])
+            .fold(f64::INFINITY, f64::min);
+        assert!(best <= pop_min + 1e-12, "best {best} > pop min {pop_min}");
+    }
 }

@@ -305,4 +305,26 @@ mod tests {
         let r = opt.run(&Sphere1D);
         assert!(r.best.is_some());
     }
+
+    /// PAES must return a non-empty Pareto archive on a 2-objective problem
+    /// and be deterministic with a fixed seed. Pins the run-loop
+    /// bookkeeping against degenerate / comparison mutants.
+    #[test]
+    fn produces_deterministic_nonempty_front() {
+        let make = || {
+            Paes::new(
+                PaesConfig { iterations: 40, archive_size: 10, seed: 5 },
+                RealBounds::new(vec![(-5.0, 5.0)]),
+                GaussianMutation { sigma: 0.3 },
+            )
+        };
+        let r1 = make().run(&SchafferN1);
+        let r2 = make().run(&SchafferN1);
+        assert!(!r1.pareto_front.is_empty());
+        let f1: Vec<Vec<f64>> = r1.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        let f2: Vec<Vec<f64>> = r2.pareto_front.iter().map(|c| c.evaluation.objectives.clone()).collect();
+        assert_eq!(f1, f2);
+        // Archive never exceeds its configured cap.
+        assert!(r1.pareto_front.len() <= 10);
+    }
 }

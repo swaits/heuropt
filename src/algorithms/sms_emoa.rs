@@ -400,4 +400,51 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::candidate::Candidate;
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::{Objective, ObjectiveSpace};
+
+    fn sms_space() -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+    }
+    fn sms_cand(o: Vec<f64>) -> Candidate<u32> {
+        Candidate::new(0, Evaluation::new(o))
+    }
+
+    /// `pick_drop_index` drops the member of the worst front with the
+    /// smallest hypervolume contribution. With one clearly-dominated point
+    /// in the pool, that point forms a singleton worst front and is
+    /// returned directly.
+    #[test]
+    fn pick_drop_index_returns_singleton_worst_front() {
+        // (1,1) and (2,2)-trade-offs are front 0; (9,9) is dominated → the
+        // sole member of front 1.
+        let pool = vec![
+            sms_cand(vec![1.0, 3.0]),
+            sms_cand(vec![3.0, 1.0]),
+            sms_cand(vec![9.0, 9.0]), // dominated — worst front, singleton
+        ];
+        let drop = pick_drop_index(&pool, &sms_space(), &[100.0, 100.0]);
+        assert_eq!(drop, 2, "should drop the dominated singleton");
+    }
+
+    /// When the worst front has multiple members, the one with the
+    /// smallest hypervolume contribution is dropped — and the scan must
+    /// find it even at a non-zero index. Here `(1.0, 9.0)` at index 1 is
+    /// "shadowed" by its near-neighbour `(1.5, 8.5)` and contributes the
+    /// least unique HV (≈ 0.5 vs ≈ 3.75 and ≈ 7.5).
+    #[test]
+    fn pick_drop_index_drops_least_hv_contributor() {
+        // All three mutually non-dominated → single (worst) front.
+        let pool = vec![
+            sms_cand(vec![1.5, 8.5]),
+            sms_cand(vec![1.0, 9.0]), // least HV contribution → drop target
+            sms_cand(vec![9.0, 1.0]),
+        ];
+        let drop = pick_drop_index(&pool, &sms_space(), &[10.0, 10.0]);
+        assert_eq!(drop, 1, "should drop the lowest-HV-contribution member");
+    }
 }

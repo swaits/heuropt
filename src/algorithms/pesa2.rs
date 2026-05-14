@@ -499,4 +499,67 @@ mod tests {
         );
         let _ = opt.run(&SchafferN1);
     }
+
+    // ---- Mutation-test pinned helpers --------------------------------------
+
+    use crate::core::candidate::Candidate;
+    use crate::core::evaluation::Evaluation;
+    use crate::core::objective::{Objective, ObjectiveSpace};
+
+    fn space2() -> ObjectiveSpace {
+        ObjectiveSpace::new(vec![Objective::minimize("f1"), Objective::minimize("f2")])
+    }
+
+    #[test]
+    fn build_grid_empty_archive_is_empty() {
+        let archive = ParetoArchive::<u32>::new(space2());
+        let (boxes, counts) = build_grid(&archive, &space2(), 4);
+        assert!(boxes.is_empty());
+        assert!(counts.is_empty());
+    }
+
+    #[test]
+    fn build_grid_assigns_corner_points_to_distinct_boxes() {
+        let mut archive = ParetoArchive::<u32>::new(space2());
+        // Three non-dominated corner points span the grid extremes.
+        archive.insert(Candidate::new(1u32, Evaluation::new(vec![0.0, 4.0])));
+        archive.insert(Candidate::new(2u32, Evaluation::new(vec![2.0, 2.0])));
+        archive.insert(Candidate::new(3u32, Evaluation::new(vec![4.0, 0.0])));
+        let (boxes, counts) = build_grid(&archive, &space2(), 4);
+        assert_eq!(boxes.len(), 3);
+        // The min and max corners land in different boxes — total count
+        // across all boxes equals the member count.
+        let total: usize = counts.values().sum();
+        assert_eq!(total, 3);
+        // The two extreme points are in different boxes (grid spreads them).
+        assert_ne!(boxes[0], boxes[2]);
+    }
+
+    #[test]
+    fn region_tournament_prefers_less_crowded_box() {
+        use crate::core::rng::rng_from_seed;
+        // Members 0 and 1 share a crowded box (count 2); member 2 is alone.
+        let mut archive = ParetoArchive::<u32>::new(space2());
+        archive.insert(Candidate::new(1u32, Evaluation::new(vec![0.0, 4.0])));
+        archive.insert(Candidate::new(2u32, Evaluation::new(vec![2.0, 2.0])));
+        archive.insert(Candidate::new(3u32, Evaluation::new(vec![4.0, 0.0])));
+        // Hand-build boxes/counts where index 2 is in a singleton box and
+        // indices 0,1 share a crowded box.
+        let boxes = vec![vec![0usize, 0], vec![0usize, 0], vec![3usize, 3]];
+        let mut counts = std::collections::BTreeMap::new();
+        counts.insert(vec![0usize, 0], 2usize);
+        counts.insert(vec![3usize, 3], 1usize);
+        // Across many seeds, the less-crowded index (2) must win whenever
+        // the two random draws differ between the crowded/uncrowded boxes.
+        let mut picked_uncrowded = 0;
+        for seed in 0..300 {
+            let mut rng = rng_from_seed(seed);
+            if region_tournament(&archive, &boxes, &counts, &mut rng) == 2 {
+                picked_uncrowded += 1;
+            }
+        }
+        // Index 2 wins whenever it's drawn against 0 or 1, plus half its
+        // self-draws — clear majority.
+        assert!(picked_uncrowded > 150, "uncrowded picked {picked_uncrowded}/300");
+    }
 }

@@ -2,7 +2,6 @@
 
 use crate::core::candidate::Candidate;
 use crate::core::objective::ObjectiveSpace;
-use crate::pareto::dominance::{Dominance, pareto_compare};
 
 /// Return all candidates that are not dominated by any other candidate.
 ///
@@ -31,20 +30,68 @@ pub fn pareto_front<D: Clone>(
     population: &[Candidate<D>],
     objectives: &ObjectiveSpace,
 ) -> Vec<Candidate<D>> {
+    let n = population.len();
+    if n == 0 {
+        return Vec::new();
+    }
+
+    // Precompute per-individual feasibility, violation, and the
+    // minimization-oriented objective vectors once, mirroring
+    // `non_dominated_sort`. The naïve formulation called `pareto_compare`
+    // (and therefore `as_minimization`) for every ordered pair, re-deriving
+    // all of this on every comparison; precomputing turns the O(n²) inner
+    // loop into a branchless scan over a contiguous buffer.
+    let feasible: Vec<bool> = population
+        .iter()
+        .map(|c| c.evaluation.is_feasible())
+        .collect();
+    let violation: Vec<f64> = population
+        .iter()
+        .map(|c| c.evaluation.constraint_violation)
+        .collect();
+    let m = objectives.len();
+    let mut oriented: Vec<f64> = Vec::with_capacity(n * m);
+    for c in population {
+        oriented.extend_from_slice(&objectives.as_minimization(&c.evaluation.objectives));
+    }
+
     let mut out = Vec::new();
-    'outer: for (i, a) in population.iter().enumerate() {
-        for (j, b) in population.iter().enumerate() {
+    'outer: for i in 0..n {
+        let ai_feasible = feasible[i];
+        let ai_violation = violation[i];
+        let ai = &oriented[i * m..i * m + m];
+        for j in 0..n {
             if i == j {
                 continue;
             }
-            if matches!(
-                pareto_compare(&a.evaluation, &b.evaluation, objectives),
-                Dominance::DominatedBy
-            ) {
+            // `i` is kept only if no `j` dominates it — i.e. no `j` for which
+            // `pareto_compare(a_i, a_j)` would be `DominatedBy`. This inlines
+            // exactly that one outcome of `pareto_compare`.
+            let dominated_by_j = match (ai_feasible, feasible[j]) {
+                (true, false) => false,
+                (false, true) => true,
+                (false, false) => ai_violation > violation[j],
+                (true, true) => {
+                    let aj = &oriented[j * m..j * m + m];
+                    let mut a_better_anywhere = false;
+                    let mut b_better_anywhere = false;
+                    for k in 0..m {
+                        let av = ai[k];
+                        let bv = aj[k];
+                        if av < bv {
+                            a_better_anywhere = true;
+                        } else if av > bv {
+                            b_better_anywhere = true;
+                        }
+                    }
+                    b_better_anywhere && !a_better_anywhere
+                }
+            };
+            if dominated_by_j {
                 continue 'outer;
             }
         }
-        out.push(a.clone());
+        out.push(population[i].clone());
     }
     out
 }

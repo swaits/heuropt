@@ -17,7 +17,9 @@ in particular fell ~2.7× from the `hypervolume_nd` rework.
 This refresh also adds three **combinatorial / sequencing** problems —
 TSP, job-shop scheduling, and a bi-objective knapsack — which exercise the
 permutation and bitstring operators and a different algorithm roster (the
-real-vector methods can't run them).
+real-vector methods can't run them) — and three **many-objective**
+problems (DTLZ at 4, 10, and 8 objectives) that push past where Pareto
+dominance still discriminates.
 
 Wall-clock numbers are from the development machine and will vary; the
 *relative* numbers across algorithms are the interesting part.
@@ -238,4 +240,94 @@ bitstrings. No closed-form optimum; scored by hypervolume vs reference
 | RandomSearch | 1118233.1 ± 34150.3     | 9     | 17  |
 
 The three Pareto EAs land within ~1% of each other; random search finds a
-front of only ~9 points and trails badly.
+front of only ~9 points and trails badly. Note IBEA — which dominates the
+*continuous* multi-objective tables — is only mid-pack here: its
+continuous-MO edge does not transfer to a binary combinatorial encoding.
+
+---
+
+## Many-objective (4+ objectives)
+
+The curse of dimensionality for multi-objective optimizers: as objective
+count climbs, almost every pair of solutions becomes mutually
+non-dominated, so Pareto rank stops discriminating. NSGA-II's whole
+population collapses into front 0 and only crowding distance is left to
+steer. Reference-point (NSGA-III), decomposition (MOEA/D),
+reference-vector (RVEA), grid (GrEA), and indicator (IBEA, HypE) methods
+are built for this regime. Scored by mean distance to the true front
+(lower better).
+
+### DTLZ2 4-objective (dim=13, 40000 evals/run × 10 seeds)
+
+DTLZ2 scaled to 4 objectives — the entry point to many-objective. Front
+is still the unit-hypersphere octant (`Σf² = 1`). Already hard: with 4
+objectives most random solution pairs are mutually non-dominated, so
+Pareto rank alone barely discriminates.
+
+| algorithm    | mean dist ↓         | front | ms   |
+|---|---|---|---|
+| **HypE**     | **0.0005 ± 0.0004** | 56    | 292  |
+| MOEA/D       | 0.0019 ± 0.0004     | 46    | 33   |
+| GrEA         | 0.0023 ± 0.0021     | 56    | 75   |
+| IBEA         | 0.0043 ± 0.0008     | 56    | 135  |
+| RVEA         | 0.0193 ± 0.0040     | 56    | 58   |
+| NSGA-III     | 0.0312 ± 0.0046     | 56    | 100  |
+| AGE-MOEA     | 0.0457 ± 0.0113     | 56    | 239  |
+| NSGA-II      | 0.1149 ± 0.0249     | 56    | 74   |
+| RandomSearch | 0.4720 ± 0.0122     | 887   | 1960 |
+
+NSGA-II already trails the specialists by ~230× — and its "front" is the
+whole population (56), the first sign of dominance resistance. Random
+search's front balloons to ~887: nothing it sampled dominates anything
+else.
+
+### DTLZ2 10-objective (dim=19, 40000 evals/run × 10 seeds)
+
+DTLZ2 at 10 objectives — the curse of dimensionality in full. In 10-D
+objective space almost *every* pair of solutions is mutually
+non-dominated.
+
+| algorithm    | mean dist ↓         | front | ms    |
+|---|---|---|---|
+| **HypE**     | **0.0007 ± 0.0005** | 55    | 555   |
+| MOEA/D       | 0.0029 ± 0.0022     | 48    | 57    |
+| GrEA         | 0.0066 ± 0.0145     | 55    | 146   |
+| RVEA         | 0.0094 ± 0.0066     | 41    | 74    |
+| IBEA         | 0.0118 ± 0.0033     | 55    | 171   |
+| AGE-MOEA     | 0.1812 ± 0.0523     | 55    | 529   |
+| NSGA-III     | 0.3064 ± 0.0327     | 55    | 220   |
+| RandomSearch | 0.6326 ± 0.0044     | 4592  | 16131 |
+| NSGA-II      | 2.0096 ± 0.0540     | 55    | 186   |
+
+**The headline result.** NSGA-II is *dead last — worse than random
+search* (2.01 vs 0.63). Its crowding distance in 10-D doesn't just fail
+to help, it actively misleads. The indicator (HypE, IBEA), decomposition
+(MOEA/D) and grid (GrEA) methods barely notice the objective-count jump
+from 4 to 10; AGE-MOEA and NSGA-III degrade noticeably but still beat
+random.
+
+### DTLZ1 8-objective (dim=12, 40000 evals/run × 10 seeds)
+
+DTLZ1 at 8 objectives — the brutal one: many-objective dominance collapse
+*plus* DTLZ1's deceptive multimodal `g`-term (a huge number of local
+fronts). The true front is the linear simplex `Σf = 0.5`; reaching it at
+all is the achievement.
+
+| algorithm    | mean dist ↓           | front | ms   |
+|---|---|---|---|
+| **GrEA**     | **1.5441 ± 0.3844**   | 98    | 183  |
+| MOEA/D       | 2.2867 ± 2.0553       | 94    | 37   |
+| RVEA         | 2.4016 ± 1.3780       | 51    | 116  |
+| IBEA         | 7.9615 ± 3.6041       | 101   | 283  |
+| NSGA-III     | 26.6956 ± 7.3771      | 120   | 295  |
+| HypE         | 26.8702 ± 5.5660      | 120   | 375  |
+| AGE-MOEA     | 43.9530 ± 15.4464     | 120   | 591  |
+| RandomSearch | 172.6562 ± 6.8456     | 700   | 2553 |
+| NSGA-II      | 281.4563 ± 11.9140    | 120   | 277  |
+
+**GrEA wins** — consistent with the 3-objective DTLZ1 table, where it
+also won: grid-based niching matches a linear/simplex front at any
+objective count. The other striking result is **HypE's reversal**: #1 on
+both DTLZ2 tables, but #6 here — Monte-Carlo hypervolume is a poor
+discriminator on the deceptive simplex. NSGA-II again finishes last,
+worse than random by ~1.6×.

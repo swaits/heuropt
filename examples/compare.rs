@@ -2847,6 +2847,320 @@ fn run_knapsack_comparison() {
     print_table(&["algorithm", "hypervolume", "front", "ms"], &table);
 }
 
+// =============================================================================
+// Many-objective problems (4+ objectives)
+//
+// The "curse of dimensionality" for multi-objective optimizers: as the
+// objective count climbs, the fraction of mutually non-dominated solution
+// pairs rushes toward 1, so Pareto rank alone stops discriminating.
+// NSGA-II's whole population collapses into front 0 and only crowding
+// distance is left to steer. Reference-point (NSGA-III), decomposition
+// (MOEA/D), reference-vector (RVEA), grid (GrEA) and indicator (IBEA,
+// HypE) methods are built to survive this regime.
+//
+// Both DTLZ structs above are already parameterised by objective count,
+// and the DTLZ1/DTLZ2 distance metrics generalise to any M, so a single
+// `ManySpec` + generic runners cover every objective count.
+// =============================================================================
+
+/// A DTLZ instance at an arbitrary objective count, plus the budget and
+/// the reference-set sizing the many-objective algorithms need.
+#[derive(Clone, Copy)]
+struct ManySpec {
+    objectives: usize,
+    dim: usize,
+    budget: usize,
+    /// Population for the fixed-population algorithms; also the
+    /// Das-Dennis weight count MOEA/D derives from `reference_divisions`.
+    population: usize,
+    /// Das-Dennis divisions for NSGA-III / RVEA / MOEA/D reference sets.
+    reference_divisions: usize,
+    /// `true` = DTLZ1 (deceptive multimodal, linear-simplex front);
+    /// `false` = DTLZ2 (unit-hypersphere-octant front).
+    is_dtlz1: bool,
+    /// Per-axis HypE hypervolume reference coordinate.
+    hype_ref: f64,
+}
+
+/// One DTLZ problem type so the generic runners have a single `Problem`
+/// to hand to `run` regardless of which front geometry is in play.
+enum ManyDtlz {
+    D1(Dtlz1),
+    D2(Dtlz2),
+}
+impl Problem for ManyDtlz {
+    type Decision = Vec<f64>;
+    fn objectives(&self) -> ObjectiveSpace {
+        match self {
+            ManyDtlz::D1(p) => p.objectives(),
+            ManyDtlz::D2(p) => p.objectives(),
+        }
+    }
+    fn evaluate(&self, x: &Vec<f64>) -> Evaluation {
+        match self {
+            ManyDtlz::D1(p) => p.evaluate(x),
+            ManyDtlz::D2(p) => p.evaluate(x),
+        }
+    }
+}
+
+impl ManySpec {
+    fn problem(&self) -> ManyDtlz {
+        if self.is_dtlz1 {
+            ManyDtlz::D1(Dtlz1 {
+                num_objectives: self.objectives,
+                dim: self.dim,
+            })
+        } else {
+            ManyDtlz::D2(Dtlz2 {
+                num_objectives: self.objectives,
+                dim: self.dim,
+            })
+        }
+    }
+    fn bounds(&self) -> Vec<(f64, f64)> {
+        vec![(0.0, 1.0); self.dim]
+    }
+    fn variation(&self) -> CompositeVariation<SimulatedBinaryCrossover, PolynomialMutation> {
+        let b = self.bounds();
+        CompositeVariation {
+            crossover: SimulatedBinaryCrossover::new(b.clone(), 30.0, 1.0),
+            mutation: PolynomialMutation::new(b, 20.0, 1.0 / self.dim as f64),
+        }
+    }
+    fn mean_dist(&self, front: &[Candidate<Vec<f64>>]) -> f64 {
+        if self.is_dtlz1 {
+            mean_distance_to_dtlz1_front(front)
+        } else {
+            mean_distance_to_dtlz2_front(front)
+        }
+    }
+}
+
+fn many_random(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = RandomSearch::new(
+        RandomSearchConfig {
+            iterations: spec.budget,
+            batch_size: 1,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_nsga2(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Nsga2::new(
+        Nsga2Config {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_nsga3(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Nsga3::new(
+        Nsga3Config {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            reference_divisions: spec.reference_divisions,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_moead(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Moead::new(
+        MoeadConfig {
+            generations: spec.budget / spec.population,
+            reference_divisions: spec.reference_divisions,
+            neighborhood_size: 20,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_rvea(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Rvea::new(
+        RveaConfig {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            reference_divisions: spec.reference_divisions,
+            alpha: 2.0,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_grea(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Grea::new(
+        GreaConfig {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            grid_divisions: 10,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_ibea(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Ibea::new(
+        IbeaConfig {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            kappa: 0.05,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_hype(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = Hype::new(
+        HypeConfig {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            reference_point: vec![spec.hype_ref; spec.objectives],
+            mc_samples: 1_000,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn many_age_moea(spec: ManySpec, seed: u64) -> MoRun {
+    let problem = spec.problem();
+    let mut opt = AgeMoea::new(
+        AgeMoeaConfig {
+            population_size: spec.population,
+            generations: spec.budget / spec.population,
+            seed,
+        },
+        RealBounds::new(spec.bounds()),
+        spec.variation(),
+    );
+    let t0 = Instant::now();
+    let result = opt.run(&problem);
+    MoRun {
+        front: result.pareto_front,
+        wall_ms: t0.elapsed().as_millis(),
+    }
+}
+
+fn run_many_objective_comparison(title: &str, blurb: &[&str], spec: ManySpec) {
+    println!();
+    println!("== {title} ==");
+    for line in blurb {
+        println!("{line}");
+    }
+    println!("sorted best-first by mean dist to the true front (lower is better)");
+    println!();
+
+    type Runner = fn(ManySpec, u64) -> MoRun;
+    let runners: &[(&str, Runner)] = &[
+        ("RandomSearch", many_random),
+        ("NSGA-II", many_nsga2),
+        ("NSGA-III", many_nsga3),
+        ("MOEA/D", many_moead),
+        ("RVEA", many_rvea),
+        ("GrEA", many_grea),
+        ("IBEA", many_ibea),
+        ("HypE", many_hype),
+        ("AGE-MOEA", many_age_moea),
+    ];
+
+    let mut rows: Vec<(f64, Vec<String>)> = Vec::new();
+    for (name, runner) in runners {
+        let runs: Vec<MoRun> = (0..SEEDS).map(|s| runner(spec, s)).collect();
+        let dist: Vec<f64> = runs.iter().map(|r| spec.mean_dist(&r.front)).collect();
+        let fs: Vec<f64> = runs.iter().map(|r| r.front.len() as f64).collect();
+        let ms: Vec<f64> = runs.iter().map(|r| r.wall_ms as f64).collect();
+        let (d_m, d_s) = mean_std(&dist);
+        let (fs_m, _) = mean_std(&fs);
+        let (ms_m, _) = mean_std(&ms);
+        rows.push((
+            d_m,
+            vec![
+                name.to_string(),
+                format!("{d_m:.4}+/-{d_s:.4}"),
+                format!("{fs_m:.0}"),
+                format!("{ms_m:.0}"),
+            ],
+        ));
+    }
+    rows.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let table: Vec<Vec<String>> = rows.into_iter().map(|(_, r)| r).collect();
+    print_table(&["algorithm", "mean dist", "front", "ms"], &table);
+}
+
 fn main() {
     run_zdt1_comparison();
     run_zdt3_comparison();
@@ -2858,4 +3172,66 @@ fn main() {
     run_tsp_comparison();
     run_jss_comparison();
     run_knapsack_comparison();
+
+    // ---- Many-objective (4+) ----
+    run_many_objective_comparison(
+        "DTLZ2 4-objective (dim=13, 40000 evals/run × 10 seeds)",
+        &[
+            "DTLZ2 scaled to 4 objectives -- the entry point to many-objective.",
+            "Front is still the unit-hypersphere octant (Σf² = 1). Already hard:",
+            "with 4 objectives most random pairs of solutions are mutually",
+            "non-dominated, so Pareto rank alone barely discriminates. Optimum:",
+            "mean dist -> 0.",
+        ],
+        ManySpec {
+            objectives: 4,
+            dim: 13,
+            budget: 40_000,
+            population: 56,
+            reference_divisions: 5,
+            is_dtlz1: false,
+            hype_ref: 3.0,
+        },
+    );
+    run_many_objective_comparison(
+        "DTLZ2 10-objective (dim=19, 40000 evals/run × 10 seeds)",
+        &[
+            "DTLZ2 scaled to 10 objectives -- the curse of dimensionality in full.",
+            "In 10-D objective space almost EVERY pair of solutions is mutually",
+            "non-dominated, so NSGA-II's whole population collapses into front 0",
+            "and crowding distance is the only signal left. Reference-point,",
+            "decomposition and indicator methods are built for exactly this.",
+            "Watch the 'front' column: it pins to the population size because",
+            "nothing dominates anything. Optimum: mean dist -> 0.",
+        ],
+        ManySpec {
+            objectives: 10,
+            dim: 19,
+            budget: 40_000,
+            population: 55,
+            reference_divisions: 2,
+            is_dtlz1: false,
+            hype_ref: 3.0,
+        },
+    );
+    run_many_objective_comparison(
+        "DTLZ1 8-objective (dim=12, 40000 evals/run × 10 seeds)",
+        &[
+            "DTLZ1 scaled to 8 objectives -- the brutal one. Stacks the",
+            "many-objective dominance collapse on top of DTLZ1's deceptive",
+            "multimodal g-term (a huge number of local fronts). The true front",
+            "is the linear simplex Σf = 0.5; reaching it at all is the",
+            "achievement. Expect large mean-dist values and wide spreads -- this",
+            "is near the edge of what the catalogue does at this budget.",
+        ],
+        ManySpec {
+            objectives: 8,
+            dim: 12,
+            budget: 40_000,
+            population: 120,
+            reference_divisions: 3,
+            is_dtlz1: true,
+            hype_ref: 1.0,
+        },
+    );
 }

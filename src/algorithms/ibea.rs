@@ -280,14 +280,24 @@ fn environmental_selection<D: Clone>(
         }
     }
 
+    // Pre-exponentiate the indicator matrix once. Every later use of
+    // `indicator[j][i]` is `exp(-indicator[j][i] / scale)` — in the initial
+    // fitness sum and, identically, in the per-removal fitness update — so
+    // computing it here turns the removal loop's O((pool-n) · pool) `exp`
+    // calls into plain additions.
+    let scale = max_abs * kappa;
+    let exp_terms: Vec<Vec<f64>> = indicator
+        .into_iter()
+        .map(|row| row.into_iter().map(|v| (-v / scale).exp()).collect())
+        .collect();
+
     // Fitness F(i) = -Σ_{j≠i} exp(-indicator[j][i] / (max_abs · kappa)).
     // (Higher is better — so a candidate dominated by many is heavily negative.)
-    let scale = max_abs * kappa;
     let mut fitness: Vec<f64> = (0..pool.len())
         .map(|i| {
             (0..pool.len())
                 .filter(|&j| j != i)
-                .map(|j| -(-indicator[j][i] / scale).exp())
+                .map(|j| -exp_terms[j][i])
                 .sum()
         })
         .collect();
@@ -310,7 +320,7 @@ fn environmental_selection<D: Clone>(
             if !alive[i] || i == worst {
                 continue;
             }
-            fitness[i] += (-indicator[worst][i] / scale).exp();
+            fitness[i] += exp_terms[worst][i];
         }
         alive[worst] = false;
         alive_count -= 1;

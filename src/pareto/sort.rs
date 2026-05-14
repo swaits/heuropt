@@ -51,11 +51,14 @@ pub fn non_dominated_sort<D>(
         .iter()
         .map(|c| c.evaluation.constraint_violation)
         .collect();
-    let oriented: Vec<Vec<f64>> = population
-        .iter()
-        .map(|c| objectives.as_minimization(&c.evaluation.objectives))
-        .collect();
     let m = objectives.len();
+    // Flat `n * m` buffer rather than `Vec<Vec<f64>>`: the O(n²) pair loop
+    // reads `oriented[j]` for every `j`, and a contiguous layout keeps those
+    // reads sequential instead of chasing one heap allocation per individual.
+    let mut oriented: Vec<f64> = Vec::with_capacity(n * m);
+    for c in population {
+        oriented.extend_from_slice(&objectives.as_minimization(&c.evaluation.objectives));
+    }
 
     let mut dominates: Vec<Vec<usize>> = vec![Vec::new(); n];
     let mut dominated_by_count: Vec<usize> = vec![0; n];
@@ -69,7 +72,7 @@ pub fn non_dominated_sort<D>(
     for i in 0..n {
         let ai_feasible = feasible[i];
         let ai_violation = violation[i];
-        let ai = &oriented[i];
+        let ai = &oriented[i * m..i * m + m];
         for j in (i + 1)..n {
             let bi_feasible = feasible[j];
             let bi_violation = violation[j];
@@ -89,7 +92,7 @@ pub fn non_dominated_sort<D>(
                     }
                 }
                 (true, true) => {
-                    let bj = &oriented[j];
+                    let bj = &oriented[j * m..j * m + m];
                     let mut a_better_anywhere = false;
                     let mut b_better_anywhere = false;
                     for k in 0..m {

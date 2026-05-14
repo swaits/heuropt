@@ -416,6 +416,9 @@ fn estimate_contributions<D>(
 
     let mut contrib = vec![0.0_f64; n];
     let mut sample = vec![0.0_f64; m];
+    // Reused across samples — previously heap-allocated once per Monte
+    // Carlo sample (thousands of allocations per call).
+    let mut dominators: Vec<usize> = Vec::with_capacity(n);
     for _ in 0..samples {
         for k in 0..m {
             let u: f64 = rng.random();
@@ -423,7 +426,7 @@ fn estimate_contributions<D>(
         }
         // Count and identify candidates that dominate this sample (point
         // in the box).
-        let mut dominators: Vec<usize> = Vec::with_capacity(n);
+        dominators.clear();
         for (i, o) in oriented.iter().enumerate() {
             if o.iter().zip(sample.iter()).all(|(p, s)| *p <= *s) {
                 dominators.push(i);
@@ -436,7 +439,7 @@ fn estimate_contributions<D>(
         // dominators. (This generalizes "exactly-one dominator" to
         // arbitrary multiplicities.)
         let weight = 1.0 / dominators.len() as f64;
-        for i in dominators {
+        for &i in &dominators {
             contrib[i] += weight;
         }
     }

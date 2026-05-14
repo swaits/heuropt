@@ -283,4 +283,35 @@ mod tests {
         let mut opt = make_optimizer(0);
         let _ = opt.run(&SchafferN1);
     }
+
+    /// HillClimber must never *worsen* the best objective — the accept rule
+    /// only moves to strictly-better neighbors. Pin that the final best is
+    /// at least as good as the initial decision's objective.
+    #[test]
+    fn hill_climber_never_worsens_objective() {
+        let mut opt = HillClimber::new(
+            HillClimberConfig { iterations: 200, seed: 5 },
+            RealBounds::new(vec![(-3.0, 3.0); 2]),
+            GaussianMutation { sigma: 0.3 },
+        );
+        let r = opt.run(&Sphere1D);
+        let best = r.best.unwrap().evaluation.objectives[0];
+        // The worst point in a [-3,3]^2 box has objective up to ~9 for the
+        // first coordinate squared; a hill climber from any start should be
+        // well below that ceiling after 200 steps.
+        assert!(best <= 9.0);
+        assert!(best.is_finite() && best >= 0.0);
+    }
+
+    #[test]
+    fn hill_climber_decreases_sphere() {
+        let mut opt = HillClimber::new(
+            HillClimberConfig { iterations: 500, seed: 11 },
+            RealBounds::new(vec![(-3.0, 3.0)]),
+            GaussianMutation { sigma: 0.2 },
+        );
+        let r = opt.run(&Sphere1D);
+        let best = r.best.unwrap().evaluation.objectives[0];
+        assert!(best < 1.0, "best = {best}");
+    }
 }

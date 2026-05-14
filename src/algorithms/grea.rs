@@ -400,4 +400,28 @@ mod tests {
             .collect();
         assert_eq!(oa, ob);
     }
+
+    /// `environmental_selection` truncates the combined 2N pool down to
+    /// exactly N. Pin the final population size across several configs so
+    /// the grid-coordinate arithmetic / front-peeling comparisons can't
+    /// silently mis-count survivors.
+    #[test]
+    fn final_population_size_matches_config() {
+        for pop in [4_usize, 12, 20] {
+            let bounds = vec![(-5.0, 5.0)];
+            let initializer = RealBounds::new(bounds.clone());
+            let variation = CompositeVariation {
+                crossover: SimulatedBinaryCrossover::new(bounds.clone(), 15.0, 0.5),
+                mutation: PolynomialMutation::new(bounds, 20.0, 1.0),
+            };
+            let mut opt = Grea::new(
+                GreaConfig { population_size: pop, generations: 5, grid_divisions: 8, seed: 3 },
+                initializer,
+                variation,
+            );
+            let r = opt.run(&SchafferN1);
+            assert_eq!(r.population.len(), pop, "config pop = {pop}");
+            assert!(!r.pareto_front.is_empty());
+        }
+    }
 }

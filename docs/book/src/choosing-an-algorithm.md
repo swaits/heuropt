@@ -121,15 +121,27 @@ picker.
 
 ### Strong default
 
-[NSGA-II][Nsga2] is the canonical Pareto-based EA. Fast, well-understood,
-maintains diversity via crowding distance. On the harness it lands
-on the Pareto front of every test problem.
+[MOEA/D][Moead] is the most consistent performer on the harness. It
+decomposes the problem into many scalar sub-problems (Tchebycheff or
+weighted sum) and solves them in parallel — fast per generation, and
+robust: it finishes **top-3 on every multi- and many-objective table**
+(convex, disconnected, spherical and linear fronts; 2 through 10
+objectives) and is consistently the fastest or near-fastest. It rarely
+*wins* a table outright — a specialist usually does — but it never lands
+badly. One caveat from the literature: MOEA/D's spread depends on the
+weight-vector distribution and the scalarizing function, so it can leave
+gaps on highly irregular or degenerate fronts; the DTLZ/ZDT suite here
+doesn't stress that.
 
-NSGA-II is generic over the decision type — drop in
-[`ShuffledPermutation`] + a permutation crossover and it solves
-bi-objective TSP; drop in a binary initializer and [`BitFlipMutation`]
-and it solves bi-objective knapsack. See
-[Multi-objective combinatorial problems](./cookbook/multi-objective-combinatorial.md).
+[NSGA-II][Nsga2] is the other safe default — the canonical Pareto-based
+EA: fast, well-understood, diversity-preserving via crowding distance.
+On the harness it's edged out by MOEA/D on every multi-objective table
+and degrades past ~4 objectives (see the many-objective section), but it
+stays a solid 2–3-objective pick and is the established choice for
+*combinatorial* encodings: drop in [`ShuffledPermutation`] + a
+permutation crossover and it solves bi-objective TSP; drop in a binary
+initializer and [`BitFlipMutation`] and it solves bi-objective knapsack.
+See [Multi-objective combinatorial problems](./cookbook/multi-objective-combinatorial.md).
 
 ### Real-valued, smooth front, want best convergence
 
@@ -137,7 +149,7 @@ and it solves bi-objective knapsack. See
 hypervolume outright and converges 100× tighter than the
 dominance-based methods.
 
-### Better front quality than NSGA-II
+### Better front quality than the default
 
 [IBEA][Ibea] (indicator-based) is consistently the best of the
 dominance-based methods on the harness — wins ZDT3 hypervolume and
@@ -151,13 +163,6 @@ archive separate from the population.
 in theory; in practice on the harness budgets here it underperforms
 NSGA-II. Worth the higher per-step cost only when exact HV
 contribution is the right discriminator.
-
-### Decomposition / weight-vector style
-
-[MOEA/D][Moead] decomposes the multi-objective problem into many scalar
-sub-problems (Tchebycheff or weighted sum) and solves them in
-parallel. Very fast per generation; scales naturally to many
-objectives.
 
 ### Disconnected or non-convex front
 
@@ -194,18 +199,31 @@ population.
 
 ## Step 2 — many-objective (4+)
 
+### Strong default
+
+[MOEA/D][Moead] again. Decomposition sidesteps the *dominance resistance*
+that breaks Pareto-based methods at high objective count — each scalar
+sub-problem still has a clear best, even when almost every pair of
+solutions is mutually non-dominated. On the harness it is **#2 on every
+many-objective table** (DTLZ2 at 4 and 10 objectives, DTLZ1 at 8), and
+fast every time. [NSGA-II][Nsga2] is the cautionary tale: on DTLZ2 at 10
+objectives it finishes *last — behind random search* — because its
+crowding distance has no dominance signal left to refine.
+
 ### Linear / simplex-shaped front (e.g., DTLZ1)
 
-[GrEA][Grea] — grid coords drive ranking. On DTLZ1 it beats NSGA-III by
-3× and AGE-MOEA by 2.5×.
+[GrEA][Grea] — grid coords drive ranking. On 3-objective DTLZ1 it beats
+NSGA-III by 3× and AGE-MOEA by 2.5×, and it wins the 8-objective DTLZ1
+table outright.
 
-[MOEA/D][Moead] — decomposition shines on linear fronts; second on DTLZ1
-and among the fastest per generation.
+[MOEA/D][Moead] — also #2 on both DTLZ1 tables.
 
 ### Curved / unknown front geometry
 
-[NSGA-III][Nsga3] — reference-point niching; canonical many-objective method;
-strong default when the front isn't simplex-shaped.
+[NSGA-III][Nsga3] — reference-point niching; the canonical many-objective
+method by reputation, though on the harness MOEA/D outperforms it on
+every table. Reach for it when you specifically want reference-point
+niching.
 
 [AGE-MOEA][AgeMoea] — estimates L_p geometry per generation.
 
@@ -265,11 +283,12 @@ method on every algorithm in the catalog. See the
 | Multimodal single-objective continuous | [IPOP-CMA-ES][IpopCmaEs] or [Differential Evolution][DifferentialEvolution] |
 | Expensive single-objective | [Bayesian Optimization][BayesianOpt] or [TPE] |
 | Multi-fidelity single-objective | [Hyperband] |
-| 2- or 3-objective default | [NSGA-II][Nsga2] |
+| 2- or 3-objective default | [MOEA/D][Moead] (or [NSGA-II][Nsga2]) |
+| Many-objective default | [MOEA/D][Moead] |
 | 2-objective real-valued smooth front | [MOPSO][Mopso] |
-| Disconnected / non-convex front | [IBEA][Ibea] |
-| Many-objective default (curved front) | [NSGA-III][Nsga3] |
-| Many-objective linear / simplex front | [GrEA][Grea] |
+| Disconnected front | [IBEA][Ibea] |
+| Many-objective, curved front | [NSGA-III][Nsga3] |
+| Many-objective, linear / simplex front | [GrEA][Grea] |
 | Permutation problem (TSP with distance matrix) | [Ant Colony][AntColonyTsp] |
 | Generic permutation problem | [GA][GeneticAlgorithm] + permutation toolkit |
 | Bi-objective combinatorial (TSP / scheduling / knapsack) | [NSGA-II][Nsga2] + matching encoding operators |

@@ -426,8 +426,20 @@ START
      │
      ├─ 2 or 3 (multi-objective)
      │    │
-     │    ├─ Strong default, fast, well-understood
-     │    │     → NSGA-II
+     │    ├─ Strong default — top-3 on every multi- and
+     │    │  many-objective table on the harness, fastest or
+     │    │  near-fastest every time
+     │    │     → MOEA/D   (decomposition into scalar sub-problems;
+     │    │                 robust across convex / disconnected /
+     │    │                 spherical / linear fronts and 2–10
+     │    │                 objectives. Caveat: weight-vector spread
+     │    │                 can leave gaps on highly irregular or
+     │    │                 degenerate fronts)
+     │    │     → NSGA-II  (canonical Pareto EA; well-understood and
+     │    │                 the established choice for combinatorial
+     │    │                 encodings — but edged out by MOEA/D on
+     │    │                 every MO table here, and fades past
+     │    │                 ~4 objectives)
      │    │
      │    ├─ Real-valued, smooth front, want best convergence
      │    │     → MOPSO    (multi-objective PSO; on the benches
@@ -435,7 +447,7 @@ START
      │    │                 convergence by 100× over the
      │    │                 dominance-based methods)
      │    │
-     │    ├─ Want better front quality than NSGA-II
+     │    ├─ Want better front quality than the default
      │    │     → IBEA     (indicator-based; consistently the best
      │    │                 of the dominance-based methods on these
      │    │                 benches — wins ZDT3 HV and DTLZ2 mean
@@ -447,9 +459,6 @@ START
      │    │                 only worth its higher per-step cost on
      │    │                 fronts where exact HV-contribution is
      │    │                 the right discriminator)
-     │    │
-     │    ├─ Want decomposition / weight-vector style
-     │    │     → MOEA/D   (very fast per generation, scales well)
      │    │
      │    ├─ Disconnected front (separate arcs, e.g. ZDT3)
      │    │     → IBEA     (wins ZDT3 hypervolume on the harness;
@@ -470,18 +479,25 @@ START
      │
      └─ 4+ (many-objective)
           │
+          ├─ Strong default — #2 on every many-objective table on
+          │  the harness (DTLZ2 at 4 and 10 objectives, DTLZ1 at 8);
+          │  decomposition sidesteps the dominance collapse that
+          │  wrecks Pareto-based EAs at high objective count
+          │     → MOEA/D
+          │     (NSGA-II is the cautionary tale: on DTLZ2 at 10
+          │      objectives it finishes last — behind random search)
+          │
           ├─ Linear / simplex-shaped front (e.g., DTLZ1)
           │     → GrEA       (grid coords drive ranking; on DTLZ1
           │                    here it beats NSGA-III by 3× and
-          │                    AGE-MOEA by 2.5×)
-          │     → MOEA/D     (decomposition shines on linear fronts;
-          │                    second on DTLZ1, also among the
-          │                    fastest per generation)
+          │                    AGE-MOEA by 2.5×, and wins the
+          │                    8-objective DTLZ1 table outright)
+          │     → MOEA/D     (also #2 on both DTLZ1 tables)
           │
           ├─ Curved / unknown front geometry
-          │     → NSGA-III   (reference-point niching, canonical;
-          │                    a strong default when the front
-          │                    isn't simplex-shaped)
+          │     → NSGA-III   (reference-point niching; canonical by
+          │                    reputation, but MOEA/D outperforms it
+          │                    on every harness table)
           │     → AGE-MOEA   (estimates L_p geometry per generation)
           │     → RVEA       (reference vectors with adaptive penalty)
           │
@@ -531,21 +547,21 @@ START
 
 | Algorithm     | Objectives | Strengths |
 |---|---|---|
-| **PAES**      | 2–3        | 1+1 ES with Pareto archive |
-| **NSGA-II**   | 2–3        | canonical Pareto-based EA |
-| **SPEA2**     | 2–3        | strength + density |
+| **MOEA/D**    | 2+         | decomposition; the most consistent all-rounder — top-3 on every MO/many-objective table here, fastest or near-fastest |
+| **NSGA-II**   | 2–3        | canonical Pareto-based EA; well-understood, the go-to for combinatorial encodings — but fades past ~4 objectives |
 | **MOPSO**     | 2–3        | multi-objective PSO; best convergence on smooth real-valued 2-obj fronts |
-| **IBEA**      | 2+         | indicator-based; consistently best of the dominance-based methods |
+| **IBEA**      | 2+         | indicator-based; consistently best of the dominance-based methods; wins disconnected fronts |
+| **SPEA2**     | 2–3        | strength + density |
 | **SMS-EMOA**  | 2+         | exact HV-contribution selection; high per-step cost, modest gain |
-| **HypE**      | 2+         | Monte Carlo HV estimation |
+| **HypE**      | 2+         | Monte Carlo HV estimation; strong on spherical many-objective fronts |
 | **ε-MOEA**    | 2+         | ε-grid archive; auto-sized |
 | **PESA-II**   | 2+         | grid-based region selection |
 | **AGE-MOEA**  | 2+         | adaptive front-geometry estimation |
 | **KnEA**      | 2+         | knee-point favored survival |
-| **MOEA/D**    | 2+         | decomposition; fast per-gen |
+| **PAES**      | 2–3        | 1+1 ES with Pareto archive |
 | **NSGA-III**  | 4+         | reference-point niching; strong on curved fronts |
 | **RVEA**      | 4+         | reference vectors with penalty |
-| **GrEA**      | 4+         | grid coords drive selection; particularly strong on linear/simplex fronts |
+| **GrEA**      | 4+         | grid coords drive selection; wins linear/simplex fronts at any objective count |
 
 ## Current algorithms
 
